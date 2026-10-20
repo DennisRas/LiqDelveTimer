@@ -1,0 +1,243 @@
+---@class LDT_Player
+---@field guid WOWGUID|nil
+---@field name string|nil
+---@field realm string|nil
+---@field homeRealm string|nil
+---@field classFile string|nil
+---@field classID number|nil
+---@field level number|nil
+---@field itemLevel number|nil
+---@field specID number|nil
+---@field specName string|nil
+
+---@class LDT_TierReward
+---@field id number
+---@field quantity number
+---@field rewardType number
+---@field context number
+
+---@class LDT_TierInfo
+---@field tier number
+---@field suggestedILvl number
+---@field overrideTooltipSpellID number
+---@field unlocked boolean
+---@field tierDescription string
+---@field rewards LDT_TierReward[]
+---@field modifierUIWidgetSetID number
+---@field lockedReason string|nil
+---@field queueAsLFG boolean
+---@field difficultyID number
+
+---@class LDT_Entrance
+---@field entranceType number|nil
+---@field title string|nil
+---@field header string|nil
+---@field description string|nil
+---@field mapID number|nil
+---@field pdeID number|nil
+---@field seasonNumber number|nil
+---@field worldTierDifficulty number|nil
+---@field affixSpellIDs number[]|nil
+---@field activeSpellIDs number[]|nil
+---@field tierInfo LDT_TierInfo|nil
+
+---@class LDT_Companion
+---@field companionID number|nil
+---@field creatureDisplayInfoID number|nil
+---@field factionID number|nil
+---@field name string|nil
+---@field description string|nil
+---@field level number|nil
+---@field maxLevel number|nil
+---@field flavorName string|nil
+---@field flavorNodeID number|nil
+---@field roleNodeID number|nil
+---@field traitTreeID number|nil
+---@field combatCurioNodeID number|nil
+---@field utilityCurioNodeID number|nil
+---@field roleName string|nil
+---@field combatCurioName string|nil
+---@field utilityCurioName string|nil
+---@field standing number|nil
+---@field reactionThreshold number|nil
+---@field nextThreshold number|nil
+---@field startStanding number|nil
+
+---@class LDT_Instance
+---@field name string|nil
+---@field instanceType string|nil
+---@field difficultyID number|nil
+---@field difficultyName string|nil
+---@field maxPlayers number|nil
+---@field dynamicDifficulty number|nil
+---@field isDynamic boolean|nil
+---@field instanceID number|nil
+---@field instanceGroupSize number|nil
+---@field lfgDungeonID number|nil
+---@field hasWorldTier boolean|nil
+---@field mapID number|nil
+---@field mapName string|nil
+---@field zone string|nil
+---@field subzone string|nil
+
+---@class LDT_Place
+---@field zone string|nil
+---@field subzone string|nil
+---@field mapID number|nil
+---@field mapName string|nil
+
+---@class LDT_CriteriaSnap
+---@field description string
+---@field criteriaType number
+---@field completed boolean
+---@field quantity number
+---@field totalQuantity number
+---@field flags number
+---@field assetID number
+---@field criteriaID number
+---@field duration number
+---@field elapsed number
+---@field failed boolean
+---@field isWeightedProgress boolean
+---@field isFormatted boolean
+---@field quantityString string
+
+---@class LDT_Scenario
+---@field info ScenarioInformation|nil
+---@field step ScenarioStepInfo|nil
+---@field criteria LDT_CriteriaSnap[]
+
+---@class LDT_VaultActivity
+---@field threshold number
+---@field progress number
+---@field level number
+---@field activityTierID number
+---@field id number
+---@field index number
+
+---@class LDT_Vault
+---@field startProgress number|nil
+---@field progress number|nil
+---@field credits number
+---@field activities LDT_VaultActivity[]
+
+---@class LDT_GoldGain
+---@field elapsed number
+---@field copper number
+---@field afterComplete boolean
+
+---@class LDT_Gold
+---@field start number
+---@field last number
+---@field gained number
+---@field gains LDT_GoldGain[]
+
+---@class LDT_CurrencyChange
+---@field currencyID number
+---@field name string|nil
+---@field change number
+---@field quantity number|nil
+---@field elapsed number
+---@field afterComplete boolean
+
+---@class LDT_RenownBaseline
+---@field level number
+---@field earned number
+
+---@class LDT_RenownChange
+---@field factionID number
+---@field name string|nil
+---@field startLevel number
+---@field startEarned number
+---@field level number
+---@field earned number
+---@field threshold number
+---@field maxLevel number
+
+---@class LDT_BoonStat
+---@field text string
+
+---@class LDT_LootRow
+---@field elapsed number
+---@field itemLink string|nil
+---@field itemID number|nil
+---@field quantity number|nil
+---@field afterComplete boolean
+
+---@class LDT_Chamber
+---@field name string
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+
+---@class LDT_Encounter
+---@field encounterID number
+---@field encounterName string
+---@field difficultyID number
+---@field groupSize number
+---@field success number
+---@field elapsed number
+
+---@class LDT_CriteriaWatch
+---@field completed boolean
+---@field failed boolean
+
+---@class LDT_Watch
+---@field zone string|nil
+---@field subzone string|nil
+---@field stepID number|nil
+---@field criteriaSignature string|nil
+---@field scenarioComplete boolean
+---@field delveComplete boolean
+---@field criteria table<number, LDT_CriteriaWatch>
+
+---@class LDT_LogDetail
+---@field zone string|nil
+---@field subzone string|nil
+---@field mapID number|nil
+---@field stepID number|nil
+---@field stepTitle string|nil
+---@field criteriaID number|nil
+---@field description string|nil
+---@field encounterID number|nil
+---@field encounterName string|nil
+---@field progress number|nil
+---@field gain number|nil
+
+---@class LDT_LogEntry
+---@field at number
+---@field elapsed number
+---@field kind LDT_LogKindId
+---@field text string
+---@field detail LDT_LogDetail|nil
+
+---@class LDT_Record
+---@field id string
+---@field result LDT_RunResultId
+---@field labyrinth boolean
+---@field startedAt number
+---@field sessionStart number
+---@field sessionOffset number
+---@field finishedElapsed number|nil
+---@field endedElapsed number|nil
+---@field bossName string|nil
+---@field bossElapsed number|nil
+---@field sawDelveComplete boolean
+---@field deaths number
+---@field lives number|nil
+---@field player LDT_Player|nil
+---@field entrance LDT_Entrance|nil
+---@field companion LDT_Companion|nil
+---@field instance LDT_Instance|nil
+---@field place LDT_Place|nil
+---@field scenario LDT_Scenario|nil
+---@field vault LDT_Vault
+---@field gold LDT_Gold
+---@field currencies LDT_CurrencyChange[]
+---@field renownStart table<string, LDT_RenownBaseline>
+---@field renowns LDT_RenownChange[]
+---@field boons LDT_BoonStat[]
+---@field loot LDT_LootRow[]
+---@field chambers LDT_Chamber[]
+---@field encounters LDT_Encounter[]
+---@field log LDT_LogEntry[]
+---@field watch LDT_Watch

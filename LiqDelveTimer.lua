@@ -1,0 +1,110 @@
+---@class LDT_Addon
+local addon = select(2, ...)
+
+local Data = addon.Data
+local Constants = addon.Constants
+local Capture = addon.Capture
+local LibAceAddon = addon.libs.AceAddon
+local LibDataBroker = addon.libs.LibDataBroker
+local LibDBIcon = addon.libs.LibDBIcon
+local LiqUI = addon.libs.LiqUI
+local Events = LiqUI.Events
+
+---@class LDT_Core
+local Core = LibAceAddon:NewAddon(addon.name, "AceConsole-3.0")
+addon.Core = Core
+
+function Core:OnInitialize()
+  if not LiqUI or not Events or not LiqUI.Utils then
+    self:Print("This version needs a newer LiqUI embed. Reload after updating LiqUI.")
+    return
+  end
+
+  self:RegisterChatCommand(addon.name:lower(), "OnChatCommand")
+  Data:Initialize()
+  Data:MigrateDB()
+  addon.logger = LiqUI:NewLogger({
+    name = addon.name,
+    title = "Delve Log",
+    storage = Data.db.global.logs,
+  })
+
+  ---@type LibDataBroker.DataObject
+  local libDataObject = {
+    label = addon.title,
+    type = "launcher",
+    icon = Constants.media.Icon,
+    OnClick = function(displayFrame, mouseButton)
+      local shifted = IsShiftKeyDown()
+      if shifted then
+        if addon.Module_Records then
+          addon.Module_Records:ToggleWindow()
+        end
+        return
+      end
+      if mouseButton == "RightButton" then
+        if addon.Module_Main then
+          addon.Module_Main:OpenMenu(displayFrame)
+        end
+        return
+      end
+      if addon.Module_Main then
+        addon.Module_Main:ToggleWindow()
+      end
+    end,
+    OnTooltipShow = function(tooltip)
+      tooltip:SetText(addon.title, 1, 1, 1)
+      tooltip:AddLine("|cff00ff00Left click|r to show or hide the tracker.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+      tooltip:AddLine("|cff00ff00Right click|r to open settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+      tooltip:AddLine("|cff00ff00Shift click|r to open records.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    end,
+  }
+  LibDataBroker:NewDataObject(addon.name, libDataObject)
+  LibDBIcon:Register(addon.name, libDataObject, Data.db.global.minimap)
+  LibDBIcon:AddButtonToCompartment(addon.name)
+end
+
+function Core:OnEnable()
+  if not Events then
+    return
+  end
+  Capture:Register()
+  if addon.logger and addon.ApiLog then
+    addon.ApiLog:Log("log", "ready")
+    addon.ApiLog:LogState()
+    addon.logger:Show()
+  end
+end
+
+---@param input string|nil
+function Core:OnChatCommand(input)
+  local command = self:GetArgs(input or "", 1)
+  if not command then
+    self:ToggleWindow()
+    return
+  end
+  local token = command:lower()
+  if token == "log" then
+    if addon.logger then
+      addon.logger:Toggle()
+    end
+    return
+  end
+  if token == "history" or token == "records" then
+    if addon.Module_Records then
+      addon.Module_Records:ToggleWindow()
+    end
+    return
+  end
+  if addon.Debug and addon.Debug:OnChatCommand(input) then
+    return
+  end
+  self:Print(format("Usage: /%s [history|log]", addon.name:lower()))
+end
+
+function Core:ToggleWindow()
+  if not addon.Module_Main then
+    return
+  end
+  addon.Module_Main:ToggleWindow()
+end
