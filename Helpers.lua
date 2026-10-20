@@ -5,6 +5,30 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
+---@param value string
+---@return number|nil, boolean
+function Helpers.BoonAmount(value)
+  local cleaned = value:gsub("%s+$", ""):gsub("%.$", "")
+  local percent = cleaned:find("%%", 1, true) ~= nil
+  local numberText = cleaned:match("([%+%-]?%d+%.?%d*)")
+  if not numberText then
+    return nil, percent
+  end
+  return tonumber(numberText), percent
+end
+
+---@param amount number
+---@return string
+function Helpers.FormatBoonAmount(amount)
+  local text
+  if amount % 1 == 0 then
+    text = format("%d", amount)
+  else
+    text = format("%.1f", amount)
+  end
+  return text .. "%"
+end
+
 ---@param elapsed number|nil
 ---@return string
 function Helpers.FormatElapsed(elapsed)
@@ -29,15 +53,13 @@ function Helpers.FormatMoney(copper)
   if not copper or copper < 0 then
     copper = 0
   end
-  local gold = math.floor(copper / 10000)
-  local silver = math.floor((copper % 10000) / 100)
-  if gold > 0 then
-    return format("%dg %ds", gold, silver)
-  end
-  if silver > 0 then
-    return format("%ds", silver)
-  end
-  return format("%dc", copper)
+  return C_CurrencyInfo.GetCoinTextureString(copper, 12)
+end
+
+---@param itemID number|nil
+---@return boolean
+function Helpers.ItemHidden(itemID)
+  return itemID ~= nil and addon.Constants.hiddenItemIDs[itemID] == true
 end
 
 ---@param delta number|nil

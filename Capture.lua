@@ -24,7 +24,10 @@ local function CopySpellIDs(spellIDs)
     return copy
   end
   for index = 1, #spellIDs do
-    copy[index] = spellIDs[index]
+    local spellID = spellIDs[index]
+    if spellID and not issecretvalue(spellID) then
+      copy[#copy + 1] = spellID
+    end
   end
   return copy
 end
@@ -174,12 +177,12 @@ end
 
 ---@param treeID number|nil
 ---@param nodeID number|nil
----@return string|nil
+---@return string|nil, number|nil
 local function TraitNodeName(treeID, nodeID)
   if not treeID or not nodeID or treeID <= 0 or nodeID <= 0 then
-    return nil
+    return nil, nil
   end
-  local ok, name = pcall(function()
+  local ok, name, spellID = pcall(function()
     local configID = C_Traits.GetConfigIDByTreeID(treeID)
     if not configID then
       return nil
@@ -197,18 +200,17 @@ local function TraitNodeName(treeID, nodeID)
     if not definition then
       return nil
     end
-    if definition.overrideName and definition.overrideName ~= "" then
-      return definition.overrideName
+    local spellID = definition.overriddenSpellID or definition.spellID
+    local nodeName = definition.overrideName
+    if (not nodeName or nodeName == "") and spellID then
+      nodeName = C_Spell.GetSpellName(spellID)
     end
-    if definition.spellID then
-      return C_Spell.GetSpellName(definition.spellID)
-    end
-    return nil
+    return nodeName, spellID
   end)
   if ok then
-    return name
+    return name, spellID
   end
-  return nil
+  return nil, nil
 end
 
 ---@return LDT_Entrance
@@ -235,29 +237,51 @@ function Capture:ReadEntrance()
   return entrance
 end
 
+---@param value number|nil
+---@return number|nil
+local function OptionalID(value)
+  if value == nil or issecretvalue(value) or value <= 0 then
+    return nil
+  end
+  return value
+end
+
 ---@return LDT_Companion
 function Capture:ReadCompanion()
-  local companionID = C_DelvesUI.GetCompanionInfoForActivePlayer()
+  local companionID = OptionalID(C_DelvesUI.GetCompanionInfoForActivePlayer())
   ---@type LDT_Companion
   local companion = {
     companionID = companionID,
   }
-  if not companionID or companionID <= 0 then
-    return companion
+  local factionID = OptionalID(C_DelvesUI.GetFactionForCompanion(companionID))
+  if not factionID then
+    factionID = OptionalID(C_DelvesUI.GetFactionForCompanion(nil))
   end
-  companion.creatureDisplayInfoID = C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID)
-  companion.factionID = C_DelvesUI.GetFactionForCompanion(companionID)
-  companion.flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(companionID)
-  companion.flavorNodeID = C_DelvesUI.GetFlavorNodeForCompanion(companionID)
-  companion.roleNodeID = C_DelvesUI.GetRoleNodeForCompanion(companionID)
-  companion.traitTreeID = C_DelvesUI.GetTraitTreeForCompanion(companionID)
-  companion.combatCurioNodeID = C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID)
-  companion.utilityCurioNodeID = C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID)
-  if companion.factionID and companion.factionID > 0 then
-    local faction = C_Reputation.GetFactionDataByID(companion.factionID)
-    if faction then
+  companion.factionID = factionID
+  if companionID then
+    companion.creatureDisplayInfoID = OptionalID(C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID))
+  end
+  local flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(nil)
+  if (not flavorName or issecretvalue(flavorName) or flavorName == "") and companionID then
+    flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(companionID)
+  end
+  if flavorName and not issecretvalue(flavorName) and flavorName ~= "" then
+    companion.flavorName = flavorName
+  end
+  companion.flavorNodeID = OptionalID(C_DelvesUI.GetFlavorNodeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetFlavorNodeForCompanion(companionID))
+  companion.traitTreeID = OptionalID(C_DelvesUI.GetTraitTreeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetTraitTreeForCompanion(companionID))
+  companion.roleNodeID = OptionalID(C_DelvesUI.GetRoleNodeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetRoleNodeForCompanion(companionID))
+  companion.combatCurioNodeID = OptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, nil))
+    or OptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID))
+  companion.utilityCurioNodeID = OptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, nil))
+    or OptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID))
+  if factionID then
+    local faction = C_Reputation.GetFactionDataByID(factionID)
+    if faction and faction.name and not issecretvalue(faction.name) and faction.name ~= "" then
       companion.name = faction.name
-      companion.description = faction.description
+      if faction.description and not issecretvalue(faction.description) then
+        companion.description = faction.description
+      end
     end
     local ranks = C_GossipInfo.GetFriendshipReputationRanks(companion.factionID)
     if ranks then
@@ -271,9 +295,14 @@ function Capture:ReadCompanion()
       companion.nextThreshold = friendship.nextThreshold
     end
   end
-  companion.roleName = TraitNodeName(companion.traitTreeID, companion.roleNodeID)
-  companion.combatCurioName = TraitNodeName(companion.traitTreeID, companion.combatCurioNodeID)
-  companion.utilityCurioName = TraitNodeName(companion.traitTreeID, companion.utilityCurioNodeID)
+  companion.roleName, companion.roleSpellID = TraitNodeName(companion.traitTreeID, companion.roleNodeID)
+  local flavorSelectionName, flavorSpellID = TraitNodeName(companion.traitTreeID, companion.flavorNodeID)
+  companion.flavorSpellID = flavorSpellID
+  if flavorSelectionName and flavorSelectionName ~= "" then
+    companion.flavorName = flavorSelectionName
+  end
+  companion.combatCurioName, companion.combatCurioSpellID = TraitNodeName(companion.traitTreeID, companion.combatCurioNodeID)
+  companion.utilityCurioName, companion.utilityCurioSpellID = TraitNodeName(companion.traitTreeID, companion.utilityCurioNodeID)
   return companion
 end
 
@@ -499,13 +528,54 @@ end
 ---@param placeChanged boolean
 function Capture:ObserveScenario(record, scenario, placeChanged)
   record.scenario = scenario
+  local entrance = record.entrance
+  if entrance then
+    local spells = C_ScenarioInfo.GetTieredEntranceActiveSpells()
+    if spells then
+      entrance.activeSpellIDs = CopySpellIDs(spells)
+    end
+  end
   local watch = record.watch
+  local sealed = (record.sawDelveComplete or record.finishedElapsed) and not record.labyrinth
   local step = scenario.step
   local stepID = step and step.stepID
   if stepID ~= watch.stepID then
+    if watch.stepID then
+      local current = {}
+      for index = 1, #scenario.criteria do
+        local criteriaID = scenario.criteria[index].criteriaID
+        if criteriaID and not issecretvalue(criteriaID) then
+          current[criteriaID] = true
+        end
+      end
+      LiqUI.Utils.TableForEach(watch.criteria, function(state, criteriaID)
+        if current[criteriaID] or state.completed then
+          return
+        end
+        state.completed = true
+        local description
+        for logIndex = #record.log, 1, -1 do
+          local entry = record.log[logIndex]
+          local detail = entry.detail
+          if detail and detail.criteriaID == criteriaID and detail.description and detail.description ~= "" then
+            description = detail.description
+            break
+          end
+        end
+        if not description then
+          description = tostring(criteriaID)
+        end
+        ---@type LDT_LogDetail
+        local detail = {
+          criteriaID = criteriaID,
+          description = description,
+        }
+        self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
+      end)
+    end
     watch.stepID = stepID
     local stepTitle = step and step.title
-    if stepTitle and stepTitle ~= "" then
+    if not sealed and stepTitle and stepTitle ~= "" then
       ---@type LDT_LogDetail
       local detail = {
         stepID = stepID,
@@ -523,47 +593,64 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
   for index = 1, #scenario.criteria do
     local criteria = scenario.criteria[index]
     local criteriaID = criteria.criteriaID
-    local previous = criteriaWatch[criteriaID]
-    if not previous then
-      criteriaWatch[criteriaID] = {
-        completed = criteria.completed,
-        failed = criteria.failed,
-      }
-      if not criteria.completed and criteria.description and criteria.description ~= "" then
-        ---@type LDT_LogDetail
-        local detail = {
-          criteriaID = criteriaID,
-          description = criteria.description,
-        }
-        self:AppendLog(record, Constants.logKind.Objective, format("Objective: %s", criteria.description), detail)
+    local completed = criteria.completed
+    local failed = criteria.failed
+    local description = criteria.description
+    if not criteriaID or issecretvalue(criteriaID) or issecretvalue(completed) or issecretvalue(failed) then
+      criteriaID = nil
+    end
+    if description and issecretvalue(description) then
+      description = nil
+    end
+    local previous = criteriaID and criteriaWatch[criteriaID]
+    if criteriaID and not previous then
+      if sealed then
+        criteriaID = nil
       end
-    else
-      if criteria.completed and not previous.completed then
-        previous.completed = true
+    end
+    if criteriaID and not previous then
+      criteriaWatch[criteriaID] = {
+        completed = completed,
+        failed = failed,
+      }
+      if description and description ~= "" then
         ---@type LDT_LogDetail
         local detail = {
           criteriaID = criteriaID,
-          description = criteria.description,
+          description = description,
         }
-        local description = criteria.description
+        self:AppendLog(record, Constants.logKind.Objective, format("Objective: %s", description), detail)
+        if completed then
+          self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
+        end
+      end
+    elseif previous then
+      if completed and not previous.completed then
+        previous.completed = true
         if not description or description == "" then
           description = tostring(criteriaID)
         end
+        ---@type LDT_LogDetail
+        local detail = {
+          criteriaID = criteriaID,
+          description = description,
+        }
         self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
         criteriaFinished = true
-      elseif not criteria.completed and previous.completed then
+      elseif not completed and previous.completed then
         previous.completed = false
       end
-      if criteria.failed and not previous.failed then
+      if failed and not previous.failed then
         previous.failed = true
-        local description = criteria.description
         if not description or description == "" then
           description = tostring(criteriaID)
         end
-        self:AppendLog(record, Constants.logKind.ObjectiveFailed, format("Objective failed: %s", description), {
+        ---@type LDT_LogDetail
+        local detail = {
           criteriaID = criteriaID,
-          description = criteria.description,
-        })
+          description = description,
+        }
+        self:AppendLog(record, Constants.logKind.ObjectiveFailed, format("Objective failed: %s", description), detail)
       end
     end
   end
@@ -623,16 +710,32 @@ function Capture:ObserveVault(record)
 end
 
 ---@param record LDT_Record
-function Capture:ObserveDelveComplete(record)
-  local delveComplete = C_PartyInfo.IsDelveComplete()
-  if delveComplete and not record.watch.delveComplete then
-    record.watch.delveComplete = true
-    record.sawDelveComplete = true
-    if not record.finishedElapsed then
-      record.finishedElapsed = self:Elapsed(record)
-    end
-    self:AppendLog(record, Constants.logKind.DelveComplete, "Delve complete")
+function Capture:MarkRunFinished(record)
+  if record.labyrinth or record.sawDelveComplete then
+    return
   end
+  record.watch.delveComplete = true
+  record.sawDelveComplete = true
+  if not record.finishedElapsed then
+    record.finishedElapsed = self:Elapsed(record)
+  end
+  self:AppendLog(record, Constants.logKind.DelveComplete, "Delve complete")
+end
+
+---@param record LDT_Record
+function Capture:ObserveDelveComplete(record)
+  if C_PartyInfo.IsDelveComplete() then
+    self:MarkRunFinished(record)
+  end
+end
+
+function Capture:OnScenarioCompleted()
+  local record = Data:GetActiveRecord()
+  if not record then
+    return
+  end
+  self:EnsureClock(record, false)
+  self:MarkRunFinished(record)
 end
 
 ---@param record LDT_Record
@@ -658,8 +761,12 @@ function Capture:UpdateCompanion(record)
     companion.startStanding = latest.standing
   end
   companion.roleName = latest.roleName or companion.roleName
+  companion.roleSpellID = latest.roleSpellID or companion.roleSpellID
+  companion.flavorSpellID = latest.flavorSpellID or companion.flavorSpellID
   companion.combatCurioName = latest.combatCurioName or companion.combatCurioName
+  companion.combatCurioSpellID = latest.combatCurioSpellID or companion.combatCurioSpellID
   companion.utilityCurioName = latest.utilityCurioName or companion.utilityCurioName
+  companion.utilityCurioSpellID = latest.utilityCurioSpellID or companion.utilityCurioSpellID
   companion.flavorName = latest.flavorName or companion.flavorName
 end
 
@@ -686,9 +793,17 @@ function Capture:ObserveBoons(record)
         for line in leftText:gmatch("[^\r\n]+") do
           local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
           if label and label ~= "" and value and value ~= "" then
-            ---@type LDT_BoonStat
-            local stat = { text = format("%s: %s", label, value) }
-            lines[#lines + 1] = stat
+            local amount, percent = Helpers.BoonAmount(value)
+            if amount then
+              ---@type LDT_BoonStat
+              local stat = {
+                label = label,
+                amount = amount,
+                percent = percent,
+                text = format("%s: %s", label, Helpers.FormatBoonAmount(amount)),
+              }
+              lines[#lines + 1] = stat
+            end
           end
         end
       end
@@ -701,7 +816,7 @@ function Capture:ObserveBoons(record)
   local changed = #previous ~= #lines
   if not changed then
     for index = 1, #lines do
-      if previous[index].text ~= lines[index].text then
+      if previous[index].label ~= lines[index].label or previous[index].amount ~= lines[index].amount then
         changed = true
         break
       end
@@ -861,6 +976,9 @@ function Capture:OnLoot(message, guid)
   end
   self:EnsureClock(record, false)
   local itemID = tonumber(itemLink:match("item:(%d+)"))
+  if Helpers.ItemHidden(itemID) then
+    return
+  end
   local quantity = tonumber(message:match("x(%d+)"))
   local elapsed = self:Elapsed(record)
   for index = #record.loot, 1, -1 do
@@ -906,9 +1024,9 @@ function Capture:Observe(record)
   self:UpdateCompanion(record)
   local instance = self:ReadInstance()
   local placeChanged = self:ObservePlace(record, instance)
+  self:ObserveDelveComplete(record)
   self:ObserveScenario(record, self:ReadScenario(), placeChanged)
   self:ObserveVault(record)
-  self:ObserveDelveComplete(record)
   self:ObserveBoons(record)
   self:ObserveRenown(record)
   self:OnMoney()
@@ -1094,7 +1212,9 @@ function Capture:Register()
     if addon.ApiLog then
       addon.ApiLog:OnEvent(event, ...)
     end
-    if event == "ENCOUNTER_END" then
+    if event == "SCENARIO_COMPLETED" then
+      Capture:OnScenarioCompleted()
+    elseif event == "ENCOUNTER_END" then
       local encounterID, encounterName, difficultyID, groupSize, success = ...
       Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
     elseif event == "PLAYER_MONEY" then

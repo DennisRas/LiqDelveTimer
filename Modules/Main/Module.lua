@@ -35,6 +35,7 @@ local FONT_ROW = "GameFontHighlightSmall"
 ---@field align "LEFT"|"CENTER"|"RIGHT"|nil
 ---@field width number|nil
 ---@field icon number|string|nil
+---@field spellID number|nil
 ---@field barMin number|nil
 ---@field barMax number|nil
 ---@field barValue number|nil
@@ -51,6 +52,7 @@ local FONT_ROW = "GameFontHighlightSmall"
 ---@field text FontString
 ---@field icon Texture
 ---@field bar StatusBar
+---@field textFrame Frame
 
 ---@class LDT_WidgetRowFrame : Frame
 ---@field columns LDT_WidgetColumnFrame[]
@@ -122,7 +124,7 @@ local function BarRow(text, minValue, maxValue, value, textOnBar)
 end
 
 ---@param label string
----@param elapsed number
+---@param elapsed number|nil
 ---@param bestElapsed number|nil
 ---@param large boolean|nil
 ---@return LDT_RowModel
@@ -138,9 +140,11 @@ local function SplitRow(label, elapsed, bestElapsed, large)
   ---@type LDT_RowColumn[]
   local columns = {
     TextColumn(label, nil, "LEFT", font, 0.95, 0.95, 0.95),
-    TextColumn(Helpers.FormatElapsed(elapsed), timeWidth, "RIGHT", font, 1, 0.82, 0.2),
   }
-  if bestElapsed then
+  if elapsed then
+    columns[#columns + 1] = TextColumn(Helpers.FormatElapsed(elapsed), timeWidth, "RIGHT", font, 1, 0.82, 0.2)
+  end
+  if bestElapsed and elapsed then
     local delta = elapsed - bestElapsed
     local red, green, blue = 0.75, 0.75, 0.75
     if delta > 0.05 then
@@ -157,7 +161,7 @@ end
 
 ---@param record LDT_Record
 ---@return number
-local function HeadlineElapsed(record)
+local function LiveElapsed(record)
   if record.result == Constants.runResult.Active then
     if Capture.clockReady then
       return Capture:Elapsed(record)
@@ -172,6 +176,15 @@ local function HeadlineElapsed(record)
     return record.endedElapsed
   end
   return 0
+end
+
+---@param record LDT_Record
+---@return number
+local function HeadlineElapsed(record)
+  if record.finishedElapsed or record.bossElapsed then
+    return Helpers.CompletionTime(record) or LiveElapsed(record)
+  end
+  return LiveElapsed(record)
 end
 
 ---@param record LDT_Record
@@ -296,25 +309,130 @@ local function RunRows(record, best)
 end
 
 ---@param record LDT_Record
+---@param now number
+---@return { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
+local function ObjectiveRows(record, now)
+  ---@type { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
+  local order = {}
+  ---@type table<number|string, { description: string, appeared: number, completed: number|nil, failed: boolean|nil }>
+  local byKey = {}
+  local completion = record.finishedElapsed
+  local sealed = {}
+  local log = record.log or {}
+  for index = 1, #log do
+    local entry = log[index]
+    local kind = entry.kind
+    if kind == Constants.logKind.Objective or kind == Constants.logKind.ObjectiveDone or kind == Constants.logKind.ObjectiveFailed then
+      local detail = entry.detail
+      local criteriaID = detail and detail.criteriaID
+      local key = criteriaID or entry.text
+      if completion and not byKey[key] and entry.elapsed > completion then
+        sealed[key] = true
+      end
+      local row = byKey[key]
+      if sealed[key] then
+        row = nil
+      end
+      if not sealed[key] then
+        if not row then
+          local description = detail and detail.description
+          if not description or description == "" then
+            description = entry.text
+          end
+          row = { description = description, appeared = entry.elapsed }
+          byKey[key] = row
+          order[#order + 1] = row
+        elseif detail and detail.description and detail.description ~= "" then
+          row.description = detail.description
+        end
+        if kind == Constants.logKind.ObjectiveDone then
+          row.completed = entry.elapsed
+        elseif kind == Constants.logKind.ObjectiveFailed then
+          row.failed = true
+          row.completed = entry.elapsed
+        end
+      end
+    end
+  end
+  local runFinished = record.sawDelveComplete or record.finishedElapsed
+  local scenario = record.scenario
+  local criteria = scenario and scenario.criteria
+  if criteria and not runFinished then
+    for index = 1, #criteria do
+      local info = criteria[index]
+      local criteriaID = info.criteriaID
+      local description = info.description
+      if criteriaID and not issecretvalue(criteriaID) and description and not issecretvalue(description) and description ~= "" then
+        local row = byKey[criteriaID]
+        if not row then
+          row = { description = description, appeared = now }
+          byKey[criteriaID] = row
+          order[#order + 1] = row
+        end
+        local completed = info.completed
+        if completed and not issecretvalue(completed) and completed and not row.completed then
+          row.completed = now
+        end
+      end
+    end
+  end
+  return order
+end
+
+---@param record LDT_Record
 ---@param best LDT_Record|nil
 ---@return LDT_RowModel[]
 local function TimerRows(record, best)
   ---@type LDT_RowModel[]
   local rows = {}
   local now = HeadlineElapsed(record)
+  local live = LiveElapsed(record)
   local bestFinish = best and Helpers.CompletionTime(best) or nil
   rows[#rows + 1] = SplitRow("Time", now, bestFinish, true)
-  local step = LastLog(record, Constants.logKind.Step)
-  if step then
-    local stepTitle = step.detail and step.detail.stepTitle
-    if not stepTitle or stepTitle == "" then
-      stepTitle = step.text
+  local spells = record.entrance and record.entrance.activeSpellIDs
+  if spells and #spells > 0 then
+    ---@type LDT_RowColumn[]
+    local spellColumns = {}
+    for index = 1, #spells do
+      local spellID = spells[index]
+      if spellID and not issecretvalue(spellID) then
+        local texture = C_Spell.GetSpellTexture(spellID)
+        if texture and not issecretvalue(texture) then
+          local column = TextColumn("", 22, "CENTER")
+          column.icon = texture
+          column.spellID = spellID
+          spellColumns[#spellColumns + 1] = column
+        end
+      end
     end
-    rows[#rows + 1] = SplitRow(stepTitle, math.max(0, now - step.elapsed), nil, false)
+    if #spellColumns > 0 then
+      rows[#rows + 1] = { columns = spellColumns, height = 22 }
+    end
+  end
+  local frozen = record.finishedElapsed or record.bossElapsed
+  local clock = live
+  if frozen then
+    clock = now
+  end
+  local objectives = ObjectiveRows(record, clock)
+  for index = 1, #objectives do
+    local objective = objectives[index]
+    local label = objective.description
+    if objective.failed then
+      label = format("%s failed", label)
+    end
+    local elapsed = objective.completed
+    if not elapsed and not (frozen and objective.appeared > clock) then
+      elapsed = math.max(0, clock - objective.appeared)
+    end
+    rows[#rows + 1] = SplitRow(label, elapsed, nil, false)
   end
   for index = 1, #record.chambers do
     local chamber = record.chambers[index]
-    local elapsed = chamber.completedElapsed or math.max(0, now - chamber.enteredElapsed)
+    local elapsed = chamber.completedElapsed
+    if not elapsed and not (frozen and chamber.enteredElapsed > clock) then
+      elapsed = math.max(0, clock - chamber.enteredElapsed)
+    end
     local bestElapsed = nil
     if chamber.completedElapsed then
       bestElapsed = BestChamberTime(best, chamber.name)
@@ -336,7 +454,7 @@ local function TimerRows(record, best)
   if record.finishedElapsed then
     rows[#rows + 1] = SplitRow("Complete", record.finishedElapsed, bestFinish, false)
   end
-  if #rows == 1 and not step then
+  if #rows == 1 and #objectives == 0 then
     rows[#rows + 1] = { columns = { TextColumn("No step or boss yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
   end
   return rows
@@ -360,9 +478,6 @@ local function CompanionRows(record)
     end
   end
   rows[#rows + 1] = { columns = { TextColumn(header, nil, "LEFT", FONT_ROW, 0.95, 0.95, 0.95) }, height = 16 }
-  if companion.flavorName and companion.flavorName ~= "" then
-    rows[#rows + 1] = { columns = { TextColumn(companion.flavorName, nil, "LEFT", FONT_ROW, 0.75, 0.75, 0.75) }, height = 16 }
-  end
   local minValue = companion.reactionThreshold
   local maxValue = companion.nextThreshold
   local standing = companion.standing
@@ -371,22 +486,88 @@ local function CompanionRows(record)
     local into = standing - minValue
     rows[#rows + 1] = BarRow(format("%d / %d", into, span), minValue, maxValue, standing, "center")
   end
-  if companion.roleName and companion.roleName ~= "" then
-    rows[#rows + 1] = { columns = { TextColumn(format("Role %s", companion.roleName), nil, "LEFT") }, height = 16 }
-  end
-  if companion.combatCurioName and companion.combatCurioName ~= "" then
-    rows[#rows + 1] = { columns = { TextColumn(format("Combat %s", companion.combatCurioName), nil, "LEFT") }, height = 16 }
-  end
-  if companion.utilityCurioName and companion.utilityCurioName ~= "" then
-    rows[#rows + 1] = { columns = { TextColumn(format("Utility %s", companion.utilityCurioName), nil, "LEFT") }, height = 16 }
-  end
-  if companion.startStanding and companion.standing and companion.standing ~= companion.startStanding then
+  if companion.startStanding and companion.standing then
+    local gained = companion.standing - companion.startStanding
+    local gainedText = format("%d", gained)
+    if gained > 0 then
+      gainedText = format("+%d", gained)
+    end
     rows[#rows + 1] = {
-      columns = { TextColumn(format("XP this run %+d", companion.standing - companion.startStanding), nil, "LEFT", FONT_ROW, 0.4, 0.8, 1) },
+      columns = { TextColumn(format("This run %s", gainedText), nil, "LEFT", FONT_ROW, 0.4, 0.8, 1) },
       height = 16,
     }
   end
+  ---@type LDT_RowColumn[]
+  local sockets = {}
+  local socketSpells = {
+    companion.roleSpellID,
+    companion.flavorSpellID,
+    companion.combatCurioSpellID,
+    companion.utilityCurioSpellID,
+  }
+  for index = 1, #socketSpells do
+    local spellID = socketSpells[index]
+    if spellID and not issecretvalue(spellID) then
+      local texture = C_Spell.GetSpellTexture(spellID)
+      if texture and not issecretvalue(texture) then
+        local column = TextColumn("", 22, "CENTER")
+        column.icon = texture
+        column.spellID = spellID
+        sockets[#sockets + 1] = column
+      end
+    end
+  end
+  if #sockets > 0 then
+    rows[#rows + 1] = { columns = sockets, height = 22 }
+  else
+    if companion.flavorName and companion.flavorName ~= "" then
+      rows[#rows + 1] = { columns = { TextColumn(companion.flavorName, nil, "LEFT", FONT_ROW, 0.75, 0.75, 0.75) }, height = 16 }
+    end
+    if companion.roleName and companion.roleName ~= "" then
+      rows[#rows + 1] = { columns = { TextColumn(format("Role %s", companion.roleName), nil, "LEFT") }, height = 16 }
+    end
+    if companion.combatCurioName and companion.combatCurioName ~= "" then
+      rows[#rows + 1] = { columns = { TextColumn(format("Combat %s", companion.combatCurioName), nil, "LEFT") }, height = 16 }
+    end
+    if companion.utilityCurioName and companion.utilityCurioName ~= "" then
+      rows[#rows + 1] = { columns = { TextColumn(format("Utility %s", companion.utilityCurioName), nil, "LEFT") }, height = 16 }
+    end
+  end
   return rows
+end
+
+local boonColorNeedles
+
+---@param label string
+---@return number|nil, number|nil, number|nil
+local function BoonStatColor(label)
+  if not boonColorNeedles then
+    boonColorNeedles = {}
+    local colors = Constants.boonStatColors
+    for index = 1, #colors do
+      local entry = colors[index]
+      local text = _G[entry.key]
+      if type(text) == "string" and text ~= "" then
+        boonColorNeedles[#boonColorNeedles + 1] = {
+          text = text:lower(),
+          r = entry.r,
+          g = entry.g,
+          b = entry.b,
+        }
+      end
+    end
+    table.sort(boonColorNeedles, function(left, right)
+      return #left.text > #right.text
+    end)
+  end
+  local lower = label:lower()
+  for index = 1, #boonColorNeedles do
+    local needle = boonColorNeedles[index]
+    if #needle.text >= 4 and (lower == needle.text or lower:find(needle.text, 1, true)) then
+      return needle.r, needle.g, needle.b
+    end
+  end
+  return nil
 end
 
 ---@param text string
@@ -395,6 +576,12 @@ local function AppendBoonStats(text, stats)
   for line in text:gmatch("[^\r\n]+") do
     local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
     if label and label ~= "" and value and value ~= "" then
+      local amount = Helpers.BoonAmount(value)
+      if amount then
+        value = Helpers.FormatBoonAmount(amount)
+      else
+        value = value:gsub("%s+$", ""):gsub("%.$", "")
+      end
       stats[#stats + 1] = { label = label, value = value }
     end
   end
@@ -409,9 +596,11 @@ local function BoonRows(record)
   ---@type { label: string, value: string }[]
   local stats = {}
   for index = 1, #boons do
-    local text = boons[index].text
-    if text and text ~= "" then
-      AppendBoonStats(text, stats)
+    local boon = boons[index]
+    if boon.label and boon.amount then
+      stats[#stats + 1] = { label = boon.label, value = Helpers.FormatBoonAmount(boon.amount) }
+    elseif boon.text and boon.text ~= "" then
+      AppendBoonStats(boon.text, stats)
     end
   end
   if #stats == 0 then
@@ -424,16 +613,19 @@ local function BoonRows(record)
     local nextStat = stats[index + 1]
     local nextLabel = ""
     local nextValue = ""
+    local statR, statG, statB = BoonStatColor(stat.label)
+    local nextR, nextG, nextB
     if nextStat then
       nextLabel = nextStat.label
       nextValue = nextStat.value
+      nextR, nextG, nextB = BoonStatColor(nextLabel)
     end
     rows[#rows + 1] = {
       columns = {
-        TextColumn(stat.label, nil, "LEFT", FONT_ROW, 0.85, 0.85, 0.85),
-        TextColumn(stat.value, 56, "RIGHT", FONT_ROW, 0.75, 0.9, 0.7),
-        TextColumn(nextLabel, nil, "LEFT", FONT_ROW, 0.85, 0.85, 0.85),
-        TextColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.75, 0.9, 0.7),
+        TextColumn(stat.label, nil, "LEFT", FONT_ROW, statR or 0.85, statG or 0.85, statB or 0.85),
+        TextColumn(stat.value, 56, "RIGHT", FONT_ROW, statR or 0.75, statG or 0.9, statB or 0.7),
+        TextColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
+        TextColumn(nextValue, 56, "RIGHT", FONT_ROW, nextR or 0.75, nextG or 0.9, nextB or 0.7),
       },
       height = 16,
     }
@@ -461,7 +653,7 @@ local function GainsRows(record)
     rows[#rows + 1] = {
       columns = {
         TextColumn("Gold", nil, "LEFT"),
-        TextColumn(Helpers.FormatMoney(gold.gained), VALUE_WIDTH, "RIGHT", FONT_ROW, 1, 0.82, 0.2),
+        TextColumn(Helpers.FormatMoney(gold.gained), nil, "RIGHT", FONT_ROW, 1, 1, 1),
       },
       height = 16,
       goldCopper = gold.gained,
@@ -494,54 +686,115 @@ local function GainsRows(record)
           break
         end
       end
+      local nameColumn = TextColumn(name, nil, "LEFT")
+      local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
+      if info and info.iconFileID and not issecretvalue(info.iconFileID) and info.iconFileID > 0 then
+        nameColumn.icon = info.iconFileID
+      end
       rows[#rows + 1] = {
         columns = {
-          TextColumn(name, nil, "LEFT"),
+          nameColumn,
           TextColumn(SignedCount(total), VALUE_WIDTH, "RIGHT", FONT_ROW, 0.5, 0.85, 1),
         },
-        height = 16,
+        height = 18,
         currencyID = currencyID,
       }
     end
   end
   local loot = record.loot or {}
-  ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, elapsed: number }[]
+  ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, elapsed: number, quality: number, qualityKnown: boolean, name: string }[]
   local items = {}
   for index = 1, #loot do
     local item = loot[index]
-    local quantity = item.quantity or 1
-    local elapsed = item.elapsed or 0
-    local match
-    for itemIndex = 1, #items do
-      local existing = items[itemIndex]
-      local sameItem = (item.itemID and existing.itemID == item.itemID) or (not item.itemID and existing.itemLink == item.itemLink)
-      if sameItem then
-        match = existing
-        break
+    if not Helpers.ItemHidden(item.itemID) then
+      local quantity = item.quantity or 1
+      local elapsed = item.elapsed or 0
+      local match
+      for itemIndex = 1, #items do
+        local existing = items[itemIndex]
+        local sameItem = (item.itemID and existing.itemID == item.itemID) or (not item.itemID and existing.itemLink == item.itemLink)
+        if sameItem then
+          match = existing
+          break
+        end
       end
-    end
-    if not match then
-      items[#items + 1] = { itemID = item.itemID, itemLink = item.itemLink, quantity = quantity, elapsed = elapsed }
-    elseif math.abs(elapsed - match.elapsed) < 2 then
-      if quantity > match.quantity then
-        match.quantity = quantity
-      end
-      if item.itemLink then
-        match.itemLink = item.itemLink
-      end
-    else
-      match.quantity = match.quantity + quantity
-      match.elapsed = elapsed
-      if item.itemLink then
-        match.itemLink = item.itemLink
+      if not match then
+        items[#items + 1] = {
+          itemID = item.itemID,
+          itemLink = item.itemLink,
+          quantity = quantity,
+          elapsed = elapsed,
+          quality = 0,
+          qualityKnown = false,
+          name = "",
+        }
+      elseif math.abs(elapsed - match.elapsed) < 2 then
+        if quantity > match.quantity then
+          match.quantity = quantity
+        end
+        if item.itemLink then
+          match.itemLink = item.itemLink
+        end
+      else
+        match.quantity = match.quantity + quantity
+        match.elapsed = elapsed
+        if item.itemLink then
+          match.itemLink = item.itemLink
+        end
       end
     end
   end
   for index = 1, #items do
     local item = items[index]
-    local label = item.itemLink or "Item"
+    item.quality = 0
+    item.qualityKnown = false
+    local quality
+    if item.itemLink then
+      local _, _, linkQuality = C_Item.GetItemInfo(item.itemLink)
+      if linkQuality and not issecretvalue(linkQuality) then
+        quality = linkQuality
+      end
+    elseif item.itemID then
+      local baseQuality = C_Item.GetItemQualityByID(item.itemID)
+      if baseQuality and not issecretvalue(baseQuality) then
+        quality = baseQuality
+      else
+        C_Item.RequestLoadItemDataByID(item.itemID)
+      end
+    end
+    if quality then
+      item.quality = quality
+      item.qualityKnown = true
+    end
+    item.name = ""
+    if item.itemLink then
+      item.name = item.itemLink:match("%[(.-)%]") or item.itemLink
+    end
+  end
+  table.sort(items, function(left, right)
+    if left.quantity ~= right.quantity then
+      return left.quantity > right.quantity
+    end
+    if left.quality ~= right.quality then
+      return left.quality > right.quality
+    end
+    return left.name < right.name
+  end)
+  for index = 1, #items do
+    local item = items[index]
+    local label = item.name
+    if label == "" then
+      label = "Item"
+    end
+    local red, green, blue
+    if item.qualityKnown then
+      local colorR, colorG, colorB = C_Item.GetItemQualityColor(item.quality)
+      if colorR and not issecretvalue(colorR) then
+        red, green, blue = colorR, colorG, colorB
+      end
+    end
     ---@type LDT_RowColumn
-    local nameColumn = TextColumn(label, nil, "LEFT")
+    local nameColumn = TextColumn(label, nil, "LEFT", nil, red, green, blue)
     if item.itemID then
       local texture = C_Item.GetItemIconByID(item.itemID)
       if texture then
@@ -594,18 +847,6 @@ end
 local function CreateColumn(parent)
   ---@type LDT_WidgetColumnFrame
   local column = CreateFrame("Frame", nil, parent)
-  local icon = column:CreateTexture(nil, "ARTWORK")
-  icon:SetSize(14, 14)
-  icon:SetPoint("LEFT", column, "LEFT", 0, 0)
-  icon:Hide()
-  column.icon = icon
-  local text = column:CreateFontString(nil, "OVERLAY", FONT_ROW)
-  text:SetPoint("LEFT", column, "LEFT", 0, 0)
-  text:SetPoint("RIGHT", column, "RIGHT", 0, 0)
-  text:SetJustifyH("LEFT")
-  text:SetJustifyV("MIDDLE")
-  text:SetWordWrap(true)
-  column.text = text
   local bar = CreateFrame("StatusBar", nil, column)
   bar:SetStatusBarTexture("Interface/Buttons/WHITE8X8")
   bar:SetStatusBarColor(0.25, 0.55, 0.9, 0.95)
@@ -615,6 +856,22 @@ local function CreateColumn(parent)
   background:SetAllPoints()
   background:SetColorTexture(1, 1, 1, 0.08)
   column.bar = bar
+  local textFrame = CreateFrame("Frame", nil, column)
+  textFrame:SetAllPoints()
+  textFrame:SetFrameLevel(bar:GetFrameLevel() + 2)
+  column.textFrame = textFrame
+  local icon = textFrame:CreateTexture(nil, "OVERLAY")
+  icon:SetSize(18, 18)
+  icon:SetPoint("LEFT", textFrame, "LEFT", 0, 0)
+  icon:Hide()
+  column.icon = icon
+  local text = textFrame:CreateFontString(nil, "OVERLAY", FONT_ROW)
+  text:SetPoint("LEFT", textFrame, "LEFT", 0, 0)
+  text:SetPoint("RIGHT", textFrame, "RIGHT", 0, 0)
+  text:SetJustifyH("LEFT")
+  text:SetJustifyV("MIDDLE")
+  text:SetWordWrap(true)
+  column.text = text
   return column
 end
 
@@ -655,25 +912,25 @@ local function ApplyColumn(column, model, rowHeight)
       bar:SetPoint("BOTTOMLEFT", column, "BOTTOMLEFT", 0, 0)
       bar:SetPoint("BOTTOMRIGHT", column, "BOTTOMRIGHT", 0, 0)
       bar:SetHeight(12)
-      text:SetPoint("TOPLEFT", column, "TOPLEFT", 0, 0)
-      text:SetPoint("TOPRIGHT", column, "TOPRIGHT", 0, 0)
+      text:SetPoint("TOPLEFT", column.textFrame, "TOPLEFT", 0, 0)
+      text:SetPoint("TOPRIGHT", column.textFrame, "TOPRIGHT", 0, 0)
     else
       bar:SetAllPoints()
       local left = 4
       if icon:IsShown() then
         left = 20
       end
-      text:SetPoint("LEFT", column, "LEFT", left, 0)
-      text:SetPoint("RIGHT", column, "RIGHT", -4, 0)
+      text:SetPoint("LEFT", column.textFrame, "LEFT", left, 0)
+      text:SetPoint("RIGHT", column.textFrame, "RIGHT", -4, 0)
     end
   else
     bar:Hide()
     if icon:IsShown() then
       text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
     else
-      text:SetPoint("LEFT", column, "LEFT", 0, 0)
+      text:SetPoint("LEFT", column.textFrame, "LEFT", 0, 0)
     end
-    text:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    text:SetPoint("RIGHT", column.textFrame, "RIGHT", 0, 0)
     text:SetHeight(rowHeight)
   end
   column:SetHeight(rowHeight)
@@ -772,6 +1029,23 @@ local function LayoutPanel(panel, spacing)
       column:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
       column:SetWidth(math.max(width, 1))
       ApplyColumn(column, columns[columnIndex], rowHeight)
+      local spellID = columns[columnIndex].spellID
+      local textFrame = column.textFrame
+      if spellID then
+        textFrame:EnableMouse(true)
+        textFrame:SetScript("OnEnter", function()
+          GameTooltip:SetOwner(textFrame, "ANCHOR_RIGHT")
+          GameTooltip:SetSpellByID(spellID)
+          GameTooltip:Show()
+        end)
+        textFrame:SetScript("OnLeave", function()
+          GameTooltip:Hide()
+        end)
+      else
+        textFrame:EnableMouse(false)
+        textFrame:SetScript("OnEnter", nil)
+        textFrame:SetScript("OnLeave", nil)
+      end
       x = x + width + gap
     end
     for columnIndex = #columns + 1, #row.columns do
@@ -1382,11 +1656,11 @@ local function DemoRecord()
       { factionID = 2590, name = "The Assembly of the Deeps", startLevel = 12, startEarned = 0, level = 12, earned = 1800, threshold = 2500, maxLevel = 25 },
     },
     boons = {
-      { text = "Haste: +8%" },
-      { text = "Speed: +5%" },
-      { text = "Stamina: +120" },
-      { text = "Leech: +3%" },
-      { text = "Versatility: +10%" },
+      { label = "Haste", amount = 8, percent = true },
+      { label = "Speed", amount = 5, percent = true },
+      { label = "Stamina", amount = 120, percent = false },
+      { label = "Leech", amount = 3, percent = true },
+      { label = "Versatility", amount = 10, percent = true },
     },
     loot = {
       { elapsed = 330, itemLink = "Adventurer's Helm", quantity = 1, afterComplete = false },
@@ -1402,10 +1676,31 @@ local function DemoRecord()
     log = {
       {
         at = 0,
-        elapsed = 400,
-        kind = Constants.logKind.Step,
-        text = "Defeat the chamber boss",
-        detail = { stepTitle = "Defeat the chamber boss" },
+        elapsed = 40,
+        kind = Constants.logKind.Objective,
+        text = "Objective: Clear the webs",
+        detail = { criteriaID = 1, description = "Clear the webs" },
+      },
+      {
+        at = 0,
+        elapsed = 180,
+        kind = Constants.logKind.ObjectiveDone,
+        text = "Objective done: Clear the webs",
+        detail = { criteriaID = 1, description = "Clear the webs" },
+      },
+      {
+        at = 0,
+        elapsed = 180,
+        kind = Constants.logKind.Objective,
+        text = "Objective: Defeat the chamber boss",
+        detail = { criteriaID = 2, description = "Defeat the chamber boss" },
+      },
+      {
+        at = 0,
+        elapsed = 720,
+        kind = Constants.logKind.ObjectiveDone,
+        text = "Objective done: Defeat the chamber boss",
+        detail = { criteriaID = 2, description = "Defeat the chamber boss" },
       },
     },
     watch = { criteria = {} },

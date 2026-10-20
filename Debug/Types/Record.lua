@@ -51,13 +51,17 @@
 ---@field maxLevel number|nil
 ---@field flavorName string|nil
 ---@field flavorNodeID number|nil
+---@field flavorSpellID number|nil
 ---@field roleNodeID number|nil
 ---@field traitTreeID number|nil
 ---@field combatCurioNodeID number|nil
 ---@field utilityCurioNodeID number|nil
 ---@field roleName string|nil
+---@field roleSpellID number|nil
 ---@field combatCurioName string|nil
+---@field combatCurioSpellID number|nil
 ---@field utilityCurioName string|nil
+---@field utilityCurioSpellID number|nil
 ---@field standing number|nil
 ---@field reactionThreshold number|nil
 ---@field nextThreshold number|nil
@@ -155,7 +159,10 @@
 ---@field maxLevel number
 
 ---@class LDT_BoonStat
----@field text string
+---@field label string|nil
+---@field amount number|nil
+---@field percent boolean|nil
+---@field text string|nil
 
 ---@class LDT_LootRow
 ---@field elapsed number

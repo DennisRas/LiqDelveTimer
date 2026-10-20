@@ -88,6 +88,60 @@ Constants.sectionGaps = {
 
 Constants.boonSpellID = 1280098
 
+Constants.hiddenItemIDs = {
+  [254748] = true,
+  [254756] = true,
+  [254757] = true,
+  [260878] = true,
+  [260879] = true,
+  [260882] = true,
+  [260884] = true,
+  [260910] = true,
+  [260911] = true,
+  [264668] = true,
+  [264669] = true,
+  [264670] = true,
+  [267235] = true,
+  [267236] = true,
+  [267237] = true,
+  [267238] = true,
+  [267239] = true,
+  [267240] = true,
+  [267241] = true,
+  [267242] = true,
+  [267243] = true,
+  [267647] = true,
+  [267648] = true,
+  [267649] = true,
+}
+
+Constants.boonStatColors = {
+  { key = "ITEM_MOD_STRENGTH_SHORT", r = 1, g = 0.5, b = 0.25 },
+  { key = "STAT_STRENGTH", r = 1, g = 0.5, b = 0.25 },
+  { key = "ITEM_MOD_AGILITY_SHORT", r = 0.55, g = 1, b = 0.45 },
+  { key = "STAT_AGILITY", r = 0.55, g = 1, b = 0.45 },
+  { key = "ITEM_MOD_INTELLECT_SHORT", r = 0.25, g = 0.78, b = 1 },
+  { key = "STAT_INTELLECT", r = 0.25, g = 0.78, b = 1 },
+  { key = "ITEM_MOD_CRIT_RATING_SHORT", r = 0.878, g = 0.11, b = 0.11 },
+  { key = "STAT_CRITICAL_STRIKE", r = 0.878, g = 0.11, b = 0.11 },
+  { key = "ITEM_MOD_HASTE_RATING_SHORT", r = 1, g = 0.92, b = 0.15 },
+  { key = "STAT_HASTE", r = 1, g = 0.92, b = 0.15 },
+  { key = "ITEM_MOD_MASTERY_RATING_SHORT", r = 0.72, g = 0.5, b = 1 },
+  { key = "STAT_MASTERY", r = 0.72, g = 0.5, b = 1 },
+  { key = "ITEM_MOD_VERSATILITY", r = 0.1, g = 1, b = 0.15 },
+  { key = "STAT_VERSATILITY", r = 0.1, g = 1, b = 0.15 },
+  { key = "ITEM_MOD_STAMINA_SHORT", r = 0.9, g = 0.25, b = 0.25 },
+  { key = "STAT_STAMINA", r = 0.9, g = 0.25, b = 0.25 },
+  { key = "STAT_HEALTH", r = 0.9, g = 0.25, b = 0.25 },
+  { key = "ITEM_MOD_HEALTH_SHORT", r = 0.9, g = 0.25, b = 0.25 },
+  { key = "STAT_MOVEMENT_SPEED", r = 0.3, g = 0.85, b = 1 },
+  { key = "MOVEMENT_SPEED", r = 0.3, g = 0.85, b = 1 },
+  { key = "STAT_SPEED", r = 0.3, g = 0.85, b = 1 },
+  { key = "ITEM_MOD_CR_SPEED_SHORT", r = 0.3, g = 0.85, b = 1 },
+  { key = "STAT_ARMOR", r = 0.65, g = 0.75, b = 0.9 },
+  { key = "ITEM_MOD_ARMOR_SHORT", r = 0.65, g = 0.75, b = 0.9 },
+}
+
 Constants.media = {
   Icon = "Interface/Icons/INV_Misc_PocketWatch_01",
 }

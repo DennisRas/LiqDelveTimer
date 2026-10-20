@@ -92,8 +92,10 @@ local function DetailText(record)
   if record.loot then
     for index = 1, #record.loot do
       local row = record.loot[index]
-      local link = row.itemLink or "Item"
-      lines[#lines + 1] = format("Loot %s", link)
+      if not Helpers.ItemHidden(row.itemID) then
+        local link = row.itemLink or "Item"
+        lines[#lines + 1] = format("Loot %s", link)
+      end
     end
   end
   if record.encounters and #record.encounters > 0 then

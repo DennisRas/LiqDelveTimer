@@ -126,9 +126,13 @@ function Module:Render()
     if not delve or delve == "" then
       delve = "Delve"
     end
-    local duration = record.endedElapsed or 0
-    if record.result == Constants.runResult.Active then
-      duration = ActiveElapsed(record)
+    local duration = Helpers.CompletionTime(record)
+    if not duration then
+      if record.result == Constants.runResult.Active then
+        duration = ActiveElapsed(record)
+      else
+        duration = record.endedElapsed or 0
+      end
     end
     ---@type LDT_RecordsTableRow
     local row = {
