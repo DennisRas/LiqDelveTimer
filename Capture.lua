@@ -11,10 +11,13 @@ local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 local Events = LiqUI.Events
 
+local pickerHooked
+local trackerHooked
+
 Capture.ready = false
 Capture.clockReady = false
 Capture.reloadNoted = false
-Capture.seenWorld = false
+Capture.zoneKnown = false
 
 ---@param spellIDs number[]|nil
 ---@return number[]
@@ -30,6 +33,20 @@ local function CopySpellIDs(spellIDs)
     end
   end
   return copy
+end
+
+local function PaintReport()
+  local report = addon.Module_Report
+  if report and report.frame and report.frame:IsShown() then
+    report:Render()
+  end
+end
+
+local function PaintRecords()
+  local records = addon.Module_Records
+  if records and records.window and records.window:IsShown() then
+    records:Render()
+  end
 end
 
 ---@param spellIDs number[]|nil
@@ -49,7 +66,7 @@ end
 ---@param instance LDT_Instance
 ---@return boolean
 local function DetectLabyrinth(instance)
-  return instance.mapID == Constants.labyrinthMapID
+  return instance.mapID == Data.labyrinthMapID
 end
 
 ---@param scenario LDT_Scenario
@@ -213,6 +230,49 @@ local function TraitNodeName(treeID, nodeID)
   return nil, nil
 end
 
+---@param treeID number|nil
+---@param nodeID number|nil
+---@param companionID number|nil
+---@return string|nil, string|nil
+local function ReadRole(treeID, nodeID, companionID)
+  if not treeID or not nodeID or treeID <= 0 or nodeID <= 0 then
+    return nil, nil
+  end
+  local ok, roleName, roleAtlas = pcall(function()
+    local configID = C_Traits.GetConfigIDByTreeID(treeID)
+    if not configID then
+      return nil, nil
+    end
+    local node = C_Traits.GetNodeInfo(configID, nodeID)
+    local entryID = node and node.activeEntry and node.activeEntry.entryID
+    if not entryID then
+      return nil, nil
+    end
+    local entry = C_Traits.GetEntryInfo(configID, entryID)
+    local subTreeID = entry and entry.subTreeID
+    if not subTreeID or subTreeID <= 0 then
+      return nil, nil
+    end
+    local info = C_Traits.GetSubTreeInfo(configID, subTreeID)
+    local resolvedName = info and info.name
+    local atlas
+    if companionID then
+      if subTreeID == C_DelvesUI.GetRoleSubtreeForCompanion(Enum.CompanionRoleType.Dps, companionID) then
+        atlas = "ui-lfg-roleicon-dps-micro-raid"
+      elseif subTreeID == C_DelvesUI.GetRoleSubtreeForCompanion(Enum.CompanionRoleType.Heal, companionID) then
+        atlas = "ui-lfg-roleicon-healer-micro-raid"
+      elseif subTreeID == C_DelvesUI.GetRoleSubtreeForCompanion(Enum.CompanionRoleType.Tank, companionID) then
+        atlas = "ui-lfg-roleicon-tank-micro-raid"
+      end
+    end
+    return resolvedName, atlas
+  end)
+  if ok then
+    return roleName, roleAtlas
+  end
+  return nil, nil
+end
+
 ---@return LDT_Entrance
 function Capture:ReadEntrance()
   ---@type LDT_Entrance
@@ -296,6 +356,13 @@ function Capture:ReadCompanion()
     end
   end
   companion.roleName, companion.roleSpellID = TraitNodeName(companion.traitTreeID, companion.roleNodeID)
+  local subtreeName, roleAtlas = ReadRole(companion.traitTreeID, companion.roleNodeID, companionID)
+  if subtreeName and subtreeName ~= "" then
+    companion.roleName = subtreeName
+  end
+  if roleAtlas then
+    companion.roleAtlas = roleAtlas
+  end
   local flavorSelectionName, flavorSpellID = TraitNodeName(companion.traitTreeID, companion.flavorNodeID)
   companion.flavorSpellID = flavorSpellID
   if flavorSelectionName and flavorSelectionName ~= "" then
@@ -575,6 +642,10 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
     end
     watch.stepID = stepID
     local stepTitle = step and step.title
+    local previousStep = watch.routeStep
+    if previousStep and previousStep ~= stepTitle then
+      Data:StampStep(record, previousStep, self:Elapsed(record))
+    end
     if not sealed and stepTitle and stepTitle ~= "" then
       ---@type LDT_LogDetail
       local detail = {
@@ -584,6 +655,9 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
       self:AppendLog(record, Constants.logKind.Step, format("Step: %s", stepTitle), detail)
       if record.labyrinth then
         self:EnsureChamber(record, stepTitle)
+        record.watch.routeStep = stepTitle
+      else
+        Data:NoteShownStep(record, stepTitle)
       end
     end
   end
@@ -719,6 +793,7 @@ function Capture:MarkRunFinished(record)
   if not record.finishedElapsed then
     record.finishedElapsed = self:Elapsed(record)
   end
+  Data:StampStep(record, record.watch.routeStep, record.finishedElapsed)
   self:AppendLog(record, Constants.logKind.DelveComplete, "Delve complete")
 end
 
@@ -771,11 +846,12 @@ function Capture:UpdateCompanion(record)
 end
 
 ---@param record LDT_Record
+---@return boolean?
 function Capture:ObserveBoons(record)
   if not record.boons then
     return
   end
-  local aura = C_UnitAuras.GetPlayerAuraBySpellID(Constants.boonSpellID)
+  local aura = C_UnitAuras.GetPlayerAuraBySpellID(Data.boonSpellID)
   if not aura or issecretvalue(aura) then
     return
   end
@@ -830,6 +906,7 @@ function Capture:ObserveBoons(record)
     end
     self:AppendLog(record, Constants.logKind.Boon, table.concat(parts, " | "))
   end
+  return changed
 end
 
 ---@param record LDT_Record
@@ -1051,9 +1128,7 @@ function Capture:EnsureRun()
   self.reloadNoted = true
   self:FillStart(record)
   self:Observe(record)
-  if addon.Module_Main then
-    addon.Module_Main:ShowRun()
-  end
+  PaintRecords()
 end
 
 function Capture:Finish()
@@ -1085,6 +1160,7 @@ function Capture:Finish()
   if character then
     character.activeRecordID = nil
   end
+  PaintRecords()
 end
 
 ---@param encounterID number
@@ -1140,48 +1216,235 @@ function Capture:InInstance()
   return instanceType ~= nil and instanceType ~= "" and instanceType ~= "none"
 end
 
+function Capture:UpdatePreview()
+  local name = C_DelvesUI.GetDelveEntranceTitleString()
+  local variant = C_DelvesUI.GetDelveEntranceHeaderString()
+  if not name or issecretvalue(name) or name == "" then
+    name = nil
+  end
+  if not variant or issecretvalue(variant) or variant == "" or variant == name then
+    variant = nil
+  end
+  local mapID = C_DelvesUI.GetDelveEntranceMapID()
+  if not mapID or issecretvalue(mapID) or mapID <= 0 then
+    mapID = nil
+  end
+  local tier
+  local picker = _G.DelvesDifficultyPickerFrame
+  if picker and picker.GetSelectedTierInfo then
+    local info = picker:GetSelectedTierInfo()
+    if info and info.tier and not issecretvalue(info.tier) and info.tier > 0 then
+      tier = info.tier
+    end
+  end
+  if not tier and C_DelvesUI.HasActiveDelve() then
+    local activeTier = C_DelvesUI.GetActiveDelveTier()
+    if activeTier and activeTier.tier and not issecretvalue(activeTier.tier) and activeTier.tier > 0 then
+      tier = activeTier.tier
+    end
+  end
+  local route, bestFinish = Data:PreviewRoute(name, mapID, tier)
+  ---@type LDT_Preview
+  local preview = {
+    name = name,
+    variant = variant,
+    mapID = mapID,
+    tier = tier,
+    activeSpellIDs = CopySpellIDs(C_ScenarioInfo.GetTieredEntranceActiveSpells()),
+    routeID = route and route.id or nil,
+    bestFinish = bestFinish,
+  }
+  self.preview = preview
+end
+
 function Capture:Sync()
+  local picker = _G.DelvesDifficultyPickerFrame
+  if picker and not pickerHooked then
+    pickerHooked = true
+    picker:HookScript("OnShow", function()
+      Capture:Sync()
+    end)
+    picker:HookScript("OnHide", function()
+      Capture:Sync()
+    end)
+    if picker.Dropdown and picker.Dropdown.RegisterCallback and DropdownButtonMixin then
+      picker.Dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuClose, function()
+        Capture:Sync()
+      end)
+    end
+  end
+  local tracker = _G.ObjectiveTrackerFrame
+  if tracker and not trackerHooked then
+    trackerHooked = true
+    tracker:HookScript("OnShow", function(frame)
+      if not Data.db or not Data.db.global.timer.replaceTracker or not Capture:IsInside() then
+        return
+      end
+      frame:Hide()
+      Capture.trackerHidden = true
+    end)
+  end
   if not self.ready then
     return
   end
-  if self:IsInside() then
-    self.outsideSince = nil
+  local inDelve = self:IsInside()
+  local inInstance = self:InInstance()
+  if inInstance then
+    self.zoneKnown = true
+  end
+  local hideTracker = Data.db.global.timer.replaceTracker and inDelve
+  if tracker and hideTracker then
+    if tracker:IsShown() then
+      tracker:Hide()
+    end
+    self.trackerHidden = true
+  elseif tracker and self.trackerHidden then
+    self.trackerHidden = false
+    tracker:Show()
+  end
+  if inDelve or inInstance then
+    self.preview = nil
     self.entranceNoted = false
-    self:EnsureRun()
+    if inDelve then
+      self:EnsureRun()
+    else
+      local active = Data:GetActiveRecord()
+      if active then
+        self:EnsureClock(active, true)
+        self:Observe(active)
+      end
+    end
+  elseif self.zoneKnown and Data:GetActiveRecord() then
+    self:Finish()
+  end
+  PaintReport()
+  local context = nil
+  if inDelve then
+    context = "run"
+  elseif not inInstance and picker and picker:IsShown() then
+    context = "preview"
+    self:UpdatePreview()
+  else
+    self.preview = nil
+  end
+  if context == self.timerContext then
     return
   end
-  if self:InInstance() then
-    self.outsideSince = nil
-    local active = Data:GetActiveRecord()
-    if active then
-      self:EnsureClock(active, true)
-      self:Observe(active)
+  self.timerContext = context
+  local timer = addon.Module_Timer
+  if not timer then
+    return
+  end
+  if context then
+    local shown = timer.frame and timer.frame:IsShown()
+    if not shown then
+      timer:ShowRun()
+      self.timerFromGame = true
     end
     return
   end
-  local entranceOpen = self:EntranceOpen()
-  if entranceOpen and not self.entranceNoted then
-    self.entranceNoted = true
-    if addon.Module_Main then
-      addon.Module_Main:ShowRun()
-    end
-  elseif not entranceOpen then
-    self.entranceNoted = false
+  if self.timerFromGame then
+    self.timerFromGame = false
+    timer:HideRun()
   end
-  if Data:GetActiveRecord() then
-    if not self.outsideSince then
-      self.outsideSince = GetTime()
-      return
-    end
-    if GetTime() - self.outsideSince < 5 then
-      return
-    end
-  end
-  self.outsideSince = nil
-  self:Finish()
 end
 
 function Capture:Register()
+  Events:RegisterEvent("SCENARIO_COMPLETED", function()
+    Capture:OnScenarioCompleted()
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("ENCOUNTER_END", function(_, _, encounterID, encounterName, difficultyID, groupSize, success)
+    Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("PLAYER_MONEY", function()
+    Capture:OnMoney()
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("CURRENCY_DISPLAY_UPDATE", function(_, _, currencyType, quantity, quantityChange)
+    Capture:OnCurrency(currencyType, quantity, quantityChange)
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("CHAT_MSG_LOOT", function(_, _, ...)
+    local message = ...
+    Capture:OnLoot(message, select(12, ...))
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("PLAYER_DEAD", function()
+    Capture:OnDeath()
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("PLAYER_ENTERING_WORLD", function()
+    local first = not Capture.ready
+    Capture.ready = true
+    Capture:Sync()
+    if first and addon.ApiLog then
+      addon.ApiLog:LogState()
+    end
+  end, true)
+  Events:RegisterEvent("UNIT_AURA", function(_, _, unit)
+    if unit ~= "player" then
+      return
+    end
+    local record = Data:GetActiveRecord()
+    if not record then
+      return
+    end
+    if Capture:ObserveBoons(record) then
+      PaintReport()
+    end
+  end, true)
+  Events:RegisterEvent({
+    "UPDATE_FACTION",
+    "MAJOR_FACTION_RENOWN_LEVEL_CHANGED",
+  }, function()
+    local record = Data:GetActiveRecord()
+    if not record then
+      return
+    end
+    Capture:UpdateCompanion(record)
+    Capture:ObserveRenown(record)
+    PaintReport()
+  end, true)
+  Events:RegisterEvent({
+    "ZONE_CHANGED",
+    "ZONE_CHANGED_INDOORS",
+    "ZONE_CHANGED_NEW_AREA",
+  }, function()
+    if not Capture.ready then
+      return
+    end
+    Capture.zoneKnown = true
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("ADDON_LOADED", function(_, _, name)
+    if name == "Blizzard_DelvesDifficultyPicker" then
+      Capture:Sync()
+    end
+  end, true)
+  Events:RegisterEvent({
+    "ACTIVE_DELVE_DATA_UPDATE",
+    "WALK_IN_DATA_UPDATE",
+    "SCENARIO_UPDATE",
+    "SCENARIO_CRITERIA_UPDATE",
+    "SCENARIO_CRITERIA_SHOW_STATE_UPDATE",
+    "SCENARIO_BONUS_OBJECTIVE_COMPLETE",
+    "SCENARIO_BONUS_VISIBILITY_UPDATE",
+    "SCENARIO_SPELL_UPDATE",
+    "SCENARIO_POI_UPDATE",
+    "ENCOUNTER_START",
+    "WEEKLY_REWARDS_UPDATE",
+    "DELVE_ASSIST_ACTION",
+    "DELVES_ACCOUNT_DATA_ELEMENT_CHANGED",
+    "PARTY_ELIGIBILITY_FOR_DELVE_TIERS_CHANGED",
+    "SHOW_DELVES_COMPANION_CONFIGURATION_UI",
+  }, function()
+    Capture:Sync()
+  end, true)
+  if not addon.ApiLog then
+    return
+  end
   Events:RegisterEvent({
     "PLAYER_ENTERING_WORLD",
     "ACTIVE_DELVE_DATA_UPDATE",
@@ -1209,47 +1472,6 @@ function Capture:Register()
     "CHAT_MSG_LOOT",
     "PLAYER_DEAD",
   }, function(_, event, ...)
-    if addon.ApiLog then
-      addon.ApiLog:OnEvent(event, ...)
-    end
-    if event == "SCENARIO_COMPLETED" then
-      Capture:OnScenarioCompleted()
-    elseif event == "ENCOUNTER_END" then
-      local encounterID, encounterName, difficultyID, groupSize, success = ...
-      Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
-    elseif event == "PLAYER_MONEY" then
-      Capture:OnMoney()
-    elseif event == "CURRENCY_DISPLAY_UPDATE" then
-      local currencyType, quantity, quantityChange = ...
-      Capture:OnCurrency(currencyType, quantity, quantityChange)
-    elseif event == "CHAT_MSG_LOOT" then
-      local message = ...
-      local guid = select(12, ...)
-      Capture:OnLoot(message, guid)
-    elseif event == "PLAYER_DEAD" then
-      Capture:OnDeath()
-    end
-    if event == "PLAYER_ENTERING_WORLD" and not Capture.seenWorld then
-      Capture.seenWorld = true
-      C_Timer.After(1, function()
-        Capture.ready = true
-        Capture:Sync()
-        if addon.ApiLog then
-          addon.ApiLog:LogState()
-        end
-      end)
-      return
-    end
-    Capture:Sync()
-    if addon.ApiLog then
-      addon.ApiLog:LogState()
-    end
+    addon.ApiLog:OnEvent(event, ...)
   end, true)
-
-  C_Timer.NewTicker(0.5, function()
-    Capture:Sync()
-    if addon.ApiLog then
-      addon.ApiLog:OnPoll()
-    end
-  end)
 end

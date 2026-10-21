@@ -43,19 +43,19 @@ function Core:OnInitialize()
         return
       end
       if mouseButton == "RightButton" then
-        if addon.Module_Main then
-          addon.Module_Main:OpenMenu(displayFrame)
+        if addon.Module_Timer then
+          addon.Module_Timer:OpenMenu(displayFrame)
         end
         return
       end
-      if addon.Module_Main then
-        addon.Module_Main:ToggleWindow()
+      if addon.Module_Timer then
+        addon.Module_Timer:ToggleWindow()
       end
     end,
     OnTooltipShow = function(tooltip)
       tooltip:SetText(addon.title, 1, 1, 1)
-      tooltip:AddLine("|cff00ff00Left click|r to show or hide the tracker.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-      tooltip:AddLine("|cff00ff00Right click|r to open settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+      tooltip:AddLine("|cff00ff00Left click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+      tooltip:AddLine("|cff00ff00Right click|r to open timer settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
       tooltip:AddLine("|cff00ff00Shift click|r to open records.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
     end,
   }
@@ -103,8 +103,8 @@ function Core:OnChatCommand(input)
 end
 
 function Core:ToggleWindow()
-  if not addon.Module_Main then
+  if not addon.Module_Timer then
     return
   end
-  addon.Module_Main:ToggleWindow()
+  addon.Module_Timer:ToggleWindow()
 end

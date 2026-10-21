@@ -1,9 +1,9 @@
 ---@class LDT_Addon
 local addon = select(2, ...)
 
----@class LDT_Module_Main
-local Module = addon.Core:NewModule("Main")
-addon.Module_Main = Module
+---@class LDT_Module_Report
+local Module = addon.Core:NewModule("Report")
+addon.Module_Report = Module
 
 local Data = addon.Data
 local Constants = addon.Constants
@@ -25,48 +25,6 @@ local FONT_CLOCK = "GameFontNormalLarge"
 local FONT_HEADER = "GameFontNormalLarge"
 local FONT_PANEL = "GameFontNormal"
 local FONT_ROW = "GameFontHighlightSmall"
-
----@class LDT_RowColumn
----@field text string
----@field font string|nil
----@field r number|nil
----@field g number|nil
----@field b number|nil
----@field align "LEFT"|"CENTER"|"RIGHT"|nil
----@field width number|nil
----@field icon number|string|nil
----@field spellID number|nil
----@field barMin number|nil
----@field barMax number|nil
----@field barValue number|nil
----@field textOnBar "center"|"left"|"right"|"above"|nil
-
----@class LDT_RowModel
----@field columns LDT_RowColumn[]
----@field height number|nil
----@field itemLink string|nil
----@field currencyID number|nil
----@field goldCopper number|nil
-
----@class LDT_WidgetColumnFrame : Frame
----@field text FontString
----@field icon Texture
----@field bar StatusBar
----@field textFrame Frame
-
----@class LDT_WidgetRowFrame : Frame
----@field columns LDT_WidgetColumnFrame[]
-
----@class LDT_WidgetPanel : Frame
----@field id LDT_SectionId
----@field header Button
----@field title FontString
----@field chevron Texture
----@field headerBackground Texture
----@field bodyBackground Texture
----@field rule Texture
----@field rowFrames LDT_WidgetRowFrame[]
----@field rows LDT_RowModel[]
 
 ---@param text string
 ---@param width number|nil
@@ -137,23 +95,20 @@ local function SplitRow(label, elapsed, bestElapsed, large)
     timeWidth = CLOCK_TIME_WIDTH
     height = 24
   end
+  local red, green, blue = 0.95, 0.95, 0.95
+  if elapsed and bestElapsed then
+    if elapsed < bestElapsed - 0.05 then
+      red, green, blue = 0.35, 0.9, 0.5
+    elseif elapsed > bestElapsed + 0.05 then
+      red, green, blue = 1, 0.4, 0.4
+    end
+  end
   ---@type LDT_RowColumn[]
   local columns = {
     TextColumn(label, nil, "LEFT", font, 0.95, 0.95, 0.95),
+    TextColumn(elapsed and Helpers.FormatElapsed(elapsed) or "", timeWidth, "RIGHT", font, red, green, blue),
+    TextColumn(bestElapsed and Helpers.FormatElapsed(bestElapsed) or "", timeWidth, "RIGHT", font, 0.55, 0.55, 0.55),
   }
-  if elapsed then
-    columns[#columns + 1] = TextColumn(Helpers.FormatElapsed(elapsed), timeWidth, "RIGHT", font, 1, 0.82, 0.2)
-  end
-  if bestElapsed and elapsed then
-    local delta = elapsed - bestElapsed
-    local red, green, blue = 0.75, 0.75, 0.75
-    if delta > 0.05 then
-      red, green, blue = 1, 0.4, 0.4
-    elseif delta < -0.05 then
-      red, green, blue = 0.35, 0.9, 0.5
-    end
-    columns[#columns + 1] = TextColumn(Helpers.FormatDelta(delta), timeWidth, "RIGHT", font, red, green, blue)
-  end
   ---@type LDT_RowModel
   local row = { columns = columns, height = height }
   return row
@@ -246,65 +201,47 @@ end
 ---@param record LDT_Record
 ---@param best LDT_Record|nil
 ---@return LDT_RowModel[]
-local function RunRows(record, best)
+local function RunRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
-  local tier = Helpers.RunTier(record)
-  local difficulty = record.instance and record.instance.difficultyName
-  local summary = "Delve"
-  if tier then
-    summary = format("Tier %d", tier)
-  end
-  if difficulty and difficulty ~= "" then
-    summary = format("%s, %s", summary, difficulty)
-  end
-  if best then
-    summary = format("%s, vs tier %d best", summary, tier)
-  end
-  rows[#rows + 1] = { columns = { TextColumn(summary, nil, "LEFT", FONT_ROW, 0.8, 0.8, 0.8) }, height = 16 }
-  local place = record.place
-  local placeName = place and place.subzone
-  if not placeName or placeName == "" then
-    placeName = place and place.zone
-  end
-  if placeName and placeName ~= "" then
-    rows[#rows + 1] = { columns = { TextColumn(placeName, nil, "LEFT", FONT_ROW, 0.9, 0.9, 0.9) }, height = 16 }
-  end
   local player = record.player
-  if player then
-    ---@type LDT_RowColumn[]
-    local columns = {}
-    if player.level then
-      columns[#columns + 1] = TextColumn(format("Level %d", player.level), nil, "LEFT", FONT_ROW, 0.85, 0.85, 0.85)
-    end
-    if player.itemLevel then
-      columns[#columns + 1] = TextColumn(format("ilvl %d", math.floor(player.itemLevel)), nil, "LEFT", FONT_ROW, 0.85, 0.85, 0.85)
-    end
-    if player.specName and player.specName ~= "" then
-      columns[#columns + 1] = TextColumn(player.specName, nil, "LEFT", FONT_ROW, 0.85, 0.85, 0.85)
-    end
-    if #columns > 0 then
-      rows[#rows + 1] = { columns = columns, height = 16 }
+  local portrait = TextColumn("", 36, "LEFT")
+  portrait.width = 36
+  if player and player.guid and UnitGUID("player") == player.guid then
+    portrait.unit = "player"
+  elseif player and player.classFile then
+    local atlas = GetClassAtlas(player.classFile)
+    if atlas then
+      portrait.atlas = atlas
     end
   end
-  ---@type LDT_RowColumn[]
-  local status = {
-    TextColumn(format("Deaths %d", record.deaths or 0), nil, "LEFT", FONT_ROW, 0.95, 0.55, 0.45),
+  local name = player and player.name or ""
+  if player and player.specName and player.specName ~= "" then
+    name = format("%s, %s", name, player.specName)
+  end
+  rows[#rows + 1] = {
+    columns = { portrait, TextColumn(name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95) },
+    height = 28,
   }
-  if record.lives ~= nil then
-    status[#status + 1] = TextColumn(format("Lives %d", record.lives), nil, "LEFT", FONT_ROW, 0.55, 0.9, 0.55)
+  local delve = record.instance and record.instance.name
+  if not delve or delve == "" then
+    delve = record.place and (record.place.subzone or record.place.zone) or "Delve"
   end
-  local entered = #record.chambers
-  if record.labyrinth or entered > 0 then
-    local completed = 0
-    LiqUI.Utils.TableForEach(record.chambers, function(chamber)
-      if chamber.completedElapsed then
-        completed = completed + 1
-      end
-    end)
-    status[#status + 1] = TextColumn(format("Chambers %d/%d", completed, entered), nil, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9)
+  if record.variant and record.variant ~= "" then
+    delve = format("%s, %s", delve, record.variant)
   end
-  rows[#rows + 1] = { columns = status, height = 16 }
+  local tier = Helpers.RunTier(record)
+  local tierText = ""
+  if tier then
+    tierText = format("Tier %d", tier)
+  end
+  rows[#rows + 1] = {
+    columns = {
+      TextColumn(delve, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
+      TextColumn(tierText, 72, "RIGHT", FONT_PANEL, 0.95, 0.95, 0.95),
+    },
+    height = 22,
+  }
   return rows
 end
 
@@ -386,76 +323,53 @@ local function TimerRows(record, best)
   ---@type LDT_RowModel[]
   local rows = {}
   local now = HeadlineElapsed(record)
-  local live = LiveElapsed(record)
   local bestFinish = best and Helpers.CompletionTime(best) or nil
-  rows[#rows + 1] = SplitRow("Time", now, bestFinish, true)
-  local spells = record.entrance and record.entrance.activeSpellIDs
-  if spells and #spells > 0 then
-    ---@type LDT_RowColumn[]
-    local spellColumns = {}
-    for index = 1, #spells do
-      local spellID = spells[index]
-      if spellID and not issecretvalue(spellID) then
-        local texture = C_Spell.GetSpellTexture(spellID)
-        if texture and not issecretvalue(texture) then
-          local column = TextColumn("", 22, "CENTER")
-          column.icon = texture
-          column.spellID = spellID
-          spellColumns[#spellColumns + 1] = column
-        end
-      end
-    end
-    if #spellColumns > 0 then
-      rows[#rows + 1] = { columns = spellColumns, height = 22 }
+  local red, green, blue = 0.95, 0.95, 0.95
+  if bestFinish then
+    if now < bestFinish - 0.05 then
+      red, green, blue = 0.35, 0.9, 0.5
+    elseif now > bestFinish + 0.05 then
+      red, green, blue = 1, 0.4, 0.4
     end
   end
-  local frozen = record.finishedElapsed or record.bossElapsed
-  local clock = live
-  if frozen then
-    clock = now
+  rows[#rows + 1] = {
+    columns = {
+      TextColumn("This run", 72, "LEFT", FONT_ROW, 0.8, 0.8, 0.8),
+      TextColumn(Helpers.FormatElapsed(now), nil, "LEFT", FONT_CLOCK, red, green, blue),
+    },
+    height = 22,
+  }
+  rows[#rows + 1] = {
+    columns = {
+      TextColumn("Best", 72, "LEFT", FONT_ROW, 0.55, 0.55, 0.55),
+      TextColumn(bestFinish and Helpers.FormatElapsed(bestFinish) or "", nil, "LEFT", FONT_CLOCK, 0.7, 0.7, 0.7),
+    },
+    height = 22,
+  }
+  rows[#rows + 1] = {
+    columns = {
+      TextColumn("", nil, "LEFT"),
+      TextColumn("Time", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
+      TextColumn("Best", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
+    },
+    height = 14,
+  }
+  if record.labyrinth then
+    for index = 1, #record.chambers do
+      local chamber = record.chambers[index]
+      rows[#rows + 1] = SplitRow(chamber.name, chamber.completedElapsed, nil, false)
+    end
+    return rows
   end
-  local objectives = ObjectiveRows(record, clock)
-  for index = 1, #objectives do
-    local objective = objectives[index]
-    local label = objective.description
-    if objective.failed then
-      label = format("%s failed", label)
-    end
-    local elapsed = objective.completed
-    if not elapsed and not (frozen and objective.appeared > clock) then
-      elapsed = math.max(0, clock - objective.appeared)
-    end
-    rows[#rows + 1] = SplitRow(label, elapsed, nil, false)
+  local route = record.routeID and Data.db.global.routes[record.routeID]
+  local steps = route and route.steps or {}
+  for index = 1, #steps do
+    local stepName = steps[index]
+    local elapsed = record.splits and record.splits[stepName]
+    rows[#rows + 1] = SplitRow(stepName, elapsed, Data:BestSplit(record, stepName), false)
   end
-  for index = 1, #record.chambers do
-    local chamber = record.chambers[index]
-    local elapsed = chamber.completedElapsed
-    if not elapsed and not (frozen and chamber.enteredElapsed > clock) then
-      elapsed = math.max(0, clock - chamber.enteredElapsed)
-    end
-    local bestElapsed = nil
-    if chamber.completedElapsed then
-      bestElapsed = BestChamberTime(best, chamber.name)
-    end
-    rows[#rows + 1] = SplitRow(chamber.name, elapsed, bestElapsed, false)
-  end
-  for index = 1, #record.encounters do
-    local encounter = record.encounters[index]
-    local label = encounter.encounterName
-    if encounter.success ~= 1 then
-      label = format("%s failed", label)
-    end
-    local bestElapsed = nil
-    if encounter.success == 1 then
-      bestElapsed = BestEncounterTime(best, encounter.encounterName)
-    end
-    rows[#rows + 1] = SplitRow(label, encounter.elapsed, bestElapsed, false)
-  end
-  if record.finishedElapsed then
-    rows[#rows + 1] = SplitRow("Complete", record.finishedElapsed, bestFinish, false)
-  end
-  if #rows == 1 and #objectives == 0 then
-    rows[#rows + 1] = { columns = { TextColumn("No step or boss yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+  if #steps == 0 then
+    rows[#rows + 1] = { columns = { TextColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
   end
   return rows
 end
@@ -470,37 +384,53 @@ local function CompanionRows(record)
     rows[1] = { columns = { TextColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
     return rows
   end
-  local header = companion.name
+  local level = ""
   if companion.level then
-    header = format("%s  %d", header, companion.level)
-    if companion.maxLevel then
-      header = format("%s/%d", header, companion.maxLevel)
+    level = format("Level %d", companion.level)
+  end
+  local gain = ""
+  if companion.startStanding and companion.standing then
+    local gained = companion.standing - companion.startStanding
+    if gained > 0 then
+      gain = format("XP +%d", gained)
+    elseif gained < 0 then
+      gain = format("XP %d", gained)
+    else
+      gain = "XP +0"
     end
   end
-  rows[#rows + 1] = { columns = { TextColumn(header, nil, "LEFT", FONT_ROW, 0.95, 0.95, 0.95) }, height = 16 }
+  rows[#rows + 1] = {
+    columns = {
+      TextColumn(companion.name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
+      TextColumn(level, nil, "CENTER", FONT_ROW, 0.9, 0.9, 0.9),
+      TextColumn(gain, nil, "RIGHT", FONT_ROW, 0.4, 0.8, 1),
+    },
+    height = 18,
+  }
+  ---@type LDT_RowColumn[]
+  local barColumns = {}
   local minValue = companion.reactionThreshold
   local maxValue = companion.nextThreshold
   local standing = companion.standing
   if minValue and maxValue and standing and maxValue > minValue then
-    local span = maxValue - minValue
-    local into = standing - minValue
-    rows[#rows + 1] = BarRow(format("%d / %d", into, span), minValue, maxValue, standing, "center")
+    local bar = TextColumn(format("%d / %d", standing, maxValue), nil, "CENTER", FONT_ROW, 1, 1, 1)
+    bar.barMin = minValue
+    bar.barMax = maxValue
+    bar.barValue = standing
+    bar.textOnBar = "center"
+    barColumns[#barColumns + 1] = bar
+  elseif standing then
+    barColumns[#barColumns + 1] = TextColumn(format("%d", standing), nil, "LEFT", FONT_ROW, 0.9, 0.9, 0.9)
   end
-  if companion.startStanding and companion.standing then
-    local gained = companion.standing - companion.startStanding
-    local gainedText = format("%d", gained)
-    if gained > 0 then
-      gainedText = format("+%d", gained)
-    end
-    rows[#rows + 1] = {
-      columns = { TextColumn(format("This run %s", gainedText), nil, "LEFT", FONT_ROW, 0.4, 0.8, 1) },
-      height = 16,
-    }
+  if companion.roleAtlas then
+    local role = TextColumn("", 22, "CENTER")
+    role.atlas = companion.roleAtlas
+    role.tip = companion.roleName
+    barColumns[#barColumns + 1] = role
+  elseif companion.roleName and companion.roleName ~= "" then
+    barColumns[#barColumns + 1] = TextColumn(companion.roleName, 72, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9)
   end
-  ---@type LDT_RowColumn[]
-  local sockets = {}
   local socketSpells = {
-    companion.roleSpellID,
     companion.flavorSpellID,
     companion.combatCurioSpellID,
     companion.utilityCurioSpellID,
@@ -513,25 +443,12 @@ local function CompanionRows(record)
         local column = TextColumn("", 22, "CENTER")
         column.icon = texture
         column.spellID = spellID
-        sockets[#sockets + 1] = column
+        barColumns[#barColumns + 1] = column
       end
     end
   end
-  if #sockets > 0 then
-    rows[#rows + 1] = { columns = sockets, height = 22 }
-  else
-    if companion.flavorName and companion.flavorName ~= "" then
-      rows[#rows + 1] = { columns = { TextColumn(companion.flavorName, nil, "LEFT", FONT_ROW, 0.75, 0.75, 0.75) }, height = 16 }
-    end
-    if companion.roleName and companion.roleName ~= "" then
-      rows[#rows + 1] = { columns = { TextColumn(format("Role %s", companion.roleName), nil, "LEFT") }, height = 16 }
-    end
-    if companion.combatCurioName and companion.combatCurioName ~= "" then
-      rows[#rows + 1] = { columns = { TextColumn(format("Combat %s", companion.combatCurioName), nil, "LEFT") }, height = 16 }
-    end
-    if companion.utilityCurioName and companion.utilityCurioName ~= "" then
-      rows[#rows + 1] = { columns = { TextColumn(format("Utility %s", companion.utilityCurioName), nil, "LEFT") }, height = 16 }
-    end
+  if #barColumns > 0 then
+    rows[#rows + 1] = { columns = barColumns, height = 22 }
   end
   return rows
 end
@@ -623,9 +540,9 @@ local function BoonRows(record)
     rows[#rows + 1] = {
       columns = {
         TextColumn(stat.label, nil, "LEFT", FONT_ROW, statR or 0.85, statG or 0.85, statB or 0.85),
-        TextColumn(stat.value, 56, "RIGHT", FONT_ROW, statR or 0.75, statG or 0.9, statB or 0.7),
+        TextColumn(stat.value, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
         TextColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
-        TextColumn(nextValue, 56, "RIGHT", FONT_ROW, nextR or 0.75, nextG or 0.9, nextB or 0.7),
+        TextColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
       },
       height = 16,
     }
@@ -878,7 +795,7 @@ end
 ---@param column LDT_WidgetColumnFrame
 ---@param model LDT_RowColumn
 ---@param rowHeight number
-local function ApplyColumn(column, model, rowHeight)
+local function PaintColumn(column, model, rowHeight)
   local text = column.text
   local bar = column.bar
   local icon = column.icon
@@ -891,7 +808,18 @@ local function ApplyColumn(column, model, rowHeight)
   text:SetTextColor(model.r or red, model.g or green, model.b or blue)
   text:SetJustifyH(model.align or "LEFT")
   text:SetText(model.text or "")
-  if model.icon then
+  local iconSize = model.width or 18
+  icon:SetSize(iconSize, iconSize)
+  if model.unit then
+    SetPortraitTexture(icon, model.unit)
+    icon:Show()
+  elseif model.displayID then
+    SetPortraitTextureFromCreatureDisplayID(icon, model.displayID)
+    icon:Show()
+  elseif model.atlas then
+    icon:SetAtlas(model.atlas)
+    icon:Show()
+  elseif model.icon then
     icon:SetTexture(model.icon)
     icon:Show()
   else
@@ -1028,14 +956,25 @@ local function LayoutPanel(panel, spacing)
       column:ClearAllPoints()
       column:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
       column:SetWidth(math.max(width, 1))
-      ApplyColumn(column, columns[columnIndex], rowHeight)
+      PaintColumn(column, columns[columnIndex], rowHeight)
       local spellID = columns[columnIndex].spellID
+      local tip = columns[columnIndex].tip
       local textFrame = column.textFrame
       if spellID then
         textFrame:EnableMouse(true)
         textFrame:SetScript("OnEnter", function()
           GameTooltip:SetOwner(textFrame, "ANCHOR_RIGHT")
           GameTooltip:SetSpellByID(spellID)
+          GameTooltip:Show()
+        end)
+        textFrame:SetScript("OnLeave", function()
+          GameTooltip:Hide()
+        end)
+      elseif tip and tip ~= "" then
+        textFrame:EnableMouse(true)
+        textFrame:SetScript("OnEnter", function()
+          GameTooltip:SetOwner(textFrame, "ANCHOR_RIGHT")
+          GameTooltip:SetText(tip, 1, 1, 1)
           GameTooltip:Show()
         end)
         textFrame:SetScript("OnLeave", function()
@@ -1234,7 +1173,8 @@ function Module:Build()
   frame:SetPoint(widget.point, UIParent, widget.relativePoint, widget.x, widget.y)
   frame:SetMovable(true)
   frame:SetClampedToScreen(true)
-  frame:SetFrameStrata("MEDIUM")
+  frame:SetFrameStrata("HIGH")
+  frame:SetToplevel(true)
 
   local header = CreateFrame("Button", nil, frame)
   header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
@@ -1303,50 +1243,21 @@ function Module:Build()
   end)
   BindTooltip(closeButton, "Close")
 
-  local minimizeButton = CreateFrame("Button", nil, header)
-  minimizeButton:SetSize(18, 18)
-  minimizeButton:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
-  local minimizeIcon = minimizeButton:CreateTexture(nil, "ARTWORK")
-  minimizeIcon:SetAllPoints()
-  minimizeIcon:SetAtlas("ui-questtrackerbutton-collapse-all")
-  local minimizeHighlight = minimizeButton:CreateTexture(nil, "HIGHLIGHT")
-  minimizeHighlight:SetAllPoints()
-  minimizeHighlight:SetAtlas("ui-questtrackerbutton-red-highlight")
-  minimizeHighlight:SetBlendMode("ADD")
-  minimizeButton:SetHighlightTexture(minimizeHighlight)
-  minimizeButton:SetScript("OnClick", function()
-    widget.minimized = not widget.minimized
-    self:Render()
-  end)
-  BindTooltip(minimizeButton, "Collapse")
-
-  local recordsButton = CreateFrame("Button", nil, header)
-  recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
-  recordsButton:SetPoint("RIGHT", minimizeButton, "LEFT", -ICON_GAP, 0)
-  local recordsIcon = recordsButton:CreateTexture(nil, "ARTWORK")
-  recordsIcon:SetAllPoints()
-  recordsIcon:SetTexture(Constants.media.Icon)
-  recordsButton:SetScript("OnClick", function()
-    if addon.Module_Records then
-      addon.Module_Records:ToggleWindow()
-    end
-  end)
-  BindTooltip(recordsButton, "Records")
-
   local cog = CreateFrame("DropdownButton", nil, header)
   cog:SetSize(ICON_SIZE, ICON_SIZE)
-  cog:SetPoint("RIGHT", recordsButton, "LEFT", -ICON_GAP, 0)
+  cog:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
   local cogIcon = cog:CreateTexture(nil, "ARTWORK")
   cogIcon:SetAllPoints()
   cogIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
   cog.menuGenerator = function(_, rootMenu)
     self:BuildSettingsMenu(rootMenu)
   end
+  cog:Hide()
   BindTooltip(cog, "Settings")
 
   local title = header:CreateFontString(nil, "OVERLAY", FONT_HEADER)
   title:SetPoint("LEFT", header, "LEFT", 8, 0)
-  title:SetPoint("RIGHT", header, "RIGHT", -((ICON_SIZE * 4) + (ICON_GAP * 3) + 16), 0)
+  title:SetPoint("RIGHT", closeButton, "LEFT", -8, 0)
   title:SetJustifyH("LEFT")
   title:SetJustifyV("MIDDLE")
   title:SetWordWrap(false)
@@ -1413,74 +1324,41 @@ function Module:Build()
   self.headerBackground = headerBackground
   self.headerRule = headerRule
   self.closeButton = closeButton
-  self.minimizeIcon = minimizeIcon
   self.panels = panels
   self.pinTopRight = PinTopRight
   frame:Hide()
   frame:SetScript("OnShow", function()
-    widget.shown = true
+    Module:StartTicker()
   end)
   frame:SetScript("OnHide", function()
-    widget.shown = false
+    Module:StopTicker()
   end)
 end
 
-function Module:ApplyChrome()
+function Module:PaintChrome()
   local frame = self.frame
-  local widget = Data.db.global.widget
   if not frame then
     return
   end
-  local background = widget.backgroundColor
-  ---@type Backdrop
-  local backdrop = { bgFile = "Interface/Buttons/WHITE8X8" }
-  if widget.border.enabled then
-    backdrop.edgeFile = "Interface/Buttons/WHITE8X8"
-    backdrop.edgeSize = 1
+  frame:SetBackdrop({ bgFile = "Interface/Buttons/WHITE8X8" })
+  frame:SetBackdropColor(0, 0, 0, 0.55)
+  if self.headerBackground then
+    self.headerBackground:SetColorTexture(0, 0, 0, 0.35)
   end
-  frame:SetBackdrop(backdrop)
-  frame:SetBackdropColor(background.r, background.g, background.b, background.a)
-  if widget.border.enabled then
-    local border = widget.border.color
-    frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
+  if self.title then
+    self.title:SetTextColor(1, 0.82, 0)
   end
-  local headerColor = widget.headerBackgroundColor
-  if self.headerBackground and headerColor then
-    self.headerBackground:SetColorTexture(headerColor.r, headerColor.g, headerColor.b, headerColor.a)
-  end
-  local headerFont = widget.headerFontColor
-  if self.title and headerFont then
-    self.title:SetTextColor(headerFont.r, headerFont.g, headerFont.b)
-  end
-  local flat = widget.theme == Constants.themeId.Flat
   if self.headerRule then
-    self.headerRule:SetShown(not flat)
-    if not flat and headerFont then
-      self.headerRule:SetColorTexture(headerFont.r, headerFont.g, headerFont.b, 0.45)
-    end
+    self.headerRule:Hide()
   end
-  local panelColor = widget.panelHeaderBackgroundColor
-  local panelFont = widget.panelHeaderFontColor
-  local ruleColor = widget.sectionRuleColor
-  local sectionColor = widget.sectionBackgroundColor
-  if self.panels and panelColor and panelFont then
+  if self.panels then
     for index = 1, #Constants.sections do
       local panel = self.panels[Constants.sections[index].id]
       panel.headerBackground:Show()
-      panel.headerBackground:SetColorTexture(panelColor.r, panelColor.g, panelColor.b, panelColor.a)
-      panel.title:SetTextColor(panelFont.r, panelFont.g, panelFont.b)
-      if ruleColor and ruleColor.a > 0 then
-        panel.rule:Show()
-        panel.rule:SetColorTexture(ruleColor.r, ruleColor.g, ruleColor.b, ruleColor.a)
-      else
-        panel.rule:Hide()
-      end
-      if sectionColor and sectionColor.a > 0 then
-        panel.bodyBackground:Show()
-        panel.bodyBackground:SetColorTexture(sectionColor.r, sectionColor.g, sectionColor.b, sectionColor.a)
-      else
-        panel.bodyBackground:Hide()
-      end
+      panel.headerBackground:SetColorTexture(1, 1, 1, 0.06)
+      panel.title:SetTextColor(1, 0.82, 0)
+      panel.rule:SetColorTexture(1, 0.82, 0, 0)
+      panel.bodyBackground:SetColorTexture(0, 0, 0, 0)
     end
   end
 end
@@ -1494,9 +1372,6 @@ function Module:Layout()
   local widget = Data.db.global.widget
   local spacing = SpacingMetrics()
   local inset = 0
-  if widget.border.enabled then
-    inset = BORDER_INSET
-  end
   local header = self.header
   if header then
     header:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
@@ -1506,7 +1381,7 @@ function Module:Layout()
     self.closeButton:SetPoint("RIGHT", header, "RIGHT", -spacing.horizontal, 0)
   end
   if header and self.title and self.headerRule then
-    local buttonRow = (ICON_SIZE * 4) + (ICON_GAP * 3) + 8
+    local buttonRow = ICON_SIZE + 8
     self.title:SetPoint("LEFT", header, "LEFT", spacing.horizontal, 0)
     self.title:SetPoint("RIGHT", header, "RIGHT", -(spacing.horizontal + buttonRow), 0)
     self.headerRule:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", spacing.horizontal, 0)
@@ -1515,20 +1390,6 @@ function Module:Layout()
   local point = frame:GetPoint(1)
   if point ~= "TOPRIGHT" and self.pinTopRight then
     self.pinTopRight()
-  end
-  if self.minimizeIcon then
-    if widget.minimized then
-      self.minimizeIcon:SetAtlas("ui-questtrackerbutton-expand-all")
-    else
-      self.minimizeIcon:SetAtlas("ui-questtrackerbutton-collapse-all")
-    end
-  end
-  if widget.minimized then
-    for index = 1, #Constants.sections do
-      panels[Constants.sections[index].id]:Hide()
-    end
-    frame:SetHeight(HEADER_HEIGHT + (inset * 2))
-    return
   end
   local gap = widget.sectionGap or 0
   local y = -(HEADER_HEIGHT + inset)
@@ -1539,34 +1400,30 @@ function Module:Layout()
   for index = 1, #Constants.sections do
     local info = Constants.sections[index]
     local panel = panels[info.id]
-    local settings = widget.sections[info.id]
-    if not settings.enabled then
-      panel:Hide()
-    else
-      panel:Show()
-      panel.title:SetPoint("LEFT", panel.header, "LEFT", spacing.horizontal, 0)
-      panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(spacing.horizontal + 20), 0)
-      panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -spacing.horizontal, 0)
-      panel.rule:SetPoint("BOTTOMLEFT", panel.header, "BOTTOMLEFT", spacing.horizontal, 0)
-      panel.rule:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -spacing.horizontal, 0)
-      if placed and gap > 0 then
-        y = y - gap
-      end
-      placed = true
-      panel:ClearAllPoints()
-      panel:SetWidth(PANEL_WIDTH - (inset * 2))
-      panel:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, y)
-      if settings.collapsed then
-        panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
-        panel.rows = {}
-        LayoutPanel(panel, spacing)
-        panel:SetHeight(PANEL_HEADER)
-      else
-        panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-        LayoutPanel(panel, spacing)
-      end
-      y = y - panel:GetHeight()
+    local collapsed = widget.sections[info.id].collapsed
+    panel:Show()
+    panel.title:SetPoint("LEFT", panel.header, "LEFT", spacing.horizontal, 0)
+    panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(spacing.horizontal + 20), 0)
+    panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -spacing.horizontal, 0)
+    panel.rule:SetPoint("BOTTOMLEFT", panel.header, "BOTTOMLEFT", spacing.horizontal, 0)
+    panel.rule:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -spacing.horizontal, 0)
+    if placed and gap > 0 then
+      y = y - gap
     end
+    placed = true
+    panel:ClearAllPoints()
+    panel:SetWidth(PANEL_WIDTH - (inset * 2))
+    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, y)
+    if collapsed then
+      panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
+      panel.rows = {}
+      LayoutPanel(panel, spacing)
+      panel:SetHeight(PANEL_HEADER)
+    else
+      panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
+      LayoutPanel(panel, spacing)
+    end
+    y = y - panel:GetHeight()
   end
   frame:SetHeight(math.max(HEADER_HEIGHT + (inset * 2), -y + inset))
 end
@@ -1715,19 +1572,18 @@ function Module:Fill(record)
     return
   end
   if not record then
-    self.title:SetText("Demo")
-    local demo, best = DemoRecord()
-    panels[Constants.sectionId.Run].rows = RunRows(demo, best)
-    panels[Constants.sectionId.Timers].rows = TimerRows(demo, best)
-    panels[Constants.sectionId.Companion].rows = CompanionRows(demo)
-    panels[Constants.sectionId.Boons].rows = BoonRows(demo)
-    panels[Constants.sectionId.Gains].rows = GainsRows(demo)
-    panels[Constants.sectionId.Renown].rows = RenownRows(demo)
+    self.title:SetText("Report")
+    panels[Constants.sectionId.Run].rows = {}
+    panels[Constants.sectionId.Timers].rows = {}
+    panels[Constants.sectionId.Companion].rows = {}
+    panels[Constants.sectionId.Boons].rows = {}
+    panels[Constants.sectionId.Gains].rows = {}
+    panels[Constants.sectionId.Renown].rows = {}
     return
   end
   local best = Helpers.BestRun(record)
   self.title:SetText(RunTitle(record))
-  panels[Constants.sectionId.Run].rows = RunRows(record, best)
+  panels[Constants.sectionId.Run].rows = RunRows(record)
   panels[Constants.sectionId.Timers].rows = TimerRows(record, best)
   panels[Constants.sectionId.Companion].rows = CompanionRows(record)
   panels[Constants.sectionId.Boons].rows = BoonRows(record)
@@ -1740,37 +1596,56 @@ function Module:Render()
   if not self.frame or not self.frame:IsShown() then
     return
   end
-  self:ApplyChrome()
-  self:Fill(Data:GetActiveRecord())
+  local record = self.pinnedRecord or Data:GetActiveRecord()
+  self:PaintChrome()
+  self:Fill(record)
   self:Layout()
-end
-
-function Module:ShowRun()
-  self:Build()
-  if self.frame and not self.frame:IsShown() then
-    self.frame:Show()
+  if not record or record.result ~= Constants.runResult.Active then
+    self:StopTicker()
   end
-  self:Render()
 end
 
-function Module:ToggleWindow()
+function Module:StartTicker()
+  local record = self.pinnedRecord or Data:GetActiveRecord()
+  if not record or record.result ~= Constants.runResult.Active or self.ticker then
+    return
+  end
+  self.ticker = C_Timer.NewTicker(0.1, function()
+    Module:Render()
+  end)
+end
+
+function Module:StopTicker()
+  if self.ticker then
+    self.ticker:Cancel()
+    self.ticker = nil
+  end
+end
+
+---@param record LDT_Record|nil
+function Module:ShowRecord(record)
   self:Build()
   if not self.frame then
     return
   end
-  if self.frame:IsShown() then
+  if self.frame:IsShown() and self.pinnedRecord == record then
     self.frame:Hide()
     return
   end
+  self.pinnedRecord = record
   self.frame:Show()
+  self.frame:Raise()
+  self:StartTicker()
   self:Render()
 end
 
+function Module:ShowRun()
+  self:ShowRecord(Data:GetActiveRecord())
+end
+
+function Module:ToggleWindow()
+  self:ShowRecord(Data:GetActiveRecord())
+end
+
 function Module:OnEnable()
-  if Data.db.global.widget.shown then
-    self:ShowRun()
-  end
-  C_Timer.NewTicker(0.1, function()
-    Module:Render()
-  end)
 end

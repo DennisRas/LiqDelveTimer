@@ -58,6 +58,7 @@
 ---@field utilityCurioNodeID number|nil
 ---@field roleName string|nil
 ---@field roleSpellID number|nil
+---@field roleAtlas string|nil
 ---@field combatCurioName string|nil
 ---@field combatCurioSpellID number|nil
 ---@field utilityCurioName string|nil
@@ -195,6 +196,7 @@
 ---@field criteriaSignature string|nil
 ---@field scenarioComplete boolean
 ---@field delveComplete boolean
+---@field routeStep string|nil
 ---@field criteria table<number, LDT_CriteriaWatch>
 
 ---@class LDT_LogDetail
@@ -229,6 +231,7 @@
 ---@field bossName string|nil
 ---@field bossElapsed number|nil
 ---@field sawDelveComplete boolean
+---@field variant string|nil
 ---@field deaths number
 ---@field lives number|nil
 ---@field player LDT_Player|nil
@@ -246,5 +249,7 @@
 ---@field loot LDT_LootRow[]
 ---@field chambers LDT_Chamber[]
 ---@field encounters LDT_Encounter[]
+---@field routeID string|nil
+---@field splits table<string, number>
 ---@field log LDT_LogEntry[]
 ---@field watch LDT_Watch

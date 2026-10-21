@@ -6,7 +6,6 @@
 
 ---@class LDT_Constants
 ---@field prefix string
----@field labyrinthMapID number
 ---@field runResult table<string, LDT_RunResultId>
 ---@field logKind table<string, LDT_LogKindId>
 ---@field sectionId table<string, LDT_SectionId>
@@ -16,8 +15,6 @@
 ---@field spacingId table<string, LDT_SpacingId>
 ---@field spacings LDT_Spacing[]
 ---@field sectionGaps LDT_SectionGap[]
----@field boonSpellID number
----@field hiddenItemIDs table<number, boolean>
 ---@field boonStatColors LDT_BoonStatColor[]
 ---@field media LDT_Media
 

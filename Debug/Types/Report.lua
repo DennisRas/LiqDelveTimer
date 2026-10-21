@@ -1,0 +1,51 @@
+---@class LDT_RowColumn
+---@field text string
+---@field font string|nil
+---@field r number|nil
+---@field g number|nil
+---@field b number|nil
+---@field align "LEFT"|"CENTER"|"RIGHT"|nil
+---@field width number|nil
+---@field icon number|string|nil
+---@field unit string|nil
+---@field atlas string|nil
+---@field displayID number|nil
+---@field spellID number|nil
+---@field tip string|nil
+---@field barMin number|nil
+---@field barMax number|nil
+---@field barValue number|nil
+---@field textOnBar "center"|"left"|"right"|"above"|nil
+
+---@class LDT_RowModel
+---@field columns LDT_RowColumn[]
+---@field height number|nil
+---@field itemLink string|nil
+---@field currencyID number|nil
+---@field goldCopper number|nil
+
+---@class LDT_WidgetColumnFrame : Frame
+---@field text FontString
+---@field icon Texture
+---@field bar StatusBar
+---@field textFrame Frame
+
+---@class LDT_WidgetRowFrame : Frame
+---@field columns LDT_WidgetColumnFrame[]
+
+---@class LDT_WidgetPanel : Frame
+---@field id LDT_SectionId
+---@field header Button
+---@field title FontString
+---@field chevron Texture
+---@field headerBackground Texture
+---@field bodyBackground Texture
+---@field rule Texture
+---@field rowFrames LDT_WidgetRowFrame[]
+---@field rows LDT_RowModel[]
+
+---@class LDT_RecordsTableRow : LiqUI_TableDataRowExtended
+---@field startedAt number
+---@field delve string
+---@field result string
+---@field duration number

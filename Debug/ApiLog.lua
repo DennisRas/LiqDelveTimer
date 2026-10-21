@@ -533,16 +533,6 @@ function ApiLog:LogState()
   self:EmitState(lines, packed)
 end
 
-function ApiLog:OnPoll()
-  local lines = self:CollectState()
-  local packed = table.concat(lines, "\n")
-  if packed == self.lastPacked then
-    return
-  end
-  self:Log("poll", "state changed")
-  self:EmitState(lines, packed)
-end
-
 ---@param event string
 ---@param ... any
 function ApiLog:OnEvent(event, ...)

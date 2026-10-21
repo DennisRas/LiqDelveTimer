@@ -10,12 +10,6 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 
----@class LDT_RecordsTableRow : LiqUI_TableDataRowExtended
----@field startedAt number
----@field delve string
----@field result string
----@field duration number
-
 ---@param record LDT_Record
 ---@return number
 local function ActiveElapsed(record)
@@ -147,7 +141,9 @@ function Module:Render()
         Helpers.FormatElapsed(duration),
       },
       onClick = function()
-        Module:ShowDetail(record)
+        if addon.Module_Report then
+          addon.Module_Report:ShowRecord(record)
+        end
       end,
     }
     data[#data + 1] = row
@@ -157,12 +153,15 @@ end
 
 function Module:ToggleWindow()
   self:Render()
-  self.window:Toggle()
-  self:Render()
+  if not self.window then
+    return
+  end
+  if self.window:IsShown() then
+    self.window:Hide()
+    return
+  end
+  self.window:Show()
 end
 
 function Module:OnEnable()
-  C_Timer.NewTicker(0.5, function()
-    Module:Render()
-  end)
 end

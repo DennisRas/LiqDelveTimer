@@ -59,7 +59,7 @@ end
 ---@param itemID number|nil
 ---@return boolean
 function Helpers.ItemHidden(itemID)
-  return itemID ~= nil and addon.Constants.hiddenItemIDs[itemID] == true
+  return itemID ~= nil and addon.Data.hiddenItemIDs[itemID] == true
 end
 
 ---@param delta number|nil
