@@ -38,9 +38,6 @@
 ---@field header Button
 ---@field title FontString
 ---@field chevron Texture
----@field headerBackground Texture
----@field bodyBackground Texture
----@field rule Texture
 ---@field rowFrames LDT_WidgetRowFrame[]
 ---@field rows LDT_RowModel[]
 

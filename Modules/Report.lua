@@ -10,19 +10,20 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
+local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
+local SetHighlightColor = LiqUI.Utils.SetHighlightColor
 
 local PANEL_WIDTH = 360
-local PANEL_HEADER = 24
+local ROW_HEIGHT = 22
 local PAD = 8
 local COLUMN_GAP = 6
-local ROW_GAP = 2
 local TIME_WIDTH = 72
 local CLOCK_TIME_WIDTH = 88
 local VALUE_WIDTH = 72
 
 local FONT_CLOCK = "GameFontNormalLarge"
-local FONT_PANEL = "GameFontNormal"
-local FONT_ROW = "GameFontHighlightSmall"
+local FONT_PANEL = "GameFontHighlight_NoShadow"
+local FONT_ROW = "GameFontHighlight_NoShadow"
 
 ---@param text string
 ---@param width number|nil
@@ -74,7 +75,7 @@ local function BarRow(text, minValue, maxValue, value, textOnBar)
   ---@type LDT_RowModel
   local row = {
     columns = { column },
-    height = place == "above" and 30 or 16,
+    height = place == "above" and 30 or ROW_HEIGHT,
   }
   return row
 end
@@ -87,7 +88,7 @@ end
 local function SplitRow(label, elapsed, bestElapsed, large)
   local font = FONT_ROW
   local timeWidth = TIME_WIDTH
-  local height = 16
+  local height = ROW_HEIGHT
   if large then
     font = FONT_CLOCK
     timeWidth = CLOCK_TIME_WIDTH
@@ -350,7 +351,7 @@ local function TimerRows(record, best)
       TextColumn("Time", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
       TextColumn("Best", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
     },
-    height = 14,
+    height = ROW_HEIGHT,
   }
   if record.labyrinth then
     for index = 1, #record.chambers do
@@ -367,7 +368,7 @@ local function TimerRows(record, best)
     rows[#rows + 1] = SplitRow(stepName, elapsed, Data:BestSplit(record, stepName), false)
   end
   if #steps == 0 then
-    rows[#rows + 1] = { columns = { TextColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+    rows[#rows + 1] = { columns = { TextColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
   end
   return rows
 end
@@ -379,7 +380,7 @@ local function CompanionRows(record)
   local rows = {}
   local companion = record.companion
   if not companion or not companion.name or companion.name == "" then
-    rows[1] = { columns = { TextColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+    rows[1] = { columns = { TextColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   local level = ""
@@ -403,7 +404,7 @@ local function CompanionRows(record)
       TextColumn(level, nil, "CENTER", FONT_ROW, 0.9, 0.9, 0.9),
       TextColumn(gain, nil, "RIGHT", FONT_ROW, 0.4, 0.8, 1),
     },
-    height = 18,
+    height = ROW_HEIGHT,
   }
   ---@type LDT_RowColumn[]
   local barColumns = {}
@@ -519,7 +520,7 @@ local function BoonRows(record)
     end
   end
   if #stats == 0 then
-    rows[1] = { columns = { TextColumn("No boons", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+    rows[1] = { columns = { TextColumn("No boons", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   local index = 1
@@ -542,7 +543,7 @@ local function BoonRows(record)
         TextColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
         TextColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
       },
-      height = 16,
+      height = ROW_HEIGHT,
     }
     index = index + 2
   end
@@ -570,7 +571,7 @@ local function GainsRows(record)
         TextColumn("Gold", nil, "LEFT"),
         TextColumn(Helpers.FormatMoney(gold.gained), nil, "RIGHT", FONT_ROW, 1, 1, 1),
       },
-      height = 16,
+      height = ROW_HEIGHT,
       goldCopper = gold.gained,
     }
   end
@@ -611,7 +612,7 @@ local function GainsRows(record)
           nameColumn,
           TextColumn(SignedCount(total), VALUE_WIDTH, "RIGHT", FONT_ROW, 0.5, 0.85, 1),
         },
-        height = 18,
+        height = ROW_HEIGHT,
         currencyID = currencyID,
       }
     end
@@ -722,7 +723,7 @@ local function GainsRows(record)
         nameColumn,
         TextColumn(tostring(item.quantity), VALUE_WIDTH, "RIGHT"),
       },
-      height = 18,
+      height = ROW_HEIGHT,
     }
     if item.itemLink and item.itemLink:find("|H", 1, true) then
       row.itemLink = item.itemLink
@@ -730,7 +731,7 @@ local function GainsRows(record)
     rows[#rows + 1] = row
   end
   if #rows == 0 then
-    rows[1] = { columns = { TextColumn("No gains yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+    rows[1] = { columns = { TextColumn("No gains yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
   end
   return rows
 end
@@ -742,7 +743,7 @@ local function RenownRows(record)
   local rows = {}
   local renowns = record.renowns or {}
   if #renowns == 0 then
-    rows[1] = { columns = { TextColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = 16 }
+    rows[1] = { columns = { TextColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   for index = 1, #renowns do
@@ -798,7 +799,7 @@ local function PaintColumn(column, model, rowHeight)
   local bar = column.bar
   local icon = column.icon
   text:SetFontObject(model.font or FONT_ROW)
-  local red, green, blue = 0.9, 0.9, 0.9
+  local red, green, blue = 1, 1, 1
   text:SetTextColor(model.r or red, model.g or green, model.b or blue)
   text:SetJustifyH(model.align or "LEFT")
   text:SetText(model.text or "")
@@ -861,7 +862,7 @@ end
 ---@param panel LDT_WidgetPanel
 local function LayoutPanel(panel)
   local rows = panel.rows or {}
-  local y = -PANEL_HEADER
+  local y = -ROW_HEIGHT
   for index = 1, #rows do
     local model = rows[index]
     local row = panel.rowFrames[index]
@@ -873,10 +874,12 @@ local function LayoutPanel(panel)
       row = created
     end
     row:Show()
-    local rowHeight = model.height or 16
+    local rowHeight = model.height or ROW_HEIGHT
+    SetBackgroundColor(row, 1, 1, 1, index % 2 == 0 and 0.01 or 0)
     if model.itemLink or model.currencyID or model.goldCopper then
       row:EnableMouse(true)
       row:SetScript("OnEnter", function()
+        SetHighlightColor(row, 1, 1, 1, 0.05)
         GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
         if model.itemLink then
           GameTooltip:SetHyperlink(model.itemLink)
@@ -889,12 +892,14 @@ local function LayoutPanel(panel)
         GameTooltip:Show()
       end)
       row:SetScript("OnLeave", function()
+        SetHighlightColor(row, 1, 1, 1, 0)
         GameTooltip:Hide()
       end)
     else
       row:EnableMouse(false)
       row:SetScript("OnEnter", nil)
       row:SetScript("OnLeave", nil)
+      SetHighlightColor(row, 1, 1, 1, 0)
     end
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
@@ -968,15 +973,12 @@ local function LayoutPanel(panel)
       row.columns[columnIndex]:Hide()
     end
     y = y - rowHeight
-    if index < #rows then
-      y = y - ROW_GAP
-    end
   end
   for index = #rows + 1, #panel.rowFrames do
     panel.rowFrames[index]:Hide()
   end
   if #rows == 0 then
-    panel:SetHeight(PANEL_HEADER)
+    panel:SetHeight(ROW_HEIGHT)
     return
   end
   panel:SetHeight(-y)
@@ -1016,24 +1018,14 @@ function Module:Build()
     local panelHeader = CreateFrame("Button", nil, panel)
     panelHeader:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
     panelHeader:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
-    panelHeader:SetHeight(PANEL_HEADER)
-    local panelBackground = panelHeader:CreateTexture(nil, "BACKGROUND")
-    panelBackground:SetAllPoints()
-    panelBackground:SetColorTexture(1, 1, 1, 0.06)
-    local highlight = panelHeader:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetColorTexture(1, 1, 1, 0.14)
-    panelHeader:SetHighlightTexture(highlight)
-    local bodyBackground = panel:CreateTexture(nil, "BACKGROUND")
-    bodyBackground:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -PANEL_HEADER)
-    bodyBackground:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
-    bodyBackground:SetColorTexture(0, 0, 0, 0)
-    bodyBackground:Hide()
-    local rule = panelHeader:CreateTexture(nil, "BORDER")
-    rule:SetHeight(1)
-    rule:SetPoint("BOTTOMLEFT", panelHeader, "BOTTOMLEFT", 8, 0)
-    rule:SetPoint("BOTTOMRIGHT", panelHeader, "BOTTOMRIGHT", -8, 0)
-    rule:SetColorTexture(1, 0.82, 0, 0.35)
+    panelHeader:SetHeight(ROW_HEIGHT)
+    SetBackgroundColor(panelHeader, 0, 0, 0, 0.3)
+    panelHeader:SetScript("OnEnter", function()
+      SetHighlightColor(panelHeader, 1, 1, 1, 0.05)
+    end)
+    panelHeader:SetScript("OnLeave", function()
+      SetHighlightColor(panelHeader, 1, 1, 1, 0)
+    end)
     local chevron = panelHeader:CreateTexture(nil, "ARTWORK")
     chevron:SetSize(16, 16)
     chevron:SetPoint("RIGHT", panelHeader, "RIGHT", -8, 0)
@@ -1053,27 +1045,11 @@ function Module:Build()
     panel.header = panelHeader
     panel.title = panelTitle
     panel.chevron = chevron
-    panel.headerBackground = panelBackground
-    panel.bodyBackground = bodyBackground
-    panel.rule = rule
+    panelTitle:SetTextColor(1, 0.82, 0)
     panels[info.id] = panel
   end
 
   self.panels = panels
-end
-
-function Module:PaintChrome()
-  if not self.panels then
-    return
-  end
-  for index = 1, #Constants.sections do
-    local panel = self.panels[Constants.sections[index].id]
-    panel.headerBackground:Show()
-    panel.headerBackground:SetColorTexture(1, 1, 1, 0.06)
-    panel.title:SetTextColor(1, 0.82, 0)
-    panel.rule:SetColorTexture(1, 0.82, 0, 0)
-    panel.bodyBackground:SetColorTexture(0, 0, 0, 0)
-  end
 end
 
 function Module:Layout()
@@ -1092,8 +1068,6 @@ function Module:Layout()
     panel.title:SetPoint("LEFT", panel.header, "LEFT", PAD, 0)
     panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(PAD + 20), 0)
     panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -PAD, 0)
-    panel.rule:SetPoint("BOTTOMLEFT", panel.header, "BOTTOMLEFT", PAD, 0)
-    panel.rule:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -PAD, 0)
     panel:ClearAllPoints()
     panel:SetWidth(PANEL_WIDTH)
     panel:SetPoint("TOPLEFT", body, "TOPLEFT", 0, y)
@@ -1101,14 +1075,14 @@ function Module:Layout()
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
       panel.rows = {}
       LayoutPanel(panel)
-      panel:SetHeight(PANEL_HEADER)
+      panel:SetHeight(ROW_HEIGHT)
     else
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
       LayoutPanel(panel)
     end
     y = y - panel:GetHeight()
   end
-  window:SetBodySize(PANEL_WIDTH, math.max(PANEL_HEADER, -y))
+  window:SetBodySize(PANEL_WIDTH, math.max(ROW_HEIGHT, -y))
 end
 
 ---@return LDT_Record, LDT_Record
@@ -1280,7 +1254,6 @@ function Module:Render()
     return
   end
   local record = self.pinnedRecord or Data:GetActiveRecord()
-  self:PaintChrome()
   self:Fill(record)
   self:Layout()
   if not record or record.result ~= Constants.runResult.Active then
