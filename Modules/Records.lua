@@ -164,4 +164,9 @@ function Module:ToggleWindow()
 end
 
 function Module:OnEnable()
+  addon.Capture.onRunStored = function()
+    if Module.window and Module.window:IsShown() then
+      Module:Render()
+    end
+  end
 end

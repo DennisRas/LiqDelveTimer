@@ -44,14 +44,7 @@
 ---@field ticker TickerCallback|nil
 
 ---@class LDT_Module_Report : AceModule
----@field frame Frame|nil
----@field title FontString|nil
----@field header Frame|nil
----@field headerBackground Texture|nil
----@field headerRule Texture|nil
----@field closeButton Button|nil
----@field pinTopRight fun()|nil
----@field dragging boolean|nil
+---@field window LiqUI_WindowInstance|nil
 ---@field panels table<LDT_SectionId, LDT_WidgetPanel>|nil
 ---@field pinnedRecord LDT_Record|nil
 ---@field ticker TickerCallback|nil
@@ -70,5 +63,6 @@
 ---@field timerContext "run"|"preview"|nil
 ---@field preview LDT_Preview|nil
 ---@field trackerHidden boolean|nil
+---@field onRunStored function|nil
 
 ---@class LDT_Debug

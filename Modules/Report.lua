@@ -12,17 +12,15 @@ local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
 
 local PANEL_WIDTH = 360
-local HEADER_HEIGHT = 30
 local PANEL_HEADER = 24
-local ICON_SIZE = 16
-local ICON_GAP = 6
-local BORDER_INSET = 2
+local PAD = 8
+local COLUMN_GAP = 6
+local ROW_GAP = 2
 local TIME_WIDTH = 72
 local CLOCK_TIME_WIDTH = 88
 local VALUE_WIDTH = 72
 
 local FONT_CLOCK = "GameFontNormalLarge"
-local FONT_HEADER = "GameFontNormalLarge"
 local FONT_PANEL = "GameFontNormal"
 local FONT_ROW = "GameFontHighlightSmall"
 
@@ -800,11 +798,7 @@ local function PaintColumn(column, model, rowHeight)
   local bar = column.bar
   local icon = column.icon
   text:SetFontObject(model.font or FONT_ROW)
-  local bodyColor = Data.db.global.widget.bodyFontColor
   local red, green, blue = 0.9, 0.9, 0.9
-  if bodyColor then
-    red, green, blue = bodyColor.r, bodyColor.g, bodyColor.b
-  end
   text:SetTextColor(model.r or red, model.g or green, model.b or blue)
   text:SetJustifyH(model.align or "LEFT")
   text:SetText(model.text or "")
@@ -864,25 +858,8 @@ local function PaintColumn(column, model, rowHeight)
   column:SetHeight(rowHeight)
 end
 
----@return LDT_Spacing
-local function SpacingMetrics()
-  local id = Data.db.global.widget.spacing
-  local fallback = Constants.spacings[1]
-  for index = 1, #Constants.spacings do
-    local choice = Constants.spacings[index]
-    if choice.id == Constants.spacingId.Default then
-      fallback = choice
-    end
-    if choice.id == id then
-      return choice
-    end
-  end
-  return fallback
-end
-
 ---@param panel LDT_WidgetPanel
----@param spacing LDT_Spacing
-local function LayoutPanel(panel, spacing)
+local function LayoutPanel(panel)
   local rows = panel.rows or {}
   local y = -PANEL_HEADER
   for index = 1, #rows do
@@ -924,12 +901,12 @@ local function LayoutPanel(panel, spacing)
     row:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
     row:SetHeight(rowHeight)
     local columns = model.columns
-    local gap = spacing.column
+    local gap = COLUMN_GAP
     local panelWidth = panel:GetWidth()
     if panelWidth <= 0 then
       panelWidth = PANEL_WIDTH
     end
-    local inner = panelWidth - (spacing.horizontal * 2) - (math.max(#columns - 1, 0) * gap)
+    local inner = panelWidth - (PAD * 2) - (math.max(#columns - 1, 0) * gap)
     local used = 0
     local flex = 0
     for columnIndex = 1, #columns do
@@ -944,7 +921,7 @@ local function LayoutPanel(panel, spacing)
     if flex > 0 then
       flexWidth = (inner - used) / flex
     end
-    local x = spacing.horizontal
+    local x = PAD
     for columnIndex = 1, #columns do
       local column = row.columns[columnIndex]
       if not column then
@@ -992,7 +969,7 @@ local function LayoutPanel(panel, spacing)
     end
     y = y - rowHeight
     if index < #rows then
-      y = y - spacing.row
+      y = y - ROW_GAP
     end
   end
   for index = #rows + 1, #panel.rowFrames do
@@ -1005,270 +982,34 @@ local function LayoutPanel(panel, spacing)
   panel:SetHeight(-y)
 end
 
----@param color ColorTable
----@param apply function
-local function ShowColorPicker(color, apply)
-  local previous = { r = color.r, g = color.g, b = color.b, a = color.a }
-  ColorPickerFrame:SetupColorPickerAndShow({
-    r = color.r,
-    g = color.g,
-    b = color.b,
-    opacity = color.a,
-    hasOpacity = 1,
-    swatchFunc = function()
-      local red, green, blue = ColorPickerFrame:GetColorRGB()
-      local alpha = ColorPickerFrame:GetColorAlpha()
-      if red then
-        color.r = red
-        color.g = green
-        color.b = blue
-        color.a = alpha or color.a
-        apply()
-      end
-    end,
-    opacityFunc = function()
-      local alpha = ColorPickerFrame:GetColorAlpha()
-      if alpha then
-        color.a = alpha
-        apply()
-      end
-    end,
-    cancelFunc = function()
-      color.r = previous.r
-      color.g = previous.g
-      color.b = previous.b
-      color.a = previous.a
-      apply()
-    end,
-  })
-end
-
-function Module:BuildSettingsMenu(rootMenu)
-  local widget = Data.db.global.widget
-  rootMenu:CreateTitle("Tracker")
-  rootMenu:CreateCheckbox("Show tracker", function()
-    return self.frame and self.frame:IsShown()
-  end, function()
-    self:ToggleWindow()
-  end)
-  rootMenu:CreateButton("Records", function()
-    if addon.Module_Records then
-      addon.Module_Records:ToggleWindow()
-    end
-  end)
-  rootMenu:CreateTitle("Appearance")
-  local sectionsMenu = rootMenu:CreateButton("Sections")
-  for index = 1, #Constants.sections do
-    local section = Constants.sections[index]
-    sectionsMenu:CreateCheckbox(section.label, function()
-      return widget.sections[section.id].enabled
-    end, function()
-      local settings = widget.sections[section.id]
-      settings.enabled = not settings.enabled
-      self:Render()
-    end)
-  end
-  local themeMenu = rootMenu:CreateButton("Theme")
-  for index = 1, #Constants.themes do
-    local theme = Constants.themes[index]
-    themeMenu:CreateRadio(theme.label, function()
-      return widget.theme == theme.id
-    end, function()
-      widget.theme = theme.id
-      self:Render()
-    end, theme.id)
-  end
-  local colorsMenu = rootMenu:CreateButton("Colors")
-  local widgetColors = colorsMenu:CreateButton("Widget")
-  widgetColors:CreateColorSwatch("Background", function()
-    ShowColorPicker(widget.backgroundColor, function()
-      self:Render()
-    end)
-  end, widget.backgroundColor)
-  widgetColors:CreateColorSwatch("Header background", function()
-    ShowColorPicker(widget.headerBackgroundColor, function()
-      self:Render()
-    end)
-  end, widget.headerBackgroundColor)
-  widgetColors:CreateColorSwatch("Header text", function()
-    ShowColorPicker(widget.headerFontColor, function()
-      self:Render()
-    end)
-  end, widget.headerFontColor)
-  widgetColors:CreateColorSwatch("Text", function()
-    ShowColorPicker(widget.bodyFontColor, function()
-      self:Render()
-    end)
-  end, widget.bodyFontColor)
-  local sectionColors = colorsMenu:CreateButton("Sections")
-  sectionColors:CreateColorSwatch("Header background", function()
-    ShowColorPicker(widget.panelHeaderBackgroundColor, function()
-      self:Render()
-    end)
-  end, widget.panelHeaderBackgroundColor)
-  sectionColors:CreateColorSwatch("Header text", function()
-    ShowColorPicker(widget.panelHeaderFontColor, function()
-      self:Render()
-    end)
-  end, widget.panelHeaderFontColor)
-  sectionColors:CreateColorSwatch("Header line", function()
-    ShowColorPicker(widget.sectionRuleColor, function()
-      self:Render()
-    end)
-  end, widget.sectionRuleColor)
-  sectionColors:CreateColorSwatch("Background", function()
-    ShowColorPicker(widget.sectionBackgroundColor, function()
-      self:Render()
-    end)
-  end, widget.sectionBackgroundColor)
-  local borderMenu = rootMenu:CreateButton("Border")
-  borderMenu:CreateCheckbox("Enabled", function()
-    return widget.border.enabled
-  end, function()
-    widget.border.enabled = not widget.border.enabled
-    self:Render()
-  end)
-  borderMenu:CreateColorSwatch("Color", function()
-    ShowColorPicker(widget.border.color, function()
-      widget.border.enabled = true
-      self:Render()
-    end)
-  end, widget.border.color)
-  local spacingMenu = rootMenu:CreateButton("Spacing")
-  for index = 1, #Constants.spacings do
-    local choice = Constants.spacings[index]
-    spacingMenu:CreateRadio(choice.label, function()
-      return widget.spacing == choice.id
-    end, function()
-      widget.spacing = choice.id
-      self:Render()
-    end, choice.id)
-  end
-  local sectionGapMenu = spacingMenu:CreateButton("Between sections")
-  for index = 1, #Constants.sectionGaps do
-    local choice = Constants.sectionGaps[index]
-    sectionGapMenu:CreateRadio(choice.label, function()
-      return widget.sectionGap == choice.value
-    end, function()
-      widget.sectionGap = choice.value
-      self:Render()
-    end, choice.value)
-  end
-end
-
-function Module:OpenMenu(owner)
-  self:Render()
-  MenuUtil.CreateContextMenu(owner, function(_, rootMenu)
-    self:BuildSettingsMenu(rootMenu)
-  end)
-end
-
 function Module:Build()
-  if self.frame then
+  if self.window then
     return
   end
-  local widget = Data.db.global.widget
-  local frame = CreateFrame("Frame", addon.name .. "Tracker", UIParent, "BackdropTemplate")
-  frame:SetSize(PANEL_WIDTH, HEADER_HEIGHT)
-  frame:SetPoint(widget.point, UIParent, widget.relativePoint, widget.x, widget.y)
-  frame:SetMovable(true)
-  frame:SetClampedToScreen(true)
-  frame:SetFrameStrata("HIGH")
-  frame:SetToplevel(true)
-
-  local header = CreateFrame("Button", nil, frame)
-  header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-  header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-  header:SetHeight(HEADER_HEIGHT)
-  header:RegisterForDrag("LeftButton")
-  local headerBackground = header:CreateTexture(nil, "BACKGROUND")
-  headerBackground:SetAllPoints()
-  headerBackground:SetColorTexture(0, 0, 0, 0.35)
-  local headerRule = header:CreateTexture(nil, "BORDER")
-  headerRule:SetHeight(1)
-  headerRule:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 8, 0)
-  headerRule:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -8, 0)
-  headerRule:SetColorTexture(1, 0.82, 0, 0.45)
-
-  local function BindTooltip(owner, text)
-    owner:SetScript("OnEnter", function()
-      GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-      GameTooltip:SetText(text, 1, 1, 1)
-      GameTooltip:Show()
-    end)
-    owner:SetScript("OnLeave", function()
-      GameTooltip:Hide()
-    end)
-  end
-
-  local function PinTopRight()
-    if self.dragging then
-      return
-    end
-    local right = frame:GetRight()
-    local top = frame:GetTop()
-    local parentRight = UIParent:GetRight()
-    local parentTop = UIParent:GetTop()
-    if not right or not top or not parentRight or not parentTop or parentRight <= 0 then
-      return
-    end
-    local x = right - parentRight
-    local y = top - parentTop
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", x, y)
-    widget.point = "TOPRIGHT"
-    widget.relativePoint = "TOPRIGHT"
-    widget.x = x
-    widget.y = y
-  end
-
-  header:SetScript("OnDragStart", function()
-    self.dragging = true
-    frame:StartMoving()
+  local windows = Data.db.global.liqui.windows
+  self.window = LiqUI:NewElement("Window", {
+    name = addon.name .. "Report",
+    storage = windows.Report,
+    title = "Report",
+    icon = Constants.media.Icon,
+    width = PANEL_WIDTH,
+    height = 200,
+    onShow = function()
+      Module:StartTicker()
+      Module:Render()
+    end,
+  })
+  self.window:HookScript("OnHide", function()
+    Module:StopTicker()
   end)
-  header:SetScript("OnDragStop", function()
-    frame:StopMovingOrSizing()
-    self.dragging = false
-    PinTopRight()
-  end)
-
-  local closeButton = CreateFrame("Button", nil, header)
-  closeButton:SetSize(ICON_SIZE, ICON_SIZE)
-  closeButton:SetPoint("RIGHT", header, "RIGHT", -8, 0)
-  local closeIcon = closeButton:CreateTexture(nil, "ARTWORK")
-  closeIcon:SetAllPoints()
-  closeIcon:SetAtlas("common-search-clearbutton")
-  closeButton:SetScript("OnClick", function()
-    frame:Hide()
-  end)
-  BindTooltip(closeButton, "Close")
-
-  local cog = CreateFrame("DropdownButton", nil, header)
-  cog:SetSize(ICON_SIZE, ICON_SIZE)
-  cog:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
-  local cogIcon = cog:CreateTexture(nil, "ARTWORK")
-  cogIcon:SetAllPoints()
-  cogIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
-  cog.menuGenerator = function(_, rootMenu)
-    self:BuildSettingsMenu(rootMenu)
-  end
-  cog:Hide()
-  BindTooltip(cog, "Settings")
-
-  local title = header:CreateFontString(nil, "OVERLAY", FONT_HEADER)
-  title:SetPoint("LEFT", header, "LEFT", 8, 0)
-  title:SetPoint("RIGHT", closeButton, "LEFT", -8, 0)
-  title:SetJustifyH("LEFT")
-  title:SetJustifyV("MIDDLE")
-  title:SetWordWrap(false)
-  title:SetText("Delve")
+  local body = self.window.body
 
   ---@type table<LDT_SectionId, LDT_WidgetPanel>
   local panels = {}
   for index = 1, #Constants.sections do
     local info = Constants.sections[index]
     ---@type LDT_WidgetPanel
-    local panel = CreateFrame("Frame", nil, frame)
+    local panel = CreateFrame("Frame", nil, body)
     panel.id = info.id
     panel.rowFrames = {}
     panel.rows = {}
@@ -1305,8 +1046,8 @@ function Module:Build()
     panelTitle:SetWordWrap(false)
     panelTitle:SetText(info.label)
     panelHeader:SetScript("OnClick", function()
-      local settings = widget.sections[info.id]
-      settings.collapsed = not settings.collapsed
+      local collapsed = Data.db.global.report.collapsed
+      collapsed[info.id] = not collapsed[info.id]
       self:Render()
     end)
     panel.header = panelHeader
@@ -1318,114 +1059,56 @@ function Module:Build()
     panels[info.id] = panel
   end
 
-  self.frame = frame
-  self.title = title
-  self.header = header
-  self.headerBackground = headerBackground
-  self.headerRule = headerRule
-  self.closeButton = closeButton
   self.panels = panels
-  self.pinTopRight = PinTopRight
-  frame:Hide()
-  frame:SetScript("OnShow", function()
-    Module:StartTicker()
-  end)
-  frame:SetScript("OnHide", function()
-    Module:StopTicker()
-  end)
 end
 
 function Module:PaintChrome()
-  local frame = self.frame
-  if not frame then
+  if not self.panels then
     return
   end
-  frame:SetBackdrop({ bgFile = "Interface/Buttons/WHITE8X8" })
-  frame:SetBackdropColor(0, 0, 0, 0.55)
-  if self.headerBackground then
-    self.headerBackground:SetColorTexture(0, 0, 0, 0.35)
-  end
-  if self.title then
-    self.title:SetTextColor(1, 0.82, 0)
-  end
-  if self.headerRule then
-    self.headerRule:Hide()
-  end
-  if self.panels then
-    for index = 1, #Constants.sections do
-      local panel = self.panels[Constants.sections[index].id]
-      panel.headerBackground:Show()
-      panel.headerBackground:SetColorTexture(1, 1, 1, 0.06)
-      panel.title:SetTextColor(1, 0.82, 0)
-      panel.rule:SetColorTexture(1, 0.82, 0, 0)
-      panel.bodyBackground:SetColorTexture(0, 0, 0, 0)
-    end
+  for index = 1, #Constants.sections do
+    local panel = self.panels[Constants.sections[index].id]
+    panel.headerBackground:Show()
+    panel.headerBackground:SetColorTexture(1, 1, 1, 0.06)
+    panel.title:SetTextColor(1, 0.82, 0)
+    panel.rule:SetColorTexture(1, 0.82, 0, 0)
+    panel.bodyBackground:SetColorTexture(0, 0, 0, 0)
   end
 end
 
 function Module:Layout()
-  local frame = self.frame
+  local window = self.window
   local panels = self.panels
-  if not frame or not panels then
+  if not window or not panels then
     return
   end
-  local widget = Data.db.global.widget
-  local spacing = SpacingMetrics()
-  local inset = 0
-  local header = self.header
-  if header then
-    header:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, -inset)
-    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -inset, -inset)
-  end
-  if header and self.closeButton then
-    self.closeButton:SetPoint("RIGHT", header, "RIGHT", -spacing.horizontal, 0)
-  end
-  if header and self.title and self.headerRule then
-    local buttonRow = ICON_SIZE + 8
-    self.title:SetPoint("LEFT", header, "LEFT", spacing.horizontal, 0)
-    self.title:SetPoint("RIGHT", header, "RIGHT", -(spacing.horizontal + buttonRow), 0)
-    self.headerRule:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", spacing.horizontal, 0)
-    self.headerRule:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -spacing.horizontal, 0)
-  end
-  local point = frame:GetPoint(1)
-  if point ~= "TOPRIGHT" and self.pinTopRight then
-    self.pinTopRight()
-  end
-  local gap = widget.sectionGap or 0
-  local y = -(HEADER_HEIGHT + inset)
-  if gap > 0 then
-    y = y - gap
-  end
-  local placed = false
+  local collapsed = Data.db.global.report.collapsed
+  local body = window.body
+  local y = 0
   for index = 1, #Constants.sections do
     local info = Constants.sections[index]
     local panel = panels[info.id]
-    local collapsed = widget.sections[info.id].collapsed
     panel:Show()
-    panel.title:SetPoint("LEFT", panel.header, "LEFT", spacing.horizontal, 0)
-    panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(spacing.horizontal + 20), 0)
-    panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -spacing.horizontal, 0)
-    panel.rule:SetPoint("BOTTOMLEFT", panel.header, "BOTTOMLEFT", spacing.horizontal, 0)
-    panel.rule:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -spacing.horizontal, 0)
-    if placed and gap > 0 then
-      y = y - gap
-    end
-    placed = true
+    panel.title:SetPoint("LEFT", panel.header, "LEFT", PAD, 0)
+    panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(PAD + 20), 0)
+    panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -PAD, 0)
+    panel.rule:SetPoint("BOTTOMLEFT", panel.header, "BOTTOMLEFT", PAD, 0)
+    panel.rule:SetPoint("BOTTOMRIGHT", panel.header, "BOTTOMRIGHT", -PAD, 0)
     panel:ClearAllPoints()
-    panel:SetWidth(PANEL_WIDTH - (inset * 2))
-    panel:SetPoint("TOPLEFT", frame, "TOPLEFT", inset, y)
-    if collapsed then
+    panel:SetWidth(PANEL_WIDTH)
+    panel:SetPoint("TOPLEFT", body, "TOPLEFT", 0, y)
+    if collapsed[info.id] then
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
       panel.rows = {}
-      LayoutPanel(panel, spacing)
+      LayoutPanel(panel)
       panel:SetHeight(PANEL_HEADER)
     else
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-      LayoutPanel(panel, spacing)
+      LayoutPanel(panel)
     end
     y = y - panel:GetHeight()
   end
-  frame:SetHeight(math.max(HEADER_HEIGHT + (inset * 2), -y + inset))
+  window:SetBodySize(PANEL_WIDTH, math.max(PANEL_HEADER, -y))
 end
 
 ---@return LDT_Record, LDT_Record
@@ -1572,7 +1255,7 @@ function Module:Fill(record)
     return
   end
   if not record then
-    self.title:SetText("Report")
+    self.window:SetTitle("Report")
     panels[Constants.sectionId.Run].rows = {}
     panels[Constants.sectionId.Timers].rows = {}
     panels[Constants.sectionId.Companion].rows = {}
@@ -1582,7 +1265,7 @@ function Module:Fill(record)
     return
   end
   local best = Helpers.BestRun(record)
-  self.title:SetText(RunTitle(record))
+  self.window:SetTitle(RunTitle(record))
   panels[Constants.sectionId.Run].rows = RunRows(record)
   panels[Constants.sectionId.Timers].rows = TimerRows(record, best)
   panels[Constants.sectionId.Companion].rows = CompanionRows(record)
@@ -1593,7 +1276,7 @@ end
 
 function Module:Render()
   self:Build()
-  if not self.frame or not self.frame:IsShown() then
+  if not self.window or not self.window:IsShown() then
     return
   end
   local record = self.pinnedRecord or Data:GetActiveRecord()
@@ -1625,16 +1308,16 @@ end
 ---@param record LDT_Record|nil
 function Module:ShowRecord(record)
   self:Build()
-  if not self.frame then
+  if not self.window then
     return
   end
-  if self.frame:IsShown() and self.pinnedRecord == record then
-    self.frame:Hide()
+  if self.window:IsShown() and self.pinnedRecord == record then
+    self.window:Hide()
     return
   end
   self.pinnedRecord = record
-  self.frame:Show()
-  self.frame:Raise()
+  self.window:Show()
+  self.window:Raise()
   self:StartTicker()
   self:Render()
 end

@@ -31,6 +31,7 @@ Data.defaultDB = {
     },
     liqui = {
       windows = {
+        Report = {},
         Records = {},
         RecordDetail = {},
       },
@@ -38,34 +39,14 @@ Data.defaultDB = {
         Records = { hiddenColumns = {} },
       },
     },
-    widget = {
-      minimized = false,
-      point = "TOPRIGHT",
-      relativePoint = "TOPRIGHT",
-      x = -24,
-      y = -180,
-      spacing = "default",
-      sectionGap = 0,
-      theme = "flat",
-      backgroundColor = { r = 0, g = 0, b = 0, a = 0.55 },
-      headerBackgroundColor = { r = 0, g = 0, b = 0, a = 0.35 },
-      headerFontColor = { r = 1, g = 0.82, b = 0, a = 1 },
-      panelHeaderBackgroundColor = { r = 1, g = 1, b = 1, a = 0.06 },
-      panelHeaderFontColor = { r = 1, g = 0.82, b = 0, a = 1 },
-      sectionRuleColor = { r = 1, g = 0.82, b = 0, a = 0 },
-      sectionBackgroundColor = { r = 0, g = 0, b = 0, a = 0 },
-      bodyFontColor = { r = 0.9, g = 0.9, b = 0.9, a = 1 },
-      border = {
-        enabled = false,
-        color = { r = 1, g = 1, b = 1, a = 0.35 },
-      },
-      sections = {
-        run = { enabled = true, collapsed = false },
-        timers = { enabled = true, collapsed = false },
-        companion = { enabled = true, collapsed = false },
-        boons = { enabled = true, collapsed = false },
-        gains = { enabled = true, collapsed = false },
-        renown = { enabled = true, collapsed = false },
+    report = {
+      collapsed = {
+        run = false,
+        timers = false,
+        companion = false,
+        boons = false,
+        gains = false,
+        renown = false,
       },
     },
     logs = {

@@ -1,30 +1,5 @@
----@class LDT_WidgetSection
----@field enabled boolean
----@field collapsed boolean
-
----@class LDT_WidgetBorder
----@field enabled boolean
----@field color ColorTable
-
----@class LDT_Widget
----@field minimized boolean
----@field point string
----@field relativePoint string
----@field x number
----@field y number
----@field spacing LDT_SpacingId
----@field sectionGap number
----@field theme LDT_ThemeId
----@field backgroundColor ColorTable
----@field headerBackgroundColor ColorTable
----@field headerFontColor ColorTable
----@field panelHeaderBackgroundColor ColorTable
----@field panelHeaderFontColor ColorTable
----@field sectionRuleColor ColorTable
----@field sectionBackgroundColor ColorTable
----@field bodyFontColor ColorTable
----@field border LDT_WidgetBorder
----@field sections table<LDT_SectionId, LDT_WidgetSection>
+---@class LDT_ReportOptions
+---@field collapsed table<LDT_SectionId, boolean>
 
 ---@class LDT_Route
 ---@field id string
@@ -48,10 +23,10 @@
 ---@field dbVersion number
 ---@field minimap { minimapPos: number, hide: boolean, lock: boolean }
 ---@field liqui LiqUI_DB
----@field widget LDT_Widget
+---@field report LDT_ReportOptions
+---@field logs LiqUI_LoggerDB
 ---@field timer LDT_TimerOptions
 ---@field routes table<string, LDT_Route>
----@field logs LiqUI_LoggerDB
 ---@field characters table<WOWGUID, LDT_Character>
 
 ---@class LDT_Character

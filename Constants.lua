@@ -57,34 +57,6 @@ Constants.sections = {
   { id = Constants.sectionId.Renown, label = "Renown" },
 }
 
----@enum LDT_ThemeId
-Constants.themeId = {
-  Flat = "flat",
-}
-
-Constants.themes = {
-  { id = Constants.themeId.Flat, label = "Flat" },
-}
-
----@enum LDT_SpacingId
-Constants.spacingId = {
-  Compact = "compact",
-  Default = "default",
-  Comfortable = "comfortable",
-}
-
-Constants.spacings = {
-  { id = Constants.spacingId.Compact, label = "Compact", horizontal = 4, column = 4, row = 0 },
-  { id = Constants.spacingId.Default, label = "Default", horizontal = 8, column = 6, row = 2 },
-  { id = Constants.spacingId.Comfortable, label = "Comfortable", horizontal = 12, column = 8, row = 4 },
-}
-
-Constants.sectionGaps = {
-  { label = "None", value = 0 },
-  { label = "Small", value = 4 },
-  { label = "Medium", value = 8 },
-}
-
 Constants.boonStatColors = {
   { key = "ITEM_MOD_STRENGTH_SHORT", r = 1, g = 0.5, b = 0.25 },
   { key = "STAT_STRENGTH", r = 1, g = 0.5, b = 0.25 },

@@ -35,20 +35,6 @@ local function CopySpellIDs(spellIDs)
   return copy
 end
 
-local function PaintReport()
-  local report = addon.Module_Report
-  if report and report.frame and report.frame:IsShown() then
-    report:Render()
-  end
-end
-
-local function PaintRecords()
-  local records = addon.Module_Records
-  if records and records.window and records.window:IsShown() then
-    records:Render()
-  end
-end
-
 ---@param spellIDs number[]|nil
 ---@return string
 local function SpellList(spellIDs)
@@ -1128,7 +1114,9 @@ function Capture:EnsureRun()
   self.reloadNoted = true
   self:FillStart(record)
   self:Observe(record)
-  PaintRecords()
+  if self.onRunStored then
+    self.onRunStored()
+  end
 end
 
 function Capture:Finish()
@@ -1160,7 +1148,9 @@ function Capture:Finish()
   if character then
     character.activeRecordID = nil
   end
-  PaintRecords()
+  if self.onRunStored then
+    self.onRunStored()
+  end
 end
 
 ---@param encounterID number
@@ -1317,7 +1307,6 @@ function Capture:Sync()
   elseif self.zoneKnown and Data:GetActiveRecord() then
     self:Finish()
   end
-  PaintReport()
   local context = nil
   if inDelve then
     context = "run"
@@ -1391,9 +1380,7 @@ function Capture:Register()
     if not record then
       return
     end
-    if Capture:ObserveBoons(record) then
-      PaintReport()
-    end
+    Capture:ObserveBoons(record)
   end, true)
   Events:RegisterEvent({
     "UPDATE_FACTION",
@@ -1405,7 +1392,6 @@ function Capture:Register()
     end
     Capture:UpdateCompanion(record)
     Capture:ObserveRenown(record)
-    PaintReport()
   end, true)
   Events:RegisterEvent({
     "ZONE_CHANGED",
