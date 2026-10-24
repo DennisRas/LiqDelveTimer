@@ -11,6 +11,7 @@ local Helpers = addon.Helpers
 ---@param input string|nil
 ---@return boolean
 function Debug:OnChatCommand(input)
+  ---@type string?
   local command = addon.Core:GetArgs(input or "", 1)
   if not command or command:lower() ~= "dump" then
     return false

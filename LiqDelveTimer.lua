@@ -29,35 +29,42 @@ function Core:OnInitialize()
     storage = Data.db.global.logs,
   })
 
+  ---@param displayFrame Frame
+  ---@param mouseButton MouseButton
+  local function onLauncherClick(displayFrame, mouseButton)
+    local shifted = IsShiftKeyDown()
+    if shifted then
+      if addon.Module_Records then
+        addon.Module_Records:ToggleWindow()
+      end
+      return
+    end
+    if mouseButton == "RightButton" then
+      if addon.Module_Timer then
+        addon.Module_Timer:OpenMenu(displayFrame)
+      end
+      return
+    end
+    if addon.Module_Timer then
+      addon.Module_Timer:ToggleWindow()
+    end
+  end
+
+  ---@param tooltip GameTooltip
+  local function showLauncherTooltip(tooltip)
+    tooltip:SetText(addon.title, 1, 1, 1)
+    tooltip:AddLine("|cff00ff00Left click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    tooltip:AddLine("|cff00ff00Right click|r to open timer settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    tooltip:AddLine("|cff00ff00Shift click|r to open records.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+  end
+
   ---@type LibDataBroker.DataObject
   local libDataObject = {
     label = addon.title,
     type = "launcher",
     icon = Constants.media.Icon,
-    OnClick = function(displayFrame, mouseButton)
-      local shifted = IsShiftKeyDown()
-      if shifted then
-        if addon.Module_Records then
-          addon.Module_Records:ToggleWindow()
-        end
-        return
-      end
-      if mouseButton == "RightButton" then
-        if addon.Module_Timer then
-          addon.Module_Timer:OpenMenu(displayFrame)
-        end
-        return
-      end
-      if addon.Module_Timer then
-        addon.Module_Timer:ToggleWindow()
-      end
-    end,
-    OnTooltipShow = function(tooltip)
-      tooltip:SetText(addon.title, 1, 1, 1)
-      tooltip:AddLine("|cff00ff00Left click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-      tooltip:AddLine("|cff00ff00Right click|r to open timer settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-      tooltip:AddLine("|cff00ff00Shift click|r to open records.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-    end,
+    OnClick = onLauncherClick,
+    OnTooltipShow = showLauncherTooltip,
   }
   LibDataBroker:NewDataObject(addon.name, libDataObject)
   LibDBIcon:Register(addon.name, libDataObject, Data.db.global.minimap)
@@ -78,6 +85,7 @@ end
 
 ---@param input string|nil
 function Core:OnChatCommand(input)
+  ---@type string?
   local command = self:GetArgs(input or "", 1)
   if not command then
     self:ToggleWindow()

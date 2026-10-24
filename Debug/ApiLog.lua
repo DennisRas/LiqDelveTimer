@@ -13,13 +13,13 @@ ApiLog.lastLines = nil
 
 ---@param line string
 ---@return string
-local function LineKey(line)
+local function lineKey(line)
   return line:match("^(%S+)") or line
 end
 
----@param value any
+---@param value string|number|boolean|nil
 ---@return string
-local function ValueText(value)
+local function valueText(value)
   if value == nil then
     return "nil"
   end
@@ -35,21 +35,21 @@ end
 
 ---@param ... any
 ---@return string
-local function ArgsText(...)
+local function argsText(...)
   local count = select("#", ...)
   if count == 0 then
     return ""
   end
   local parts = {}
   for index = 1, count do
-    parts[index] = ValueText(select(index, ...))
+    parts[index] = valueText(select(index, ...))
   end
   return table.concat(parts, " ")
 end
 
 ---@param spellIDs number[]|nil
 ---@return string
-local function SpellText(spellIDs)
+local function spellText(spellIDs)
   if not spellIDs then
     return "nil"
   end
@@ -86,15 +86,15 @@ end
 ---@param lines string[]
 ---@param label string
 ---@param fn fun(lines: string[])
-local function Catch(lines, label, fn)
+local function catch(lines, label, fn)
   local ok, err = pcall(fn, lines)
   if not ok then
-    lines[#lines + 1] = format("%s error=%s", label, ValueText(err))
+    lines[#lines + 1] = format("%s error=%s", label, valueText(err))
   end
 end
 
 ---@param lines string[]
-local function DescribeDelve(lines)
+local function describeDelve(lines)
   local hasActive = C_DelvesUI.HasActiveDelve()
   local inProgress = C_PartyInfo.IsDelveInProgress()
   local delveComplete = C_PartyInfo.IsDelveComplete()
@@ -114,52 +114,51 @@ local function DescribeDelve(lines)
   local eligible = C_DelvesUI.IsEligibleForActiveDelveRewards("player")
   lines[#lines + 1] = format(
     "delve hasActive=%s inProgress=%s complete=%s tieredScenario=%s entranceType=%s season=%s worldTier=%s pde=%s entranceMap=%s faction=%s minLevel=%s hasLair=%s hasLFGLair=%s inLair=%s affixTree=%s backgroundWidget=%s eligible=%s",
-    ValueText(hasActive),
-    ValueText(inProgress),
-    ValueText(delveComplete),
-    ValueText(tieredScenario),
-    ValueText(entranceType),
-    ValueText(seasonNumber),
-    ValueText(worldTier),
-    ValueText(pdeID),
-    ValueText(entranceMapID),
-    ValueText(factionID),
-    ValueText(minLevel),
-    ValueText(hasLair),
-    ValueText(hasLFGLair),
-    ValueText(inLair),
-    ValueText(affixTreeID),
-    ValueText(backgroundWidgetSetID),
-    ValueText(eligible)
+    valueText(hasActive),
+    valueText(inProgress),
+    valueText(delveComplete),
+    valueText(tieredScenario),
+    valueText(entranceType),
+    valueText(seasonNumber),
+    valueText(worldTier),
+    valueText(pdeID),
+    valueText(entranceMapID),
+    valueText(factionID),
+    valueText(minLevel),
+    valueText(hasLair),
+    valueText(hasLFGLair),
+    valueText(inLair),
+    valueText(affixTreeID),
+    valueText(backgroundWidgetSetID),
+    valueText(eligible)
   )
   lines[#lines + 1] = format(
     "entrance title=%s header=%s description=%s",
-    ValueText(C_DelvesUI.GetDelveEntranceTitleString()),
-    ValueText(C_DelvesUI.GetDelveEntranceHeaderString()),
-    ValueText(C_DelvesUI.GetDelveEntranceDescriptionString())
+    valueText(C_DelvesUI.GetDelveEntranceTitleString()),
+    valueText(C_DelvesUI.GetDelveEntranceHeaderString()),
+    valueText(C_DelvesUI.GetDelveEntranceDescriptionString())
   )
   lines[#lines + 1] = format(
     "spells affix=%s active=%s",
-    SpellText(C_DelvesUI.GetDelvesAffixSpellsForSeason()),
-    SpellText(C_ScenarioInfo.GetTieredEntranceActiveSpells())
+    spellText(C_DelvesUI.GetDelvesAffixSpellsForSeason()),
+    spellText(C_ScenarioInfo.GetTieredEntranceActiveSpells())
   )
   if hasActive then
     local tierInfo = C_DelvesUI.GetActiveDelveTier()
     if tierInfo then
       lines[#lines + 1] = format(
-        "activeTier tier=%s difficulty=%s unlocked=%s queueLFG=%s suggested=%s widget=%s tooltipSpell=%s locked=%s desc=%s",
-        ValueText(tierInfo.tier),
-        ValueText(tierInfo.difficultyID),
-        ValueText(tierInfo.unlocked),
-        ValueText(tierInfo.queueAsLFG),
-        ValueText(tierInfo.suggestedILvl),
-        ValueText(tierInfo.modifierUIWidgetSetID),
-        ValueText(tierInfo.overrideTooltipSpellID),
-        ValueText(tierInfo.lockedReason),
-        ValueText(tierInfo.tierDescription)
+        "activeTier tier=%s unlocked=%s queueLFG=%s suggested=%s widget=%s tooltipSpell=%s locked=%s desc=%s",
+        valueText(tierInfo.tier),
+        valueText(tierInfo.unlocked),
+        valueText(tierInfo.queueAsLFG),
+        valueText(tierInfo.suggestedILvl),
+        valueText(tierInfo.modifierUIWidgetSetID),
+        valueText(tierInfo.overrideTooltipSpellID),
+        valueText(tierInfo.lockedReason),
+        valueText(tierInfo.tierDescription)
       )
       local enabled, failureReason = C_DelvesUI.IsDelveEntranceTierEnabled(tierInfo.tier)
-      lines[#lines + 1] = format("activeTierEnabled enabled=%s reason=%s", ValueText(enabled), ValueText(failureReason))
+      lines[#lines + 1] = format("activeTierEnabled enabled=%s reason=%s", valueText(enabled), valueText(failureReason))
       local rewards = tierInfo.rewards
       if rewards then
         local rewardParts = {}
@@ -168,10 +167,10 @@ local function DescribeDelve(lines)
           rewardParts[index] = format(
             "%d:id=%s:qty=%s:type=%s:context=%s",
             index,
-            ValueText(reward.id),
-            ValueText(reward.quantity),
-            ValueText(reward.rewardType),
-            ValueText(reward.context)
+            valueText(reward.id),
+            valueText(reward.quantity),
+            valueText(reward.rewardType),
+            valueText(reward.context)
           )
         end
         local rewardText = "none"
@@ -190,10 +189,9 @@ local function DescribeDelve(lines)
     for index = 1, #entranceTiers do
       local tierInfo = entranceTiers[index]
       tierParts[index] = format(
-        "%s:%s:%s",
-        ValueText(tierInfo.tier),
-        ValueText(tierInfo.unlocked),
-        ValueText(tierInfo.difficultyID)
+        "%s:%s",
+        valueText(tierInfo.tier),
+        valueText(tierInfo.unlocked)
       )
     end
   end
@@ -205,10 +203,10 @@ local function DescribeDelve(lines)
 end
 
 ---@param lines string[]
-local function DescribeCompanion(lines)
+local function describeCompanion(lines)
   local companionID = C_DelvesUI.GetCompanionInfoForActivePlayer()
   if not companionID or companionID <= 0 then
-    lines[#lines + 1] = format("companion id=%s", ValueText(companionID))
+    lines[#lines + 1] = format("companion id=%s", valueText(companionID))
     return
   end
   local displayID = C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID)
@@ -245,34 +243,34 @@ local function DescribeCompanion(lines)
   end
   lines[#lines + 1] = format(
     "companion id=%s display=%s model=%s pde=%s faction=%s name=%s level=%s/%s flavor=%s flavorNode=%s roleNode=%s tree=%s dps=%s heal=%s tank=%s combatNode=%s utilityNode=%s",
-    ValueText(companionID),
-    ValueText(displayID),
-    ValueText(modelSceneID),
-    ValueText(companionPDE),
-    ValueText(factionID),
-    ValueText(factionName),
-    ValueText(level),
-    ValueText(maxLevel),
-    ValueText(flavorName),
-    ValueText(flavorNodeID),
-    ValueText(roleNodeID),
-    ValueText(treeID),
-    ValueText(dpsTreeID),
-    ValueText(healTreeID),
-    ValueText(tankTreeID),
-    ValueText(combatNodeID),
-    ValueText(utilityNodeID)
+    valueText(companionID),
+    valueText(displayID),
+    valueText(modelSceneID),
+    valueText(companionPDE),
+    valueText(factionID),
+    valueText(factionName),
+    valueText(level),
+    valueText(maxLevel),
+    valueText(flavorName),
+    valueText(flavorNodeID),
+    valueText(roleNodeID),
+    valueText(treeID),
+    valueText(dpsTreeID),
+    valueText(healTreeID),
+    valueText(tankTreeID),
+    valueText(combatNodeID),
+    valueText(utilityNodeID)
   )
   lines[#lines + 1] = format(
     "companionText description=%s locked=%s",
-    ValueText(factionDescription),
-    ValueText(lockedText)
+    valueText(factionDescription),
+    valueText(lockedText)
   )
 end
 
 ---@param lines string[]
-local function DescribeInstance(lines)
-  local name, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize, lfgDungeonID, hasWorldTier = GetInstanceInfo()
+local function describeInstance(lines)
+  local name, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize, lfgDungeonID = GetInstanceInfo()
   local mapID = C_Map.GetBestMapForUnit("player")
   local mapName
   if mapID then
@@ -282,42 +280,41 @@ local function DescribeInstance(lines)
     end
   end
   lines[#lines + 1] = format(
-    "instance name=%s type=%s difficulty=%s:%s maxPlayers=%s dynamic=%s:%s id=%s size=%s lfg=%s worldTier=%s map=%s:%s zone=%s subzone=%s",
-    ValueText(name),
-    ValueText(instanceType),
-    ValueText(difficultyID),
-    ValueText(difficultyName),
-    ValueText(maxPlayers),
-    ValueText(dynamicDifficulty),
-    ValueText(isDynamic),
-    ValueText(instanceID),
-    ValueText(instanceGroupSize),
-    ValueText(lfgDungeonID),
-    ValueText(hasWorldTier),
-    ValueText(mapID),
-    ValueText(mapName),
-    ValueText(GetZoneText()),
-    ValueText(GetSubZoneText())
+    "instance name=%s type=%s difficulty=%s:%s maxPlayers=%s dynamic=%s:%s id=%s size=%s lfg=%s map=%s:%s zone=%s subzone=%s",
+    valueText(name),
+    valueText(instanceType),
+    valueText(difficultyID),
+    valueText(difficultyName),
+    valueText(maxPlayers),
+    valueText(dynamicDifficulty),
+    valueText(isDynamic),
+    valueText(instanceID),
+    valueText(instanceGroupSize),
+    valueText(lfgDungeonID),
+    valueText(mapID),
+    valueText(mapName),
+    valueText(GetZoneText()),
+    valueText(GetSubZoneText())
   )
 end
 
 ---@param lines string[]
-local function DescribeScenario(lines)
+local function describeScenario(lines)
   local info = C_ScenarioInfo.GetScenarioInfo()
   if info then
     lines[#lines + 1] = format(
       "scenario name=%s id=%s stage=%s/%s complete=%s type=%s area=%s flags=%s xp=%s money=%s kit=%s",
-      ValueText(info.name),
-      ValueText(info.scenarioID),
-      ValueText(info.currentStage),
-      ValueText(info.numStages),
-      ValueText(info.isComplete),
-      ValueText(info.type),
-      ValueText(info.area),
-      ValueText(info.flags),
-      ValueText(info.xp),
-      ValueText(info.money),
-      ValueText(info.uiTextureKit)
+      valueText(info.name),
+      valueText(info.scenarioID),
+      valueText(info.currentStage),
+      valueText(info.numStages),
+      valueText(info.isComplete),
+      valueText(info.type),
+      valueText(info.area),
+      valueText(info.flags),
+      valueText(info.xp),
+      valueText(info.money),
+      valueText(info.uiTextureKit)
     )
   else
     lines[#lines + 1] = "scenario nil"
@@ -329,23 +326,23 @@ local function DescribeScenario(lines)
   end
   lines[#lines + 1] = format(
     "step id=%s title=%s criteria=%s failed=%s bonus=%s currentOnly=%s showBonus=%s quest=%s widget=%s desc=%s",
-    ValueText(step.stepID),
-    ValueText(step.title),
-    ValueText(step.numCriteria),
-    ValueText(step.stepFailed),
-    ValueText(step.isBonusStep),
-    ValueText(step.isForCurrentStepOnly),
-    ValueText(step.shouldShowBonusObjective),
-    ValueText(step.rewardQuestID),
-    ValueText(step.widgetSetID),
-    ValueText(step.description)
+    valueText(step.stepID),
+    valueText(step.title),
+    valueText(step.numCriteria),
+    valueText(step.stepFailed),
+    valueText(step.isBonusStep),
+    valueText(step.isForCurrentStepOnly),
+    valueText(step.shouldShowBonusObjective),
+    valueText(step.rewardQuestID),
+    valueText(step.widgetSetID),
+    valueText(step.description)
   )
   local spells = step.spells
   if spells and #spells > 0 then
     local spellParts = {}
     for index = 1, #spells do
       local spell = spells[index]
-      spellParts[index] = format("%s:%s", ValueText(spell.name), ValueText(spell.spellID))
+      spellParts[index] = format("%s:%s", valueText(spell.name), valueText(spell.spellID))
     end
     lines[#lines + 1] = format("stepSpells %s", table.concat(spellParts, ", "))
   end
@@ -359,23 +356,23 @@ local function DescribeScenario(lines)
       return format(
         "%d:id=%s:done=%s:failed=%s:qty=%s/%s:text=%s:flags=%s:asset=%s:type=%s:weighted=%s:%s",
         index,
-        ValueText(criteria.criteriaID),
-        ValueText(criteria.completed),
-        ValueText(criteria.failed),
-        ValueText(criteria.quantity),
-        ValueText(criteria.totalQuantity),
-        ValueText(criteria.quantityString),
-        ValueText(criteria.flags),
-        ValueText(criteria.assetID),
-        ValueText(criteria.criteriaType),
-        ValueText(criteria.isWeightedProgress),
-        ValueText(criteria.description)
+        valueText(criteria.criteriaID),
+        valueText(criteria.completed),
+        valueText(criteria.failed),
+        valueText(criteria.quantity),
+        valueText(criteria.totalQuantity),
+        valueText(criteria.quantityString),
+        valueText(criteria.flags),
+        valueText(criteria.assetID),
+        valueText(criteria.criteriaType),
+        valueText(criteria.isWeightedProgress),
+        valueText(criteria.description)
       )
     end)
     if ok then
       criteriaParts[index] = text
     else
-      criteriaParts[index] = format("%d:error=%s", index, ValueText(text))
+      criteriaParts[index] = format("%d:error=%s", index, valueText(text))
     end
   end
   local criteriaText = "none"
@@ -386,7 +383,7 @@ local function DescribeScenario(lines)
 end
 
 ---@param lines string[]
-local function DescribeVault(lines)
+local function describeVault(lines)
   local activities = C_WeeklyRewards.GetActivities(Enum.WeeklyRewardChestThresholdType.World)
   local parts = {}
   if activities then
@@ -399,9 +396,9 @@ local function DescribeVault(lines)
           local reward = rewards[rewardIndex]
           rewardParts[rewardIndex] = format(
             "%s:%s:%s",
-            ValueText(reward.type),
-            ValueText(reward.id),
-            ValueText(reward.quantity)
+            valueText(reward.type),
+            valueText(reward.id),
+            valueText(reward.quantity)
           )
         end
       end
@@ -412,14 +409,14 @@ local function DescribeVault(lines)
       parts[index] = format(
         "%d:progress=%s:threshold=%s:level=%s:activityTier=%s:id=%s:index=%s:claim=%s:raid=%s:rewards=%s",
         index,
-        ValueText(activity.progress),
-        ValueText(activity.threshold),
-        ValueText(activity.level),
-        ValueText(activity.activityTierID),
-        ValueText(activity.id),
-        ValueText(activity.index),
-        ValueText(activity.claimID),
-        ValueText(activity.raidString),
+        valueText(activity.progress),
+        valueText(activity.threshold),
+        valueText(activity.level),
+        valueText(activity.activityTierID),
+        valueText(activity.id),
+        valueText(activity.index),
+        valueText(activity.claimID),
+        valueText(activity.raidString),
         rewardText
       )
     end
@@ -432,7 +429,7 @@ local function DescribeVault(lines)
 end
 
 ---@param lines string[]
-local function DescribeCapture(lines)
+local function describeCapture(lines)
   local record = Data:GetActiveRecord()
   local recordID = "nil"
   local result = "nil"
@@ -443,7 +440,7 @@ local function DescribeCapture(lines)
   if record then
     recordID = record.id
     result = record.result
-    labyrinth = ValueText(record.labyrinth)
+    labyrinth = valueText(record.labyrinth)
     local completed = 0
     for index = 1, #record.chambers do
       if record.chambers[index].completedElapsed then
@@ -453,14 +450,14 @@ local function DescribeCapture(lines)
     chambers = format("%d/%d", completed, #record.chambers)
     credits = tostring(record.vault.credits)
     if record.bossName then
-      boss = format("%s@%s", record.bossName, ValueText(record.bossElapsed))
+      boss = format("%s@%s", record.bossName, valueText(record.bossElapsed))
     end
   end
   lines[#lines + 1] = format(
     "capture ready=%s inside=%s clock=%s record=%s result=%s labyrinth=%s chambers=%s vaultCredits=%s boss=%s",
-    ValueText(Capture.ready),
-    ValueText(Capture:IsInside()),
-    ValueText(Capture.clockReady),
+    valueText(Capture.ready),
+    valueText(Capture:IsInside()),
+    valueText(Capture.clockReady),
     recordID,
     result,
     labyrinth,
@@ -473,12 +470,12 @@ end
 ---@return string[]
 function ApiLog:CollectState()
   local lines = {}
-  Catch(lines, "delve", DescribeDelve)
-  Catch(lines, "companion", DescribeCompanion)
-  Catch(lines, "instance", DescribeInstance)
-  Catch(lines, "scenario", DescribeScenario)
-  Catch(lines, "vault", DescribeVault)
-  Catch(lines, "capture", DescribeCapture)
+  catch(lines, "delve", describeDelve)
+  catch(lines, "companion", describeCompanion)
+  catch(lines, "instance", describeInstance)
+  catch(lines, "scenario", describeScenario)
+  catch(lines, "vault", describeVault)
+  catch(lines, "capture", describeCapture)
   return lines
 end
 
@@ -496,11 +493,11 @@ function ApiLog:EmitState(lines, packed)
   end
   for index = 1, #lines do
     local line = lines[index]
-    local key = LineKey(line)
+    local key = lineKey(line)
     local same = false
     for previousIndex = 1, #previous do
       local previousLine = previous[previousIndex]
-      if LineKey(previousLine) == key then
+      if lineKey(previousLine) == key then
         same = previousLine == line
         break
       end
@@ -510,10 +507,10 @@ function ApiLog:EmitState(lines, packed)
     end
   end
   for previousIndex = 1, #previous do
-    local key = LineKey(previous[previousIndex])
+    local key = lineKey(previous[previousIndex])
     local found = false
     for index = 1, #lines do
-      if LineKey(lines[index]) == key then
+      if lineKey(lines[index]) == key then
         found = true
         break
       end
@@ -536,7 +533,7 @@ end
 ---@param event string
 ---@param ... any
 function ApiLog:OnEvent(event, ...)
-  local args = ArgsText(...)
+  local args = argsText(...)
   if args == "" then
     self:Log("event", event)
   else

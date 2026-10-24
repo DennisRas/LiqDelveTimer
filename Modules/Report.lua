@@ -12,6 +12,7 @@ local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
 local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
 local SetHighlightColor = LiqUI.Utils.SetHighlightColor
+local TableFind = LiqUI.Utils.TableFind
 
 local PANEL_WIDTH = 360
 local ROW_HEIGHT = 22
@@ -33,7 +34,7 @@ local FONT_ROW = "GameFontHighlight_NoShadow"
 ---@param g number|nil
 ---@param b number|nil
 ---@return LDT_RowColumn
-local function TextColumn(text, width, align, font, r, g, b)
+local function textColumn(text, width, align, font, r, g, b)
   ---@type LDT_RowColumn
   local column = {
     text = text,
@@ -53,7 +54,7 @@ end
 ---@param value number
 ---@param textOnBar "center"|"left"|"right"|"above"|nil
 ---@return LDT_RowModel
-local function BarRow(text, minValue, maxValue, value, textOnBar)
+local function barRow(text, minValue, maxValue, value, textOnBar)
   local place = textOnBar or "center"
   ---@type LDT_RowColumn
   local column = {
@@ -85,7 +86,7 @@ end
 ---@param bestElapsed number|nil
 ---@param large boolean|nil
 ---@return LDT_RowModel
-local function SplitRow(label, elapsed, bestElapsed, large)
+local function splitRow(label, elapsed, bestElapsed, large)
   local font = FONT_ROW
   local timeWidth = TIME_WIDTH
   local height = ROW_HEIGHT
@@ -104,9 +105,9 @@ local function SplitRow(label, elapsed, bestElapsed, large)
   end
   ---@type LDT_RowColumn[]
   local columns = {
-    TextColumn(label, nil, "LEFT", font, 0.95, 0.95, 0.95),
-    TextColumn(elapsed and Helpers.FormatElapsed(elapsed) or "", timeWidth, "RIGHT", font, red, green, blue),
-    TextColumn(bestElapsed and Helpers.FormatElapsed(bestElapsed) or "", timeWidth, "RIGHT", font, 0.55, 0.55, 0.55),
+    textColumn(label, nil, "LEFT", font, 0.95, 0.95, 0.95),
+    textColumn(elapsed and Helpers.FormatElapsed(elapsed) or "", timeWidth, "RIGHT", font, red, green, blue),
+    textColumn(bestElapsed and Helpers.FormatElapsed(bestElapsed) or "", timeWidth, "RIGHT", font, 0.55, 0.55, 0.55),
   }
   ---@type LDT_RowModel
   local row = { columns = columns, height = height }
@@ -115,7 +116,7 @@ end
 
 ---@param record LDT_Record
 ---@return number
-local function LiveElapsed(record)
+local function liveElapsed(record)
   if record.result == Constants.runResult.Active then
     if Capture.clockReady then
       return Capture:Elapsed(record)
@@ -134,17 +135,17 @@ end
 
 ---@param record LDT_Record
 ---@return number
-local function HeadlineElapsed(record)
+local function headlineElapsed(record)
   if record.finishedElapsed or record.bossElapsed then
-    return Helpers.CompletionTime(record) or LiveElapsed(record)
+    return Helpers.CompletionTime(record) or liveElapsed(record)
   end
-  return LiveElapsed(record)
+  return liveElapsed(record)
 end
 
 ---@param record LDT_Record
 ---@param kind LDT_LogKindId
 ---@return LDT_LogEntry|nil
-local function LastLog(record, kind)
+local function lastLog(record, kind)
   for index = #record.log, 1, -1 do
     local entry = record.log[index]
     if entry.kind == kind then
@@ -157,11 +158,11 @@ end
 ---@param best LDT_Record|nil
 ---@param encounterName string
 ---@return number|nil
-local function BestEncounterTime(best, encounterName)
+local function bestEncounterTime(best, encounterName)
   if not best or not best.encounters then
     return nil
   end
-  local match = LiqUI.Utils.TableFind(best.encounters, function(encounter)
+  local match = TableFind(best.encounters, function(encounter)
     return encounter.encounterName == encounterName and encounter.success == 1
   end)
   if not match then
@@ -173,11 +174,11 @@ end
 ---@param best LDT_Record|nil
 ---@param chamberName string
 ---@return number|nil
-local function BestChamberTime(best, chamberName)
+local function bestChamberTime(best, chamberName)
   if not best or not best.chambers then
     return nil
   end
-  local match = LiqUI.Utils.TableFind(best.chambers, function(chamber)
+  local match = TableFind(best.chambers, function(chamber)
     return chamber.name == chamberName and chamber.completedElapsed ~= nil
   end)
   if not match then
@@ -188,7 +189,7 @@ end
 
 ---@param record LDT_Record
 ---@return string
-local function RunTitle(record)
+local function runTitle(record)
   local instance = record.instance
   local name = instance and instance.name
   if not name or name == "" then
@@ -198,13 +199,12 @@ local function RunTitle(record)
 end
 
 ---@param record LDT_Record
----@param best LDT_Record|nil
 ---@return LDT_RowModel[]
-local function RunRows(record)
+local function runRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
   local player = record.player
-  local portrait = TextColumn("", 36, "LEFT")
+  local portrait = textColumn("", 36, "LEFT")
   portrait.width = 36
   if player and player.guid and UnitGUID("player") == player.guid then
     portrait.unit = "player"
@@ -219,12 +219,33 @@ local function RunRows(record)
     name = format("%s, %s", name, player.specName)
   end
   rows[#rows + 1] = {
-    columns = { portrait, TextColumn(name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95) },
+    columns = { portrait, textColumn(name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95) },
     height = 28,
   }
-  local delve = record.instance and record.instance.name
-  if not delve or delve == "" then
-    delve = record.place and (record.place.subzone or record.place.zone) or "Delve"
+  local delve = "Delve"
+  local instance = record.instance
+  local instanceName
+  if instance then
+    instanceName = instance.name
+  end
+  local namedDelve = false
+  if instanceName then
+    if instanceName ~= "" then
+      delve = instanceName
+      namedDelve = true
+    end
+  end
+  if not namedDelve then
+    local place = record.place
+    if place then
+      local placeName = place.subzone
+      if not placeName then
+        placeName = place.zone
+      end
+      if placeName then
+        delve = placeName
+      end
+    end
   end
   if record.variant and record.variant ~= "" then
     delve = format("%s, %s", delve, record.variant)
@@ -236,8 +257,8 @@ local function RunRows(record)
   end
   rows[#rows + 1] = {
     columns = {
-      TextColumn(delve, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
-      TextColumn(tierText, 72, "RIGHT", FONT_PANEL, 0.95, 0.95, 0.95),
+      textColumn(delve, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
+      textColumn(tierText, 72, "RIGHT", FONT_PANEL, 0.95, 0.95, 0.95),
     },
     height = 22,
   }
@@ -247,7 +268,7 @@ end
 ---@param record LDT_Record
 ---@param now number
 ---@return { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
-local function ObjectiveRows(record, now)
+local function objectiveRows(record, now)
   ---@type { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
   local order = {}
   ---@type table<number|string, { description: string, appeared: number, completed: number|nil, failed: boolean|nil }>
@@ -318,10 +339,10 @@ end
 ---@param record LDT_Record
 ---@param best LDT_Record|nil
 ---@return LDT_RowModel[]
-local function TimerRows(record, best)
+local function timerRows(record, best)
   ---@type LDT_RowModel[]
   local rows = {}
-  local now = HeadlineElapsed(record)
+  local now = headlineElapsed(record)
   local bestFinish = best and Helpers.CompletionTime(best) or nil
   local red, green, blue = 0.95, 0.95, 0.95
   if bestFinish then
@@ -333,54 +354,61 @@ local function TimerRows(record, best)
   end
   rows[#rows + 1] = {
     columns = {
-      TextColumn("This run", 72, "LEFT", FONT_ROW, 0.8, 0.8, 0.8),
-      TextColumn(Helpers.FormatElapsed(now), nil, "LEFT", FONT_CLOCK, red, green, blue),
+      textColumn("This run", 72, "LEFT", FONT_ROW, 0.8, 0.8, 0.8),
+      textColumn(Helpers.FormatElapsed(now), nil, "LEFT", FONT_CLOCK, red, green, blue),
     },
     height = 22,
   }
   rows[#rows + 1] = {
     columns = {
-      TextColumn("Best", 72, "LEFT", FONT_ROW, 0.55, 0.55, 0.55),
-      TextColumn(bestFinish and Helpers.FormatElapsed(bestFinish) or "", nil, "LEFT", FONT_CLOCK, 0.7, 0.7, 0.7),
+      textColumn("Best", 72, "LEFT", FONT_ROW, 0.55, 0.55, 0.55),
+      textColumn(bestFinish and Helpers.FormatElapsed(bestFinish) or "", nil, "LEFT", FONT_CLOCK, 0.7, 0.7, 0.7),
     },
     height = 22,
   }
   rows[#rows + 1] = {
     columns = {
-      TextColumn("", nil, "LEFT"),
-      TextColumn("Time", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
-      TextColumn("Best", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
+      textColumn("", nil, "LEFT"),
+      textColumn("Time", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
+      textColumn("Best", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
     },
     height = ROW_HEIGHT,
   }
   if record.labyrinth then
     for index = 1, #record.chambers do
       local chamber = record.chambers[index]
-      rows[#rows + 1] = SplitRow(chamber.name, chamber.completedElapsed, nil, false)
+      rows[#rows + 1] = splitRow(chamber.name, chamber.completedElapsed, nil, false)
     end
     return rows
   end
-  local route = record.routeID and Data.db.global.routes[record.routeID]
-  local steps = route and route.steps or {}
+  local route
+  if record.routeID then
+    route = Data.db.global.routes[record.routeID]
+  end
+  ---@type string[]
+  local steps = {}
+  if route then
+    steps = route.steps
+  end
   for index = 1, #steps do
     local stepName = steps[index]
     local elapsed = record.splits and record.splits[stepName]
-    rows[#rows + 1] = SplitRow(stepName, elapsed, Data:BestSplit(record, stepName), false)
+    rows[#rows + 1] = splitRow(stepName, elapsed, Data:BestSplit(record, stepName), false)
   end
   if #steps == 0 then
-    rows[#rows + 1] = { columns = { TextColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+    rows[#rows + 1] = { columns = { textColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
   end
   return rows
 end
 
 ---@param record LDT_Record
 ---@return LDT_RowModel[]
-local function CompanionRows(record)
+local function companionRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
   local companion = record.companion
   if not companion or not companion.name or companion.name == "" then
-    rows[1] = { columns = { TextColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+    rows[1] = { columns = { textColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   local level = ""
@@ -400,9 +428,9 @@ local function CompanionRows(record)
   end
   rows[#rows + 1] = {
     columns = {
-      TextColumn(companion.name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
-      TextColumn(level, nil, "CENTER", FONT_ROW, 0.9, 0.9, 0.9),
-      TextColumn(gain, nil, "RIGHT", FONT_ROW, 0.4, 0.8, 1),
+      textColumn(companion.name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
+      textColumn(level, nil, "CENTER", FONT_ROW, 0.9, 0.9, 0.9),
+      textColumn(gain, nil, "RIGHT", FONT_ROW, 0.4, 0.8, 1),
     },
     height = ROW_HEIGHT,
   }
@@ -412,22 +440,22 @@ local function CompanionRows(record)
   local maxValue = companion.nextThreshold
   local standing = companion.standing
   if minValue and maxValue and standing and maxValue > minValue then
-    local bar = TextColumn(format("%d / %d", standing, maxValue), nil, "CENTER", FONT_ROW, 1, 1, 1)
+    local bar = textColumn(format("%d / %d", standing, maxValue), nil, "CENTER", FONT_ROW, 1, 1, 1)
     bar.barMin = minValue
     bar.barMax = maxValue
     bar.barValue = standing
     bar.textOnBar = "center"
     barColumns[#barColumns + 1] = bar
   elseif standing then
-    barColumns[#barColumns + 1] = TextColumn(format("%d", standing), nil, "LEFT", FONT_ROW, 0.9, 0.9, 0.9)
+    barColumns[#barColumns + 1] = textColumn(format("%d", standing), nil, "LEFT", FONT_ROW, 0.9, 0.9, 0.9)
   end
   if companion.roleAtlas then
-    local role = TextColumn("", 22, "CENTER")
+    local role = textColumn("", 22, "CENTER")
     role.atlas = companion.roleAtlas
     role.tip = companion.roleName
     barColumns[#barColumns + 1] = role
   elseif companion.roleName and companion.roleName ~= "" then
-    barColumns[#barColumns + 1] = TextColumn(companion.roleName, 72, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9)
+    barColumns[#barColumns + 1] = textColumn(companion.roleName, 72, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9)
   end
   local socketSpells = {
     companion.flavorSpellID,
@@ -439,7 +467,7 @@ local function CompanionRows(record)
     if spellID and not issecretvalue(spellID) then
       local texture = C_Spell.GetSpellTexture(spellID)
       if texture and not issecretvalue(texture) then
-        local column = TextColumn("", 22, "CENTER")
+        local column = textColumn("", 22, "CENTER")
         column.icon = texture
         column.spellID = spellID
         barColumns[#barColumns + 1] = column
@@ -456,12 +484,13 @@ local boonColorNeedles
 
 ---@param label string
 ---@return number|nil, number|nil, number|nil
-local function BoonStatColor(label)
+local function boonStatColor(label)
   if not boonColorNeedles then
     boonColorNeedles = {}
     local colors = Constants.boonStatColors
     for index = 1, #colors do
       local entry = colors[index]
+      ---@type string?
       local text = _G[entry.key]
       if type(text) == "string" and text ~= "" then
         boonColorNeedles[#boonColorNeedles + 1] = {
@@ -488,7 +517,7 @@ end
 
 ---@param text string
 ---@param stats { label: string, value: string }[]
-local function AppendBoonStats(text, stats)
+local function appendBoonStats(text, stats)
   for line in text:gmatch("[^\r\n]+") do
     local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
     if label and label ~= "" and value and value ~= "" then
@@ -505,7 +534,7 @@ end
 
 ---@param record LDT_Record
 ---@return LDT_RowModel[]
-local function BoonRows(record)
+local function boonRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
   local boons = record.boons or {}
@@ -516,11 +545,11 @@ local function BoonRows(record)
     if boon.label and boon.amount then
       stats[#stats + 1] = { label = boon.label, value = Helpers.FormatBoonAmount(boon.amount) }
     elseif boon.text and boon.text ~= "" then
-      AppendBoonStats(boon.text, stats)
+      appendBoonStats(boon.text, stats)
     end
   end
   if #stats == 0 then
-    rows[1] = { columns = { TextColumn("No boons", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+    rows[1] = { columns = { textColumn("No boons", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   local index = 1
@@ -529,19 +558,19 @@ local function BoonRows(record)
     local nextStat = stats[index + 1]
     local nextLabel = ""
     local nextValue = ""
-    local statR, statG, statB = BoonStatColor(stat.label)
+    local statR, statG, statB = boonStatColor(stat.label)
     local nextR, nextG, nextB
     if nextStat then
       nextLabel = nextStat.label
       nextValue = nextStat.value
-      nextR, nextG, nextB = BoonStatColor(nextLabel)
+      nextR, nextG, nextB = boonStatColor(nextLabel)
     end
     rows[#rows + 1] = {
       columns = {
-        TextColumn(stat.label, nil, "LEFT", FONT_ROW, statR or 0.85, statG or 0.85, statB or 0.85),
-        TextColumn(stat.value, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
-        TextColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
-        TextColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
+        textColumn(stat.label, nil, "LEFT", FONT_ROW, statR or 0.85, statG or 0.85, statB or 0.85),
+        textColumn(stat.value, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
+        textColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
+        textColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
       },
       height = ROW_HEIGHT,
     }
@@ -552,7 +581,7 @@ end
 
 ---@param amount number
 ---@return string
-local function SignedCount(amount)
+local function signedCount(amount)
   if amount > 0 then
     return format("+%d", amount)
   end
@@ -561,15 +590,15 @@ end
 
 ---@param record LDT_Record
 ---@return LDT_RowModel[]
-local function GainsRows(record)
+local function gainsRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
   local gold = record.gold
   if gold and gold.gained and gold.gained > 0 then
     rows[#rows + 1] = {
       columns = {
-        TextColumn("Gold", nil, "LEFT"),
-        TextColumn(Helpers.FormatMoney(gold.gained), nil, "RIGHT", FONT_ROW, 1, 1, 1),
+        textColumn("Gold", nil, "LEFT"),
+        textColumn(Helpers.FormatMoney(gold.gained), nil, "RIGHT", FONT_ROW, 1, 1, 1),
       },
       height = ROW_HEIGHT,
       goldCopper = gold.gained,
@@ -602,7 +631,7 @@ local function GainsRows(record)
           break
         end
       end
-      local nameColumn = TextColumn(name, nil, "LEFT")
+      local nameColumn = textColumn(name, nil, "LEFT")
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.iconFileID and not issecretvalue(info.iconFileID) and info.iconFileID > 0 then
         nameColumn.icon = info.iconFileID
@@ -610,7 +639,7 @@ local function GainsRows(record)
       rows[#rows + 1] = {
         columns = {
           nameColumn,
-          TextColumn(SignedCount(total), VALUE_WIDTH, "RIGHT", FONT_ROW, 0.5, 0.85, 1),
+          textColumn(signedCount(total), VALUE_WIDTH, "RIGHT", FONT_ROW, 0.5, 0.85, 1),
         },
         height = ROW_HEIGHT,
         currencyID = currencyID,
@@ -710,7 +739,7 @@ local function GainsRows(record)
       end
     end
     ---@type LDT_RowColumn
-    local nameColumn = TextColumn(label, nil, "LEFT", nil, red, green, blue)
+    local nameColumn = textColumn(label, nil, "LEFT", nil, red, green, blue)
     if item.itemID then
       local texture = C_Item.GetItemIconByID(item.itemID)
       if texture then
@@ -721,7 +750,7 @@ local function GainsRows(record)
     local row = {
       columns = {
         nameColumn,
-        TextColumn(tostring(item.quantity), VALUE_WIDTH, "RIGHT"),
+        textColumn(tostring(item.quantity), VALUE_WIDTH, "RIGHT"),
       },
       height = ROW_HEIGHT,
     }
@@ -731,19 +760,19 @@ local function GainsRows(record)
     rows[#rows + 1] = row
   end
   if #rows == 0 then
-    rows[1] = { columns = { TextColumn("No gains yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+    rows[1] = { columns = { textColumn("No gains yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
   end
   return rows
 end
 
 ---@param record LDT_Record
 ---@return LDT_RowModel[]
-local function RenownRows(record)
+local function renownRows(record)
   ---@type LDT_RowModel[]
   local rows = {}
   local renowns = record.renowns or {}
   if #renowns == 0 then
-    rows[1] = { columns = { TextColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+    rows[1] = { columns = { textColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
   end
   for index = 1, #renowns do
@@ -753,14 +782,14 @@ local function RenownRows(record)
       threshold = 1
     end
     local name = row.name or "Renown"
-    rows[#rows + 1] = BarRow(format("%s  %d  %d/%d", name, row.level, row.earned, threshold), 0, threshold, math.min(row.earned, threshold), "center")
+    rows[#rows + 1] = barRow(format("%s  %d  %d/%d", name, row.level, row.earned, threshold), 0, threshold, math.min(row.earned, threshold), "center")
   end
   return rows
 end
 
 ---@param parent Frame
 ---@return LDT_WidgetColumnFrame
-local function CreateColumn(parent)
+local function createColumn(parent)
   ---@type LDT_WidgetColumnFrame
   local column = CreateFrame("Frame", nil, parent)
   local bar = CreateFrame("StatusBar", nil, column)
@@ -794,7 +823,7 @@ end
 ---@param column LDT_WidgetColumnFrame
 ---@param model LDT_RowColumn
 ---@param rowHeight number
-local function PaintColumn(column, model, rowHeight)
+local function paintColumn(column, model, rowHeight)
   local text = column.text
   local bar = column.bar
   local icon = column.icon
@@ -860,7 +889,7 @@ local function PaintColumn(column, model, rowHeight)
 end
 
 ---@param panel LDT_WidgetPanel
-local function LayoutPanel(panel)
+local function layoutPanel(panel)
   local rows = panel.rows or {}
   local y = -ROW_HEIGHT
   for index = 1, #rows do
@@ -930,7 +959,7 @@ local function LayoutPanel(panel)
     for columnIndex = 1, #columns do
       local column = row.columns[columnIndex]
       if not column then
-        column = CreateColumn(row)
+        column = createColumn(row)
         row.columns[columnIndex] = column
       end
       column:Show()
@@ -938,7 +967,7 @@ local function LayoutPanel(panel)
       column:ClearAllPoints()
       column:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
       column:SetWidth(math.max(width, 1))
-      PaintColumn(column, columns[columnIndex], rowHeight)
+      paintColumn(column, columns[columnIndex], rowHeight)
       local spellID = columns[columnIndex].spellID
       local tip = columns[columnIndex].tip
       local textFrame = column.textFrame
@@ -949,9 +978,7 @@ local function LayoutPanel(panel)
           GameTooltip:SetSpellByID(spellID)
           GameTooltip:Show()
         end)
-        textFrame:SetScript("OnLeave", function()
-          GameTooltip:Hide()
-        end)
+        textFrame:SetScript("OnLeave", GameTooltip_Hide)
       elseif tip and tip ~= "" then
         textFrame:EnableMouse(true)
         textFrame:SetScript("OnEnter", function()
@@ -959,9 +986,7 @@ local function LayoutPanel(panel)
           GameTooltip:SetText(tip, 1, 1, 1)
           GameTooltip:Show()
         end)
-        textFrame:SetScript("OnLeave", function()
-          GameTooltip:Hide()
-        end)
+        textFrame:SetScript("OnLeave", GameTooltip_Hide)
       else
         textFrame:EnableMouse(false)
         textFrame:SetScript("OnEnter", nil)
@@ -989,7 +1014,8 @@ function Module:Build()
     return
   end
   local windows = Data.db.global.liqui.windows
-  self.window = LiqUI:NewElement("Window", {
+  ---@type LiqUI_WindowOptions
+  local windowOptions = {
     name = addon.name .. "Report",
     storage = windows.Report,
     title = "Report",
@@ -1000,7 +1026,8 @@ function Module:Build()
       Module:StartTicker()
       Module:Render()
     end,
-  })
+  }
+  self.window = LiqUI:NewElement("Window", windowOptions)
   self.window:HookScript("OnHide", function()
     Module:StopTicker()
   end)
@@ -1074,11 +1101,11 @@ function Module:Layout()
     if collapsed[info.id] then
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
       panel.rows = {}
-      LayoutPanel(panel)
+      layoutPanel(panel)
       panel:SetHeight(ROW_HEIGHT)
     else
       panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-      LayoutPanel(panel)
+      layoutPanel(panel)
     end
     y = y - panel:GetHeight()
   end
@@ -1086,7 +1113,7 @@ function Module:Layout()
 end
 
 ---@return LDT_Record, LDT_Record
-local function DemoRecord()
+local function demoRecord()
   ---@type LDT_Record
   local best = {
     id = "demo-best",
@@ -1116,7 +1143,8 @@ local function DemoRecord()
       { encounterID = 1, encounterName = "Chamber boss", difficultyID = 0, groupSize = 1, success = 1, elapsed = 600 },
     },
     log = {},
-    watch = { criteria = {} },
+    splits = {},
+    watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
   }
   ---@type LDT_Record
   local record = {
@@ -1134,7 +1162,7 @@ local function DemoRecord()
     deaths = 1,
     lives = 2,
     player = { level = 80, itemLevel = 645, specName = "Restoration" },
-    entrance = { tierInfo = { tier = 8, suggestedILvl = 0, overrideTooltipSpellID = 0, unlocked = true, tierDescription = "", rewards = {}, modifierUIWidgetSetID = 0, queueAsLFG = false, difficultyID = 0 } },
+    entrance = { tierInfo = { tier = 8, suggestedILvl = 0, overrideTooltipSpellID = 0, unlocked = true, tierDescription = "", rewards = {}, modifierUIWidgetSetID = 0, queueAsLFG = false } },
     companion = {
       name = "Brann Bronzebeard",
       level = 42,
@@ -1217,7 +1245,8 @@ local function DemoRecord()
         detail = { criteriaID = 2, description = "Defeat the chamber boss" },
       },
     },
-    watch = { criteria = {} },
+    splits = {},
+    watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
   }
   return record, best
 end
@@ -1225,11 +1254,12 @@ end
 ---@param record LDT_Record|nil
 function Module:Fill(record)
   local panels = self.panels
-  if not panels then
+  local window = self.window
+  if not panels or not window then
     return
   end
   if not record then
-    self.window:SetTitle("Report")
+    window:SetTitle("Report")
     panels[Constants.sectionId.Run].rows = {}
     panels[Constants.sectionId.Timers].rows = {}
     panels[Constants.sectionId.Companion].rows = {}
@@ -1239,13 +1269,13 @@ function Module:Fill(record)
     return
   end
   local best = Helpers.BestRun(record)
-  self.window:SetTitle(RunTitle(record))
-  panels[Constants.sectionId.Run].rows = RunRows(record)
-  panels[Constants.sectionId.Timers].rows = TimerRows(record, best)
-  panels[Constants.sectionId.Companion].rows = CompanionRows(record)
-  panels[Constants.sectionId.Boons].rows = BoonRows(record)
-  panels[Constants.sectionId.Gains].rows = GainsRows(record)
-  panels[Constants.sectionId.Renown].rows = RenownRows(record)
+  window:SetTitle(runTitle(record))
+  panels[Constants.sectionId.Run].rows = runRows(record)
+  panels[Constants.sectionId.Timers].rows = timerRows(record, best)
+  panels[Constants.sectionId.Companion].rows = companionRows(record)
+  panels[Constants.sectionId.Boons].rows = boonRows(record)
+  panels[Constants.sectionId.Gains].rows = gainsRows(record)
+  panels[Constants.sectionId.Renown].rows = renownRows(record)
 end
 
 function Module:Render()

@@ -30,7 +30,7 @@
 ---@class LDT_Core : AceAddon, AceConsole-3.0
 
 ---@class LDT_Module_Timer : AceModule
----@field frame Frame|nil
+---@field frame LDT_TimerFrame|nil
 ---@field title FontString|nil
 ---@field header Frame|nil
 ---@field clock FontString|nil

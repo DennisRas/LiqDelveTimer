@@ -10,6 +10,7 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
+local TableForEach = LiqUI.Utils.TableForEach
 
 local HEADER_HEIGHT = 28
 local ICON_SIZE = 16
@@ -19,61 +20,70 @@ local COLUMN_GAP = 20
 local ROW_HEIGHT = 16
 local NUMBER_FONT = "Fonts\\ARIALN.TTF"
 
----@param color ColorTable
+---@param color ColorRGBAData
 ---@param apply function
-local function ShowColorPicker(color, apply)
+local function showColorPicker(color, apply)
   local previous = { r = color.r, g = color.g, b = color.b, a = color.a }
-  ColorPickerFrame:SetupColorPickerAndShow({
+  local function applyPickedColor()
+    ---@type number?, number?, number?
+    local red, green, blue = ColorPickerFrame:GetColorRGB()
+    local alpha = ColorPickerFrame:GetColorAlpha()
+    if type(red) ~= "number" or type(green) ~= "number" or type(blue) ~= "number" then
+      return
+    end
+    color.r = red
+    color.g = green
+    color.b = blue
+    if type(alpha) == "number" then
+      color.a = alpha
+    end
+    apply()
+  end
+  local function applyPickedOpacity()
+    local alpha = ColorPickerFrame:GetColorAlpha()
+    if type(alpha) ~= "number" then
+      return
+    end
+    color.a = alpha
+    apply()
+  end
+  local function restorePreviousColor()
+    color.r = previous.r
+    color.g = previous.g
+    color.b = previous.b
+    color.a = previous.a
+    apply()
+  end
+  ---@type LiqUI_ColorPickerInfo
+  local colorInfo = {
     r = color.r,
     g = color.g,
     b = color.b,
+    a = color.a,
     opacity = color.a,
     hasOpacity = 1,
-    swatchFunc = function()
-      local red, green, blue = ColorPickerFrame:GetColorRGB()
-      local alpha = ColorPickerFrame:GetColorAlpha()
-      if red then
-        color.r = red
-        color.g = green
-        color.b = blue
-        color.a = alpha or color.a
-        apply()
-      end
-    end,
-    opacityFunc = function()
-      local alpha = ColorPickerFrame:GetColorAlpha()
-      if alpha then
-        color.a = alpha
-        apply()
-      end
-    end,
-    cancelFunc = function()
-      color.r = previous.r
-      color.g = previous.g
-      color.b = previous.b
-      color.a = previous.a
-      apply()
-    end,
-  })
+    swatchFunc = applyPickedColor,
+    opacityFunc = applyPickedOpacity,
+    cancelFunc = restorePreviousColor,
+  }
+  ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
 end
 
 ---@param owner Frame
 ---@param text string
-local function BindTooltip(owner, text)
+local function bindTooltip(owner, text)
   owner:SetScript("OnEnter", function()
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
     GameTooltip:SetText(text, 1, 1, 1)
     GameTooltip:Show()
   end)
-  owner:SetScript("OnLeave", function()
-    GameTooltip:Hide()
-  end)
+  owner:SetScript("OnLeave", GameTooltip_Hide)
 end
 
 ---@param record LDT_Record
 ---@param stepName string
 ---@return number|nil
-local function BestChamberTime(record, stepName)
+local function bestChamberTime(record, stepName)
   local character = Data:GetCharacter()
   if not character then
     return nil
@@ -81,7 +91,7 @@ local function BestChamberTime(record, stepName)
   local tier = Helpers.RunTier(record)
   local mapID = record.instance and record.instance.mapID
   local best
-  LiqUI.Utils.TableForEach(character.records, function(candidate)
+  TableForEach(character.records, function(candidate)
     if candidate == record or candidate.result ~= Constants.runResult.Complete or not candidate.labyrinth then
       return
     end
@@ -92,7 +102,7 @@ local function BestChamberTime(record, stepName)
     if mapID and candidateMap ~= mapID then
       return
     end
-    LiqUI.Utils.TableForEach(candidate.chambers, function(chamber)
+    TableForEach(candidate.chambers, function(chamber)
       if chamber.name == stepName and chamber.completedElapsed and (not best or chamber.completedElapsed < best) then
         best = chamber.completedElapsed
       end
@@ -117,17 +127,18 @@ function Timer:StopTicker()
   end
 end
 
----@param rootMenu any
+---@param rootMenu RootMenuDescriptionProxy
 ---@param text string
----@param color ColorTable
-local function AddColorSwatch(rootMenu, text, color)
+---@param color ColorRGBAData
+local function addColorSwatch(rootMenu, text, color)
   rootMenu:CreateColorSwatch(text, function()
-    ShowColorPicker(color, function()
+    showColorPicker(color, function()
       Timer:Render()
     end)
   end, color)
 end
 
+---@param owner Frame
 function Timer:OpenMenu(owner)
   local options = Data.db.global.timer
   MenuUtil.CreateContextMenu(owner, function(_, rootMenu)
@@ -138,10 +149,10 @@ function Timer:OpenMenu(owner)
       options.replaceTracker = not options.replaceTracker
       Capture:Sync()
     end)
-    AddColorSwatch(rootMenu, "Faster than best", options.aheadColor)
-    AddColorSwatch(rootMenu, "Slower than best", options.behindColor)
-    AddColorSwatch(rootMenu, "Background", options.backgroundColor)
-    AddColorSwatch(rootMenu, "Border", options.borderColor)
+    addColorSwatch(rootMenu, "Faster than best", options.aheadColor)
+    addColorSwatch(rootMenu, "Slower than best", options.behindColor)
+    addColorSwatch(rootMenu, "Background", options.backgroundColor)
+    addColorSwatch(rootMenu, "Border", options.borderColor)
     local sizeMenu = rootMenu:CreateButton("Font size")
     local sizes = { 10, 12, 14, 16 }
     for index = 1, #sizes do
@@ -188,6 +199,7 @@ function Timer:Build()
     return
   end
   local options = Data.db.global.timer
+  ---@type LDT_TimerFrame
   local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
   frame:SetSize(280, 80)
   frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
@@ -226,7 +238,7 @@ function Timer:Build()
     Capture.timerFromGame = false
     frame:Hide()
   end)
-  BindTooltip(closeButton, "Close")
+  bindTooltip(closeButton, "Close")
 
   local settingsButton = CreateFrame("DropdownButton", nil, header)
   settingsButton:SetSize(ICON_SIZE, ICON_SIZE)
@@ -237,7 +249,7 @@ function Timer:Build()
   settingsButton:SetScript("OnClick", function()
     Timer:OpenMenu(settingsButton)
   end)
-  BindTooltip(settingsButton, "Settings")
+  bindTooltip(settingsButton, "Settings")
 
   local recordsButton = CreateFrame("Button", nil, header)
   recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
@@ -250,7 +262,7 @@ function Timer:Build()
       addon.Module_Records:ToggleWindow()
     end
   end)
-  BindTooltip(recordsButton, "Records")
+  bindTooltip(recordsButton, "Records")
 
   local reportButton = CreateFrame("Button", nil, header)
   reportButton:SetSize(ICON_SIZE, ICON_SIZE)
@@ -263,7 +275,7 @@ function Timer:Build()
       addon.Module_Report:ShowRecord(Data:GetActiveRecord())
     end
   end)
-  BindTooltip(reportButton, "Report")
+  bindTooltip(reportButton, "Report")
 
   local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   deaths:SetPoint("RIGHT", reportButton, "LEFT", -8, 0)
@@ -346,14 +358,21 @@ function Timer:StepRows(record)
       rows[#rows + 1] = {
         name = chamber.name,
         elapsed = chamber.completedElapsed,
-        best = BestChamberTime(record, chamber.name),
+        best = bestChamberTime(record, chamber.name),
         current = chamber.name == currentName and chamber.completedElapsed == nil,
       }
     end
     return rows
   end
-  local route = record.routeID and Data.db.global.routes[record.routeID]
-  local steps = route and route.steps or {}
+  local route
+  if record.routeID then
+    route = Data.db.global.routes[record.routeID]
+  end
+  ---@type string[]
+  local steps = {}
+  if route then
+    steps = route.steps
+  end
   local currentName = record.watch and record.watch.routeStep
   for index = 1, #steps do
     local stepName = steps[index]
@@ -373,8 +392,15 @@ end
 function Timer:PreviewRows(preview)
   ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
   local rows = {}
-  local route = preview.routeID and Data.db.global.routes[preview.routeID]
-  local steps = route and route.steps or {}
+  local route
+  if preview.routeID then
+    route = Data.db.global.routes[preview.routeID]
+  end
+  ---@type string[]
+  local steps = {}
+  if route then
+    steps = route.steps
+  end
   for index = 1, #steps do
     local stepName = steps[index]
     rows[#rows + 1] = {
@@ -391,6 +417,18 @@ function Timer:Render()
   self:Build()
   local frame = self.frame
   if not frame or not frame:IsShown() then
+    return
+  end
+  local titleText = self.title
+  local deathsText = self.deaths
+  local spells = self.spells
+  local spellButtons = self.spellButtons
+  local clock = self.clock
+  local phrase = self.phrase
+  local timeHeader = self.timeHeader
+  local bestHeader = self.bestHeader
+  local rows = self.rows
+  if not titleText or not deathsText or not spells or not spellButtons or not clock or not phrase or not timeHeader or not bestHeader or not rows then
     return
   end
   local options = Data.db.global.timer
@@ -420,7 +458,7 @@ function Timer:Render()
     else
       title = delve
     end
-    self.deaths:SetText(format("Deaths %d", record.deaths or 0))
+    deathsText:SetText(format("Deaths %d", record.deaths or 0))
   elseif preview then
     local delve = preview.name or "Delve"
     if preview.variant then
@@ -431,12 +469,12 @@ function Timer:Render()
     else
       title = delve
     end
-    self.deaths:SetText("")
+    deathsText:SetText("")
   else
-    self.deaths:SetText("")
+    deathsText:SetText("")
   end
-  self.title:SetText(title)
-  self.deaths:SetFont(NUMBER_FONT, fontSize, "")
+  titleText:SetText(title)
+  deathsText:SetFont(NUMBER_FONT, fontSize, "")
 
   local spellIDs = {}
   if record and record.entrance and record.entrance.activeSpellIDs then
@@ -451,9 +489,9 @@ function Timer:Render()
       local texture = C_Spell.GetSpellTexture(spellID)
       if texture and not issecretvalue(texture) then
         spellCount = spellCount + 1
-        local spell = self.spellButtons[spellCount]
+        local spell = spellButtons[spellCount]
         if not spell then
-          local button = CreateFrame("Button", nil, self.spells)
+          local button = CreateFrame("Button", nil, spells)
           button:SetSize(ICON_SIZE, ICON_SIZE)
           local icon = button:CreateTexture(nil, "ARTWORK")
           icon:SetAllPoints()
@@ -470,39 +508,40 @@ function Timer:Render()
               GameTooltip:Show()
             end)
           end
-          button:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-          end)
-          self.spellButtons[spellCount] = spell
+          button:SetScript("OnLeave", GameTooltip_Hide)
+          spellButtons[spellCount] = spell
         end
         spell.spellID = spellID
         spell.icon:SetTexture(texture)
         spell.button:ClearAllPoints()
-        spell.button:SetPoint("LEFT", self.spells, "LEFT", (spellCount - 1) * (ICON_SIZE + 4), 0)
+        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (ICON_SIZE + 4), 0)
         spell.button:Show()
       end
     end
   end
-  for index = spellCount + 1, #self.spellButtons do
-    self.spellButtons[index].button:Hide()
+  for index = spellCount + 1, #spellButtons do
+    spellButtons[index].button:Hide()
   end
   local spellHeight = 0
   if spellCount > 0 then
     spellHeight = ICON_SIZE + 6
   end
-  self.spells:SetHeight(math.max(spellHeight, 1))
+  spells:SetHeight(math.max(spellHeight, 1))
 
   local clockSize = fontSize + 8
-  self.clock:SetFont(NUMBER_FONT, clockSize, "")
-  self.phrase:SetFont(NUMBER_FONT, fontSize, "")
-  self.timeHeader:SetFont(NUMBER_FONT, fontSize, "")
-  self.bestHeader:SetFont(NUMBER_FONT, fontSize, "")
-  self.timeHeader:SetTextColor(0.7, 0.7, 0.7)
-  self.bestHeader:SetTextColor(0.7, 0.7, 0.7)
+  clock:SetFont(NUMBER_FONT, clockSize, "")
+  phrase:SetFont(NUMBER_FONT, fontSize, "")
+  timeHeader:SetFont(NUMBER_FONT, fontSize, "")
+  bestHeader:SetFont(NUMBER_FONT, fontSize, "")
+  timeHeader:SetTextColor(0.7, 0.7, 0.7)
+  bestHeader:SetTextColor(0.7, 0.7, 0.7)
 
   local clockValue
   local phraseText
-  local phraseColor = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
+  local phraseColor = options.aheadColor
+  if not phraseColor then
+    phraseColor = { r = 0.2, g = 1, b = 0.2, a = 1 }
+  end
   if record and Capture.clockReady then
     local frozen = record.finishedElapsed or record.bossElapsed
     if frozen then
@@ -533,31 +572,31 @@ function Timer:Render()
     clockValue = preview.bestFinish
   end
   if clockValue then
-    self.clock:SetText(Helpers.FormatElapsed(clockValue))
+    clock:SetText(Helpers.FormatElapsed(clockValue))
   elseif preview then
-    self.clock:SetText("")
+    clock:SetText("")
   else
-    self.clock:SetText("0:00.0")
+    clock:SetText("0:00.0")
   end
-  self.phrase:SetText(phraseText or "")
-  self.phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
+  phrase:SetText(phraseText or "")
+  phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
 
   local rightPad = 8
   local bestRight = -rightPad
   local timeRight = -(rightPad + TIME_WIDTH + COLUMN_GAP)
   local nameRight = timeRight - TIME_WIDTH - 8
   local clockY = -(4 + HEADER_HEIGHT + spellHeight)
-  self.clock:ClearAllPoints()
-  self.clock:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, clockY)
-  self.phrase:ClearAllPoints()
-  self.phrase:SetPoint("LEFT", self.clock, "RIGHT", 12, 0)
+  clock:ClearAllPoints()
+  clock:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, clockY)
+  phrase:ClearAllPoints()
+  phrase:SetPoint("LEFT", clock, "RIGHT", 12, 0)
   local headerY = clockY - clockSize - 6
-  self.timeHeader:ClearAllPoints()
-  self.timeHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, headerY)
-  self.timeHeader:SetWidth(TIME_WIDTH)
-  self.bestHeader:ClearAllPoints()
-  self.bestHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, headerY)
-  self.bestHeader:SetWidth(TIME_WIDTH)
+  timeHeader:ClearAllPoints()
+  timeHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, headerY)
+  timeHeader:SetWidth(TIME_WIDTH)
+  bestHeader:ClearAllPoints()
+  bestHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, headerY)
+  bestHeader:SetWidth(TIME_WIDTH)
 
   local stepRows = {}
   if record then
@@ -568,10 +607,10 @@ function Timer:Render()
   local y = headerY - fontSize - 2
   for index = 1, #stepRows do
     local model = stepRows[index]
-    local row = self.rows[index]
+    local row = rows[index]
     if not row then
       row = self:CreateRow(frame)
-      self.rows[index] = row
+      rows[index] = row
     end
     row.name:SetFont(NUMBER_FONT, fontSize, "")
     row.time:SetFont(NUMBER_FONT, fontSize, "")
@@ -626,8 +665,8 @@ function Timer:Render()
     row.best:Show()
     y = y - ROW_HEIGHT
   end
-  for index = #stepRows + 1, #self.rows do
-    local row = self.rows[index]
+  for index = #stepRows + 1, #rows do
+    local row = rows[index]
     row.name:Hide()
     row.time:Hide()
     row.best:Hide()

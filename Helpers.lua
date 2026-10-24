@@ -5,6 +5,9 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
+local LiqUI = addon.libs.LiqUI
+local TableForEach = LiqUI.Utils.TableForEach
+
 ---@param value string
 ---@return number|nil, boolean
 function Helpers.BoonAmount(value)
@@ -32,11 +35,14 @@ end
 ---@param elapsed number|nil
 ---@return string
 function Helpers.FormatElapsed(elapsed)
-  if not elapsed or elapsed < 0 then
-    elapsed = 0
+  local secondsElapsed = 0
+  if elapsed then
+    if elapsed >= 0 then
+      secondsElapsed = elapsed
+    end
   end
-  local tenths = math.floor((elapsed * 10) % 10)
-  local whole = math.floor(elapsed)
+  local tenths = math.floor((secondsElapsed * 10) % 10)
+  local whole = math.floor(secondsElapsed)
   local seconds = whole % 60
   local minutes = math.floor(whole / 60)
   local hours = math.floor(minutes / 60)
@@ -50,10 +56,13 @@ end
 ---@param copper number|nil
 ---@return string
 function Helpers.FormatMoney(copper)
-  if not copper or copper < 0 then
-    copper = 0
+  local copperAmount = 0
+  if copper then
+    if copper >= 0 then
+      copperAmount = copper
+    end
   end
-  return C_CurrencyInfo.GetCoinTextureString(copper, 12)
+  return C_CurrencyInfo.GetCoinTextureString(copperAmount, 12)
 end
 
 ---@param itemID number|nil
@@ -119,7 +128,7 @@ function Helpers.BestRun(record)
   local name = instance.name
   local best
   local bestTime
-  addon.libs.LiqUI.Utils.TableForEach(character.records, function(candidate)
+  TableForEach(character.records, function(candidate)
     if candidate == record or candidate.result ~= addon.Constants.runResult.Complete then
       return
     end

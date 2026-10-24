@@ -1,3 +1,6 @@
+---@class LDT_AceDB : AceDBObject-3.0
+---@field global LDT_Global
+
 ---@class LDT_ReportOptions
 ---@field collapsed table<LDT_SectionId, boolean>
 
@@ -14,10 +17,10 @@
 ---@field y number
 ---@field fontSize number
 ---@field replaceTracker boolean
----@field aheadColor ColorTable
----@field behindColor ColorTable
----@field backgroundColor ColorTable
----@field borderColor ColorTable
+---@field aheadColor ColorRGBAData
+---@field behindColor ColorRGBAData
+---@field backgroundColor ColorRGBAData
+---@field borderColor ColorRGBAData
 
 ---@class LDT_Global
 ---@field dbVersion number
@@ -38,7 +41,7 @@
 ---@field dbVersion number
 ---@field defaultDB table
 ---@field defaultCharacter LDT_Character
----@field db AceDBObject-3.0
+---@field db LDT_AceDB
 ---@field labyrinthMapID number
 ---@field boonSpellID number
 ---@field hiddenItemIDs table<number, boolean>

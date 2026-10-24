@@ -1,3 +1,5 @@
+---@class LDT_TimerFrame : Frame, BackdropTemplate
+
 ---@class LDT_TimerRow
 ---@field name FontString
 ---@field time FontString

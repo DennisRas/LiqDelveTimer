@@ -16,18 +16,6 @@
 ---@field rewardType number
 ---@field context number
 
----@class LDT_TierInfo
----@field tier number
----@field suggestedILvl number
----@field overrideTooltipSpellID number
----@field unlocked boolean
----@field tierDescription string
----@field rewards LDT_TierReward[]
----@field modifierUIWidgetSetID number
----@field lockedReason string|nil
----@field queueAsLFG boolean
----@field difficultyID number
-
 ---@class LDT_Entrance
 ---@field entranceType number|nil
 ---@field title string|nil
@@ -39,7 +27,7 @@
 ---@field worldTierDifficulty number|nil
 ---@field affixSpellIDs number[]|nil
 ---@field activeSpellIDs number[]|nil
----@field tierInfo LDT_TierInfo|nil
+---@field tierInfo TieredEntranceTierInfo|nil
 
 ---@class LDT_Companion
 ---@field companionID number|nil
@@ -176,6 +164,9 @@
 ---@field name string
 ---@field enteredElapsed number
 ---@field completedElapsed number|nil
+
+---@class LDT_DelvesDifficultyPickerFrame : Frame
+---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
 
 ---@class LDT_Encounter
 ---@field encounterID number

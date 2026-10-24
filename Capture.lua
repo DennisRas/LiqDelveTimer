@@ -10,6 +10,8 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 local Events = LiqUI.Events
+local TableCopy = LiqUI.Utils.TableCopy
+local TableForEach = LiqUI.Utils.TableForEach
 
 local pickerHooked
 local trackerHooked
@@ -21,7 +23,7 @@ Capture.zoneKnown = false
 
 ---@param spellIDs number[]|nil
 ---@return number[]
-local function CopySpellIDs(spellIDs)
+local function copySpellIDs(spellIDs)
   local copy = {}
   if not spellIDs then
     return copy
@@ -37,7 +39,7 @@ end
 
 ---@param spellIDs number[]|nil
 ---@return string
-local function SpellList(spellIDs)
+local function spellList(spellIDs)
   if not spellIDs or #spellIDs == 0 then
     return ""
   end
@@ -51,13 +53,13 @@ end
 
 ---@param instance LDT_Instance
 ---@return boolean
-local function DetectLabyrinth(instance)
+local function detectLabyrinth(instance)
   return instance.mapID == Data.labyrinthMapID
 end
 
 ---@param scenario LDT_Scenario
 ---@return string
-local function CriteriaSignature(scenario)
+local function criteriaSignature(scenario)
   local parts = {}
   for index = 1, #scenario.criteria do
     local criteriaID = scenario.criteria[index].criteriaID
@@ -72,7 +74,7 @@ end
 
 ---@param scenario LDT_Scenario
 ---@return boolean
-local function IsStepComplete(scenario)
+local function isStepComplete(scenario)
   local step = scenario.step
   if not step or not step.numCriteria or step.numCriteria <= 0 then
     return false
@@ -181,7 +183,7 @@ end
 ---@param treeID number|nil
 ---@param nodeID number|nil
 ---@return string|nil, number|nil
-local function TraitNodeName(treeID, nodeID)
+local function traitNodeName(treeID, nodeID)
   if not treeID or not nodeID or treeID <= 0 or nodeID <= 0 then
     return nil, nil
   end
@@ -203,15 +205,19 @@ local function TraitNodeName(treeID, nodeID)
     if not definition then
       return nil
     end
-    local spellID = definition.overriddenSpellID or definition.spellID
+    local resolvedSpellID = definition.overriddenSpellID or definition.spellID
     local nodeName = definition.overrideName
-    if (not nodeName or nodeName == "") and spellID then
-      nodeName = C_Spell.GetSpellName(spellID)
+    if (not nodeName or nodeName == "") and resolvedSpellID then
+      nodeName = C_Spell.GetSpellName(resolvedSpellID)
     end
-    return nodeName, spellID
+    return nodeName, resolvedSpellID
   end)
   if ok then
-    return name, spellID
+    ---@type string?
+    local nodeName = name
+    ---@type number?
+    local nodeSpellID = spellID
+    return nodeName, nodeSpellID
   end
   return nil, nil
 end
@@ -220,7 +226,7 @@ end
 ---@param nodeID number|nil
 ---@param companionID number|nil
 ---@return string|nil, string|nil
-local function ReadRole(treeID, nodeID, companionID)
+local function readRole(treeID, nodeID, companionID)
   if not treeID or not nodeID or treeID <= 0 or nodeID <= 0 then
     return nil, nil
   end
@@ -254,7 +260,11 @@ local function ReadRole(treeID, nodeID, companionID)
     return resolvedName, atlas
   end)
   if ok then
-    return roleName, roleAtlas
+    ---@type string?
+    local resolvedName = roleName
+    ---@type string?
+    local resolvedAtlas = roleAtlas
+    return resolvedName, resolvedAtlas
   end
   return nil, nil
 end
@@ -271,13 +281,13 @@ function Capture:ReadEntrance()
     pdeID = C_DelvesUI.GetTieredEntrancePDEID(),
     seasonNumber = C_DelvesUI.GetCurrentDelvesSeasonNumber(),
     worldTierDifficulty = C_DelvesUI.GetWorldTierDifficultyForActivePlayer(),
-    affixSpellIDs = CopySpellIDs(C_DelvesUI.GetDelvesAffixSpellsForSeason()),
-    activeSpellIDs = CopySpellIDs(C_ScenarioInfo.GetTieredEntranceActiveSpells()),
+    affixSpellIDs = copySpellIDs(C_DelvesUI.GetDelvesAffixSpellsForSeason()),
+    activeSpellIDs = copySpellIDs(C_ScenarioInfo.GetTieredEntranceActiveSpells()),
   }
   if C_DelvesUI.HasActiveDelve() then
     local tierInfo = C_DelvesUI.GetActiveDelveTier()
     if tierInfo then
-      entrance.tierInfo = LiqUI.Utils.TableCopy(tierInfo)
+      entrance.tierInfo = TableCopy(tierInfo)
     end
   end
   return entrance
@@ -285,7 +295,7 @@ end
 
 ---@param value number|nil
 ---@return number|nil
-local function OptionalID(value)
+local function optionalID(value)
   if value == nil or issecretvalue(value) or value <= 0 then
     return nil
   end
@@ -294,18 +304,18 @@ end
 
 ---@return LDT_Companion
 function Capture:ReadCompanion()
-  local companionID = OptionalID(C_DelvesUI.GetCompanionInfoForActivePlayer())
+  local companionID = optionalID(C_DelvesUI.GetCompanionInfoForActivePlayer())
   ---@type LDT_Companion
   local companion = {
     companionID = companionID,
   }
-  local factionID = OptionalID(C_DelvesUI.GetFactionForCompanion(companionID))
+  local factionID = optionalID(C_DelvesUI.GetFactionForCompanion(companionID))
   if not factionID then
-    factionID = OptionalID(C_DelvesUI.GetFactionForCompanion(nil))
+    factionID = optionalID(C_DelvesUI.GetFactionForCompanion(nil))
   end
   companion.factionID = factionID
   if companionID then
-    companion.creatureDisplayInfoID = OptionalID(C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID))
+    companion.creatureDisplayInfoID = optionalID(C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID))
   end
   local flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(nil)
   if (not flavorName or issecretvalue(flavorName) or flavorName == "") and companionID then
@@ -314,13 +324,13 @@ function Capture:ReadCompanion()
   if flavorName and not issecretvalue(flavorName) and flavorName ~= "" then
     companion.flavorName = flavorName
   end
-  companion.flavorNodeID = OptionalID(C_DelvesUI.GetFlavorNodeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetFlavorNodeForCompanion(companionID))
-  companion.traitTreeID = OptionalID(C_DelvesUI.GetTraitTreeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetTraitTreeForCompanion(companionID))
-  companion.roleNodeID = OptionalID(C_DelvesUI.GetRoleNodeForCompanion(nil)) or OptionalID(companionID and C_DelvesUI.GetRoleNodeForCompanion(companionID))
-  companion.combatCurioNodeID = OptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, nil))
-    or OptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID))
-  companion.utilityCurioNodeID = OptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, nil))
-    or OptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID))
+  companion.flavorNodeID = optionalID(C_DelvesUI.GetFlavorNodeForCompanion(nil)) or optionalID(companionID and C_DelvesUI.GetFlavorNodeForCompanion(companionID))
+  companion.traitTreeID = optionalID(C_DelvesUI.GetTraitTreeForCompanion(nil)) or optionalID(companionID and C_DelvesUI.GetTraitTreeForCompanion(companionID))
+  companion.roleNodeID = optionalID(C_DelvesUI.GetRoleNodeForCompanion(nil)) or optionalID(companionID and C_DelvesUI.GetRoleNodeForCompanion(companionID))
+  companion.combatCurioNodeID = optionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, nil))
+    or optionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID))
+  companion.utilityCurioNodeID = optionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, nil))
+    or optionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID))
   if factionID then
     local faction = C_Reputation.GetFactionDataByID(factionID)
     if faction and faction.name and not issecretvalue(faction.name) and faction.name ~= "" then
@@ -329,39 +339,39 @@ function Capture:ReadCompanion()
         companion.description = faction.description
       end
     end
-    local ranks = C_GossipInfo.GetFriendshipReputationRanks(companion.factionID)
+    local ranks = C_GossipInfo.GetFriendshipReputationRanks(factionID)
     if ranks then
       companion.level = ranks.currentLevel
       companion.maxLevel = ranks.maxLevel
     end
-    local friendship = C_GossipInfo.GetFriendshipReputation(companion.factionID)
+    local friendship = C_GossipInfo.GetFriendshipReputation(factionID)
     if friendship then
       companion.standing = friendship.standing
       companion.reactionThreshold = friendship.reactionThreshold
       companion.nextThreshold = friendship.nextThreshold
     end
   end
-  companion.roleName, companion.roleSpellID = TraitNodeName(companion.traitTreeID, companion.roleNodeID)
-  local subtreeName, roleAtlas = ReadRole(companion.traitTreeID, companion.roleNodeID, companionID)
+  companion.roleName, companion.roleSpellID = traitNodeName(companion.traitTreeID, companion.roleNodeID)
+  local subtreeName, roleAtlas = readRole(companion.traitTreeID, companion.roleNodeID, companionID)
   if subtreeName and subtreeName ~= "" then
     companion.roleName = subtreeName
   end
   if roleAtlas then
     companion.roleAtlas = roleAtlas
   end
-  local flavorSelectionName, flavorSpellID = TraitNodeName(companion.traitTreeID, companion.flavorNodeID)
+  local flavorSelectionName, flavorSpellID = traitNodeName(companion.traitTreeID, companion.flavorNodeID)
   companion.flavorSpellID = flavorSpellID
   if flavorSelectionName and flavorSelectionName ~= "" then
     companion.flavorName = flavorSelectionName
   end
-  companion.combatCurioName, companion.combatCurioSpellID = TraitNodeName(companion.traitTreeID, companion.combatCurioNodeID)
-  companion.utilityCurioName, companion.utilityCurioSpellID = TraitNodeName(companion.traitTreeID, companion.utilityCurioNodeID)
+  companion.combatCurioName, companion.combatCurioSpellID = traitNodeName(companion.traitTreeID, companion.combatCurioNodeID)
+  companion.utilityCurioName, companion.utilityCurioSpellID = traitNodeName(companion.traitTreeID, companion.utilityCurioNodeID)
   return companion
 end
 
 ---@return LDT_Instance
 function Capture:ReadInstance()
-  local name, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize, lfgDungeonID, hasWorldTier = GetInstanceInfo()
+  local name, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize, lfgDungeonID = GetInstanceInfo()
   local mapID = C_Map.GetBestMapForUnit("player")
   local mapName
   if mapID then
@@ -382,7 +392,6 @@ function Capture:ReadInstance()
     instanceID = instanceID,
     instanceGroupSize = instanceGroupSize,
     lfgDungeonID = lfgDungeonID,
-    hasWorldTier = hasWorldTier,
     mapID = mapID,
     mapName = mapName,
     zone = GetZoneText(),
@@ -399,15 +408,15 @@ function Capture:ReadScenario()
   }
   local info = C_ScenarioInfo.GetScenarioInfo()
   if info then
-    scenario.info = LiqUI.Utils.TableCopy(info)
+    scenario.info = TableCopy(info)
   end
   local step = C_ScenarioInfo.GetScenarioStepInfo()
   if step then
-    scenario.step = LiqUI.Utils.TableCopy(step)
+    scenario.step = TableCopy(step)
     for index = 1, step.numCriteria do
       local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(index)
       if criteriaInfo then
-        scenario.criteria[index] = LiqUI.Utils.TableCopy(criteriaInfo)
+        scenario.criteria[index] = TableCopy(criteriaInfo)
       end
     end
   end
@@ -473,7 +482,7 @@ function Capture:FillStart(record)
     mapID = record.instance.mapID,
     mapName = record.instance.mapName,
   }
-  record.labyrinth = DetectLabyrinth(record.instance)
+  record.labyrinth = detectLabyrinth(record.instance)
   local progress, rows = self:ReadVault()
   if progress ~= nil then
     record.vault.startProgress = progress
@@ -508,11 +517,11 @@ function Capture:FillStart(record)
     self:AppendLog(record, Constants.logKind.Start, companionText)
   end
 
-  local activeSpells = SpellList(record.entrance.activeSpellIDs)
+  local activeSpells = spellList(record.entrance.activeSpellIDs)
   if activeSpells ~= "" then
     self:AppendLog(record, Constants.logKind.Start, format("Active spells: %s", activeSpells))
   end
-  local affixSpells = SpellList(record.entrance.affixSpellIDs)
+  local affixSpells = spellList(record.entrance.affixSpellIDs)
   if affixSpells ~= "" then
     self:AppendLog(record, Constants.logKind.Start, format("Season affixes: %s", affixSpells))
   end
@@ -524,7 +533,7 @@ function Capture:RefreshSnapshots(record)
   if entrance and not entrance.tierInfo and C_DelvesUI.HasActiveDelve() then
     local tierInfo = C_DelvesUI.GetActiveDelveTier()
     if tierInfo and tierInfo.tier and tierInfo.tier > 0 then
-      entrance.tierInfo = LiqUI.Utils.TableCopy(tierInfo)
+      entrance.tierInfo = TableCopy(tierInfo)
     end
   end
   local companion = record.companion
@@ -539,7 +548,7 @@ function Capture:RefreshSnapshots(record)
   local instance = record.instance
   if instance and (not instance.name or instance.name == "") then
     record.instance = self:ReadInstance()
-    record.labyrinth = DetectLabyrinth(record.instance)
+    record.labyrinth = detectLabyrinth(record.instance)
   end
 end
 
@@ -559,7 +568,7 @@ function Capture:ObservePlace(record, instance)
     mapID = instance.mapID,
     mapName = instance.mapName,
   }
-  if DetectLabyrinth(instance) then
+  if detectLabyrinth(instance) then
     record.labyrinth = true
   end
   local subzone = instance.subzone
@@ -585,7 +594,7 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
   if entrance then
     local spells = C_ScenarioInfo.GetTieredEntranceActiveSpells()
     if spells then
-      entrance.activeSpellIDs = CopySpellIDs(spells)
+      entrance.activeSpellIDs = copySpellIDs(spells)
     end
   end
   local watch = record.watch
@@ -601,7 +610,7 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
           current[criteriaID] = true
         end
       end
-      LiqUI.Utils.TableForEach(watch.criteria, function(state, criteriaID)
+      TableForEach(watch.criteria, function(state, criteriaID)
         if current[criteriaID] or state.completed then
           return
         end
@@ -715,10 +724,10 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
     end
   end
 
-  local signature = CriteriaSignature(scenario)
+  local signature = criteriaSignature(scenario)
   local signatureChanged = signature ~= (watch.criteriaSignature or "")
   watch.criteriaSignature = signature
-  local stepComplete = IsStepComplete(scenario)
+  local stepComplete = isStepComplete(scenario)
   local freshCriteria = signatureChanged and signature ~= ""
   local chamberCleared = false
   if placeChanged then
@@ -1220,11 +1229,17 @@ function Capture:UpdatePreview()
     mapID = nil
   end
   local tier
+  ---@type LDT_DelvesDifficultyPickerFrame|nil
   local picker = _G.DelvesDifficultyPickerFrame
-  if picker and picker.GetSelectedTierInfo then
-    local info = picker:GetSelectedTierInfo()
-    if info and info.tier and not issecretvalue(info.tier) and info.tier > 0 then
-      tier = info.tier
+  if picker then
+    if picker.GetSelectedTierInfo then
+      local info = picker:GetSelectedTierInfo()
+      if info then
+        local selectedTier = info.tier
+        if not issecretvalue(selectedTier) and selectedTier > 0 then
+          tier = selectedTier
+        end
+      end
     end
   end
   if not tier and C_DelvesUI.HasActiveDelve() then
@@ -1240,7 +1255,7 @@ function Capture:UpdatePreview()
     variant = variant,
     mapID = mapID,
     tier = tier,
-    activeSpellIDs = CopySpellIDs(C_ScenarioInfo.GetTieredEntranceActiveSpells()),
+    activeSpellIDs = copySpellIDs(C_ScenarioInfo.GetTieredEntranceActiveSpells()),
     routeID = route and route.id or nil,
     bestFinish = bestFinish,
   }
@@ -1282,7 +1297,12 @@ function Capture:Sync()
   if inInstance then
     self.zoneKnown = true
   end
-  local hideTracker = Data.db.global.timer.replaceTracker and inDelve
+  local hideTracker = false
+  if Data.db.global.timer.replaceTracker then
+    if inDelve then
+      hideTracker = true
+    end
+  end
   if tracker and hideTracker then
     if tracker:IsShown() then
       tracker:Hide()
@@ -1339,6 +1359,39 @@ function Capture:Sync()
 end
 
 function Capture:Register()
+  ---@param _frame Frame
+  ---@param _event string
+  ---@param currencyType number|nil
+  ---@param quantity number|nil
+  ---@param quantityChange number|nil
+  local function onCurrencyDisplayUpdate(_frame, _event, currencyType, quantity, quantityChange)
+    Capture:OnCurrency(currencyType, quantity, quantityChange)
+    Capture:Sync()
+  end
+
+  ---@param _frame Frame
+  ---@param _event string
+  ---@param unit string
+  local function onPlayerAura(_frame, _event, unit)
+    if unit ~= "player" then
+      return
+    end
+    local record = Data:GetActiveRecord()
+    if not record then
+      return
+    end
+    Capture:ObserveBoons(record)
+  end
+
+  ---@param _frame Frame
+  ---@param _event string
+  ---@param name string
+  local function onAddonLoaded(_frame, _event, name)
+    if name == "Blizzard_DelvesDifficultyPicker" then
+      Capture:Sync()
+    end
+  end
+
   Events:RegisterEvent("SCENARIO_COMPLETED", function()
     Capture:OnScenarioCompleted()
     Capture:Sync()
@@ -1351,11 +1404,9 @@ function Capture:Register()
     Capture:OnMoney()
     Capture:Sync()
   end, true)
-  Events:RegisterEvent("CURRENCY_DISPLAY_UPDATE", function(_, _, currencyType, quantity, quantityChange)
-    Capture:OnCurrency(currencyType, quantity, quantityChange)
-    Capture:Sync()
-  end, true)
+  Events:RegisterEvent("CURRENCY_DISPLAY_UPDATE", onCurrencyDisplayUpdate, true)
   Events:RegisterEvent("CHAT_MSG_LOOT", function(_, _, ...)
+    ---@type string?
     local message = ...
     Capture:OnLoot(message, select(12, ...))
     Capture:Sync()
@@ -1372,16 +1423,7 @@ function Capture:Register()
       addon.ApiLog:LogState()
     end
   end, true)
-  Events:RegisterEvent("UNIT_AURA", function(_, _, unit)
-    if unit ~= "player" then
-      return
-    end
-    local record = Data:GetActiveRecord()
-    if not record then
-      return
-    end
-    Capture:ObserveBoons(record)
-  end, true)
+  Events:RegisterEvent("UNIT_AURA", onPlayerAura, true)
   Events:RegisterEvent({
     "UPDATE_FACTION",
     "MAJOR_FACTION_RENOWN_LEVEL_CHANGED",
@@ -1404,11 +1446,7 @@ function Capture:Register()
     Capture.zoneKnown = true
     Capture:Sync()
   end, true)
-  Events:RegisterEvent("ADDON_LOADED", function(_, _, name)
-    if name == "Blizzard_DelvesDifficultyPicker" then
-      Capture:Sync()
-    end
-  end, true)
+  Events:RegisterEvent("ADDON_LOADED", onAddonLoaded, true)
   Events:RegisterEvent({
     "ACTIVE_DELVE_DATA_UPDATE",
     "WALK_IN_DATA_UPDATE",

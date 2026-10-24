@@ -7,6 +7,8 @@ addon.Data = Data
 
 local LibAceDB = addon.libs.AceDB
 local LiqUI = addon.libs.LiqUI
+local TableCopy = LiqUI.Utils.TableCopy
+local TableForEach = LiqUI.Utils.TableForEach
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 
@@ -72,7 +74,9 @@ Data.defaultDB = {
 }
 
 function Data:Initialize()
-  self.db = LibAceDB:New("LiqDelveTimerDB", self.defaultDB, true)
+  ---@type LDT_AceDB
+  local db = LibAceDB:New("LiqDelveTimerDB", self.defaultDB, true)
+  self.db = db
 end
 
 function Data:MigrateDB()
@@ -99,7 +103,7 @@ function Data:GetCharacter()
   if character then
     return character
   end
-  character = LiqUI.Utils.TableCopy(self.defaultCharacter)
+  character = TableCopy(self.defaultCharacter)
   character.GUID = guid
   characters[guid] = character
   return character
@@ -190,9 +194,14 @@ function Data:RouteForStep(record, stepName)
   if record.routeID and routes[record.routeID] then
     return routes[record.routeID]
   end
-  local mapID = record.instance and record.instance.mapID
+  local instance = record.instance
+  local mapID
+  if instance then
+    mapID = instance.mapID
+  end
+  ---@type LDT_Route?
   local match
-  LiqUI.Utils.TableForEach(routes, function(route)
+  TableForEach(routes, function(route)
     if match or not mapID or route.mapID ~= mapID then
       return
     end
@@ -279,7 +288,7 @@ function Data:BestSplitFor(routeID, tier, stepName)
     return nil
   end
   local best
-  LiqUI.Utils.TableForEach(character.records, function(candidate)
+  TableForEach(character.records, function(candidate)
     if candidate.result ~= Constants.runResult.Complete then
       return
     end
@@ -306,7 +315,7 @@ function Data:PreviewRoute(name, mapID, tier)
   end
   local bestRoute
   local bestTime
-  LiqUI.Utils.TableForEach(character.records, function(candidate)
+  TableForEach(character.records, function(candidate)
     if candidate.result ~= Constants.runResult.Complete or Helpers.RunTier(candidate) ~= tier then
       return
     end
