@@ -19,8 +19,8 @@
 ---@field ApiLog LDT_ApiLog
 ---@field logger LiqUI_LoggerHandle
 ---@field Module_Timer LDT_Module_Timer
----@field Module_Report LDT_Module_Report
----@field Module_Records LDT_Module_Records
+---@field Module_Run LDT_Module_Run
+---@field Module_History LDT_Module_History
 ---@field Debug LDT_Debug|nil
 
 ---@class LDT_ApiLog
@@ -42,12 +42,12 @@
 ---@field bestHeader FontString|nil
 ---@field rows LDT_TimerRow[]|nil
 
----@class LDT_Module_Report : AceModule
+---@class LDT_Module_Run : AceModule
 ---@field window LiqUI_WindowInstance|nil
 ---@field panels table<LDT_SectionId, LDT_WidgetPanel>|nil
----@field pinnedRecord LDT_Record|nil
+---@field pinnedRun LDT_Run|nil
 
----@class LDT_Module_Records : AceModule
+---@class LDT_Module_History : AceModule
 ---@field window LiqUI_WindowInstance|nil
 ---@field table LiqUI_TableInstance|nil
 

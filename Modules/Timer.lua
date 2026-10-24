@@ -80,19 +80,19 @@ local function bindTooltip(owner, text)
   owner:SetScript("OnLeave", GameTooltip_Hide)
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param stepName string
 ---@return number|nil
-local function bestChamberTime(record, stepName)
+local function bestChamberTime(run, stepName)
   local character = Data:GetCharacter()
   if not character then
     return nil
   end
-  local tier = Helpers.RunTier(record)
-  local mapID = record.instance and record.instance.mapID
+  local tier = Helpers.RunTier(run)
+  local mapID = run.instance and run.instance.mapID
   local best
-  TableForEach(character.records, function(candidate)
-    if candidate == record or candidate.result ~= Constants.runResult.Complete or not candidate.labyrinth then
+  TableForEach(character.runs, function(candidate)
+    if candidate == run or candidate.result ~= Constants.runResult.Complete or not candidate.labyrinth then
       return
     end
     if tier and Helpers.RunTier(candidate) ~= tier then
@@ -244,42 +244,42 @@ function Timer:CreateRow(parent)
   return row
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-function Timer:StepRows(record)
+function Timer:StepRows(run)
   ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
   local rows = {}
-  if record.labyrinth then
-    local currentName = record.watch and record.watch.routeStep
-    local chambers = record.chambers or {}
+  if run.labyrinth then
+    local currentName = run.watch and run.watch.routeStep
+    local chambers = run.chambers or {}
     for index = 1, #chambers do
       local chamber = chambers[index]
       rows[#rows + 1] = {
         name = chamber.name,
         elapsed = chamber.completedElapsed,
-        best = bestChamberTime(record, chamber.name),
+        best = bestChamberTime(run, chamber.name),
         current = chamber.name == currentName and chamber.completedElapsed == nil,
       }
     end
     return rows
   end
   local route
-  if record.routeID then
-    route = Data.db.global.routes[record.routeID]
+  if run.routeID then
+    route = Data.db.global.routes[run.routeID]
   end
   ---@type string[]
   local steps = {}
   if route then
     steps = route.steps
   end
-  local currentName = record.watch and record.watch.routeStep
+  local currentName = run.watch and run.watch.routeStep
   for index = 1, #steps do
     local stepName = steps[index]
-    local elapsed = record.splits and record.splits[stepName]
+    local elapsed = run.splits and run.splits[stepName]
     rows[#rows + 1] = {
       name = stepName,
       elapsed = elapsed,
-      best = Data:BestSplit(record, stepName),
+      best = Data:BestSplit(run, stepName),
       current = stepName == currentName and elapsed == nil,
     }
   end
@@ -366,34 +366,34 @@ function Timer:Render()
     end)
     bindTooltip(settingsButton, "Settings")
 
-    local recordsButton = CreateFrame("Button", nil, header)
-    recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
-    recordsButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
-    local recordsIcon = recordsButton:CreateTexture(nil, "ARTWORK")
-    recordsIcon:SetAllPoints()
-    recordsIcon:SetTexture(Constants.media.Icon)
-    recordsButton:SetScript("OnClick", function()
-      if addon.Module_Records then
-        addon.Module_Records:ToggleWindow()
+    local historyButton = CreateFrame("Button", nil, header)
+    historyButton:SetSize(ICON_SIZE, ICON_SIZE)
+    historyButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
+    local historyIcon = historyButton:CreateTexture(nil, "ARTWORK")
+    historyIcon:SetAllPoints()
+    historyIcon:SetTexture(Constants.media.Icon)
+    historyButton:SetScript("OnClick", function()
+      if addon.Module_History then
+        addon.Module_History:ToggleWindow()
       end
     end)
-    bindTooltip(recordsButton, "Records")
+    bindTooltip(historyButton, "History")
 
-    local reportButton = CreateFrame("Button", nil, header)
-    reportButton:SetSize(ICON_SIZE, ICON_SIZE)
-    reportButton:SetPoint("RIGHT", recordsButton, "LEFT", -ICON_GAP, 0)
-    local reportIcon = reportButton:CreateTexture(nil, "ARTWORK")
-    reportIcon:SetAllPoints()
-    reportIcon:SetAtlas("poi-door-arrow-down")
-    reportButton:SetScript("OnClick", function()
-      if addon.Module_Report then
-        addon.Module_Report:ShowRecord(Data:GetActiveRecord())
+    local runButton = CreateFrame("Button", nil, header)
+    runButton:SetSize(ICON_SIZE, ICON_SIZE)
+    runButton:SetPoint("RIGHT", historyButton, "LEFT", -ICON_GAP, 0)
+    local runIcon = runButton:CreateTexture(nil, "ARTWORK")
+    runIcon:SetAllPoints()
+    runIcon:SetAtlas("poi-door-arrow-down")
+    runButton:SetScript("OnClick", function()
+      if addon.Module_Run then
+        addon.Module_Run:ShowRun(Data:GetActiveRun())
       end
     end)
-    bindTooltip(reportButton, "Report")
+    bindTooltip(runButton, "Run")
 
     local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    deaths:SetPoint("RIGHT", reportButton, "LEFT", -8, 0)
+    deaths:SetPoint("RIGHT", runButton, "LEFT", -8, 0)
     deaths:SetJustifyH("RIGHT")
     self.deaths = deaths
     title:SetPoint("RIGHT", deaths, "LEFT", -8, 0)
@@ -456,8 +456,8 @@ function Timer:Render()
   end
   local options = Data.db.global.timer
   local inside = Capture:IsInside() or Capture:InInstance()
-  local record = inside and Data:GetActiveRecord() or nil
-  local preview = (not record) and Capture.preview or nil
+  local run = inside and Data:GetActiveRun() or nil
+  local preview = (not run) and Capture.preview or nil
   local fontSize = options.fontSize or 12
   local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
   local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
@@ -470,18 +470,18 @@ function Timer:Render()
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
   local title = "Delve"
-  if record then
-    local delve = record.instance and record.instance.name
+  if run then
+    local delve = run.instance and run.instance.name
     if not delve or delve == "" then
-      delve = record.place and (record.place.subzone or record.place.zone) or "Delve"
+      delve = run.place and (run.place.subzone or run.place.zone) or "Delve"
     end
-    local tier = Helpers.RunTier(record)
+    local tier = Helpers.RunTier(run)
     if tier then
       title = format("%s  Tier %d", delve, tier)
     else
       title = delve
     end
-    deathsText:SetText(format("Deaths %d", record.deaths or 0))
+    deathsText:SetText(format("Deaths %d", run.deaths or 0))
   elseif preview then
     local delve = preview.name or "Delve"
     if preview.variant then
@@ -500,8 +500,8 @@ function Timer:Render()
   deathsText:SetFont(NUMBER_FONT, fontSize, "")
 
   local spellIDs = {}
-  if record and record.entrance and record.entrance.activeSpellIDs then
-    spellIDs = record.entrance.activeSpellIDs
+  if run and run.entrance and run.entrance.activeSpellIDs then
+    spellIDs = run.entrance.activeSpellIDs
   elseif preview and preview.activeSpellIDs then
     spellIDs = preview.activeSpellIDs
   end
@@ -565,21 +565,21 @@ function Timer:Render()
   if not phraseColor then
     phraseColor = { r = 0.2, g = 1, b = 0.2, a = 1 }
   end
-  if record and Capture.clockReady then
-    local frozen = record.finishedElapsed or record.bossElapsed
+  if run and Capture.clockReady then
+    local frozen = run.finishedElapsed or run.bossElapsed
     if frozen then
-      clockValue = Helpers.CompletionTime(record) or frozen
-    elseif record.result == Constants.runResult.Active then
-      clockValue = Capture:Elapsed(record)
+      clockValue = Helpers.CompletionTime(run) or frozen
+    elseif run.result == Constants.runResult.Active then
+      clockValue = Capture:Elapsed(run)
     else
-      clockValue = record.endedElapsed
+      clockValue = run.endedElapsed
     end
     local compare
     if frozen then
-      local bestRun = Helpers.BestRun(record)
+      local bestRun = Helpers.BestRun(run)
       compare = bestRun and Helpers.CompletionTime(bestRun) or nil
-    elseif record.watch and record.watch.routeStep then
-      compare = Data:BestSplit(record, record.watch.routeStep)
+    elseif run.watch and run.watch.routeStep then
+      compare = Data:BestSplit(run, run.watch.routeStep)
     end
     if clockValue and compare then
       local gap = compare - clockValue
@@ -622,8 +622,8 @@ function Timer:Render()
   bestHeader:SetWidth(TIME_WIDTH)
 
   local stepRows = {}
-  if record then
-    stepRows = self:StepRows(record)
+  if run then
+    stepRows = self:StepRows(run)
   elseif preview then
     stepRows = self:PreviewRows(preview)
   end

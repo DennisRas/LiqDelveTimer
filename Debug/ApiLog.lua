@@ -430,31 +430,31 @@ end
 
 ---@param lines string[]
 local function describeCapture(lines)
-  local record = Data:GetActiveRecord()
+  local run = Data:GetActiveRun()
   local recordID = "nil"
   local result = "nil"
   local labyrinth = "nil"
   local chambers = "nil"
   local credits = "nil"
   local boss = "nil"
-  if record then
-    recordID = record.id
-    result = record.result
-    labyrinth = valueText(record.labyrinth)
+  if run then
+    recordID = run.id
+    result = run.result
+    labyrinth = valueText(run.labyrinth)
     local completed = 0
-    for index = 1, #record.chambers do
-      if record.chambers[index].completedElapsed then
+    for index = 1, #run.chambers do
+      if run.chambers[index].completedElapsed then
         completed = completed + 1
       end
     end
-    chambers = format("%d/%d", completed, #record.chambers)
-    credits = tostring(record.vault.credits)
-    if record.bossName then
-      boss = format("%s@%s", record.bossName, valueText(record.bossElapsed))
+    chambers = format("%d/%d", completed, #run.chambers)
+    credits = tostring(run.vault.credits)
+    if run.bossName then
+      boss = format("%s@%s", run.bossName, valueText(run.bossElapsed))
     end
   end
   lines[#lines + 1] = format(
-    "capture ready=%s inside=%s clock=%s record=%s result=%s labyrinth=%s chambers=%s vaultCredits=%s boss=%s",
+    "capture ready=%s inside=%s clock=%s run=%s result=%s labyrinth=%s chambers=%s vaultCredits=%s boss=%s",
     valueText(Capture.ready),
     valueText(Capture:IsInside()),
     valueText(Capture.clockReady),

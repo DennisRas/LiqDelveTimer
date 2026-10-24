@@ -17,8 +17,8 @@ Data.dbVersion = 1
 ---@type LDT_Character
 Data.defaultCharacter = {
   GUID = "",
-  activeRecordID = nil,
-  records = {},
+  activeRunID = nil,
+  runs = {},
 }
 
 ---@type table
@@ -33,15 +33,14 @@ Data.defaultDB = {
     },
     liqui = {
       windows = {
-        Report = {},
-        Records = {},
-        RecordDetail = {},
+        Run = {},
+        History = {},
       },
       tables = {
-        Records = { hiddenColumns = {} },
+        History = { hiddenColumns = {} },
       },
     },
-    report = {
+    run = {
       collapsed = {
         run = false,
         timers = false,
@@ -100,7 +99,7 @@ function Data:GetCharacter()
   end
   local characters = self.db.global.characters
   local character = characters[guid]
-  if character then
+  if character and character.runs then
     return character
   end
   character = TableCopy(self.defaultCharacter)
@@ -109,43 +108,43 @@ function Data:GetCharacter()
   return character
 end
 
----@return LDT_Record|nil
-function Data:GetActiveRecord()
+---@return LDT_Run|nil
+function Data:GetActiveRun()
   local character = self:GetCharacter()
-  if not character or not character.activeRecordID then
+  if not character or not character.activeRunID then
     return nil
   end
-  local records = character.records
-  for index = #records, 1, -1 do
-    local record = records[index]
-    if record.id == character.activeRecordID then
-      return record
+  local runs = character.runs
+  for index = #runs, 1, -1 do
+    local run = runs[index]
+    if run.id == character.activeRunID then
+      return run
     end
   end
   return nil
 end
 
----@return LDT_Record|nil
-function Data:GetLatestRecord()
+---@return LDT_Run|nil
+function Data:GetLatestRun()
   local character = self:GetCharacter()
   if not character then
     return nil
   end
-  local records = character.records
-  return records[#records]
+  local runs = character.runs
+  return runs[#runs]
 end
 
----@return LDT_Record|nil
-function Data:CreateRecord()
+---@return LDT_Run|nil
+function Data:CreateRun()
   local character = self:GetCharacter()
   if not character then
     return nil
   end
   local startedAt = GetServerTime()
   local money = GetMoney()
-  ---@type LDT_Record
-  local record = {
-    id = format("%d-%d", startedAt, #character.records + 1),
+  ---@type LDT_Run
+  local run = {
+    id = format("%d-%d", startedAt, #character.runs + 1),
     result = Constants.runResult.Active,
     labyrinth = false,
     startedAt = startedAt,
@@ -178,23 +177,23 @@ function Data:CreateRecord()
       scenarioComplete = false,
     },
   }
-  character.records[#character.records + 1] = record
-  character.activeRecordID = record.id
-  return record
+  character.runs[#character.runs + 1] = run
+  character.activeRunID = run.id
+  return run
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param stepName string
 ---@return LDT_Route|nil
-function Data:RouteForStep(record, stepName)
-  if record.labyrinth or not self.db then
+function Data:RouteForStep(run, stepName)
+  if run.labyrinth or not self.db then
     return nil
   end
   local routes = self.db.global.routes
-  if record.routeID and routes[record.routeID] then
-    return routes[record.routeID]
+  if run.routeID and routes[run.routeID] then
+    return routes[run.routeID]
   end
-  local instance = record.instance
+  local instance = run.instance
   local mapID
   if instance then
     mapID = instance.mapID
@@ -213,7 +212,7 @@ function Data:RouteForStep(record, stepName)
     end
   end)
   if match then
-    record.routeID = match.id
+    run.routeID = match.id
     return match
   end
   local id = format("route-%s-%d", tostring(mapID or 0), GetServerTime())
@@ -221,21 +220,21 @@ function Data:RouteForStep(record, stepName)
   local route = {
     id = id,
     mapID = mapID,
-    name = record.instance and record.instance.name,
+    name = run.instance and run.instance.name,
     steps = {},
   }
   routes[id] = route
-  record.routeID = id
+  run.routeID = id
   return route
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param stepName string
-function Data:NoteShownStep(record, stepName)
-  if record.labyrinth or stepName == "" then
+function Data:NoteShownStep(run, stepName)
+  if run.labyrinth or stepName == "" then
     return
   end
-  local route = self:RouteForStep(record, stepName)
+  local route = self:RouteForStep(run, stepName)
   if not route then
     return
   end
@@ -249,7 +248,7 @@ function Data:NoteShownStep(record, stepName)
   end
   if not shownIndex then
     local insertAt = #steps + 1
-    local previous = record.watch.routeStep
+    local previous = run.watch.routeStep
     if previous then
       for index = 1, #steps do
         if steps[index] == previous then
@@ -260,21 +259,21 @@ function Data:NoteShownStep(record, stepName)
     end
     table.insert(steps, insertAt, stepName)
   end
-  record.watch.routeStep = stepName
+  run.watch.routeStep = stepName
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param stepName string|nil
 ---@param elapsed number
-function Data:StampStep(record, stepName, elapsed)
-  if record.labyrinth or not stepName or stepName == "" then
+function Data:StampStep(run, stepName, elapsed)
+  if run.labyrinth or not stepName or stepName == "" then
     return
   end
-  if not record.splits then
-    record.splits = {}
+  if not run.splits then
+    run.splits = {}
   end
-  if record.splits[stepName] == nil then
-    record.splits[stepName] = elapsed
+  if run.splits[stepName] == nil then
+    run.splits[stepName] = elapsed
   end
 end
 
@@ -288,7 +287,7 @@ function Data:BestSplitFor(routeID, tier, stepName)
     return nil
   end
   local best
-  TableForEach(character.records, function(candidate)
+  TableForEach(character.runs, function(candidate)
     if candidate.result ~= Constants.runResult.Complete then
       return
     end
@@ -315,7 +314,7 @@ function Data:PreviewRoute(name, mapID, tier)
   end
   local bestRoute
   local bestTime
-  TableForEach(character.records, function(candidate)
+  TableForEach(character.runs, function(candidate)
     if candidate.result ~= Constants.runResult.Complete or Helpers.RunTier(candidate) ~= tier then
       return
     end
@@ -341,9 +340,9 @@ function Data:PreviewRoute(name, mapID, tier)
   return bestRoute, bestTime
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param stepName string
 ---@return number|nil
-function Data:BestSplit(record, stepName)
-  return self:BestSplitFor(record.routeID, Helpers.RunTier(record), stepName)
+function Data:BestSplit(run, stepName)
+  return self:BestSplitFor(run.routeID, Helpers.RunTier(run), stepName)
 end

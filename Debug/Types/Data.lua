@@ -1,7 +1,7 @@
 ---@class LDT_AceDB : AceDBObject-3.0
 ---@field global LDT_Global
 
----@class LDT_ReportOptions
+---@class LDT_RunOptions
 ---@field collapsed table<LDT_SectionId, boolean>
 
 ---@class LDT_Route
@@ -26,7 +26,7 @@
 ---@field dbVersion number
 ---@field minimap { minimapPos: number, hide: boolean, lock: boolean }
 ---@field liqui LiqUI_DB
----@field report LDT_ReportOptions
+---@field run LDT_RunOptions
 ---@field logs LiqUI_LoggerDB
 ---@field timer LDT_TimerOptions
 ---@field routes table<string, LDT_Route>
@@ -34,8 +34,8 @@
 
 ---@class LDT_Character
 ---@field GUID WOWGUID
----@field activeRecordID string|nil
----@field records LDT_Record[]
+---@field activeRunID string|nil
+---@field runs LDT_Run[]
 
 ---@class LDT_Data
 ---@field dbVersion number

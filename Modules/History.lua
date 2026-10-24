@@ -1,58 +1,58 @@
 ---@class LDT_Addon
 local addon = select(2, ...)
 
----@class LDT_Module_Records
-local Module = addon.Core:NewModule("Records")
-addon.Module_Records = Module
+---@class LDT_Module_History
+local Module = addon.Core:NewModule("History")
+addon.Module_History = Module
 
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 
----@param rowA LDT_RecordsTableRow
----@param rowB LDT_RecordsTableRow
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
 ---@return boolean
 local function compareStartedAscending(rowA, rowB)
   return rowA.startedAt < rowB.startedAt
 end
 
----@param rowA LDT_RecordsTableRow
----@param rowB LDT_RecordsTableRow
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
 ---@return boolean
 local function compareDelve(rowA, rowB)
   return strcmputf8i(rowA.delve, rowB.delve) < 0
 end
 
----@param rowA LDT_RecordsTableRow
----@param rowB LDT_RecordsTableRow
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
 ---@return boolean
 local function compareResult(rowA, rowB)
   return strcmputf8i(rowA.result, rowB.result) < 0
 end
 
----@param rowA LDT_RecordsTableRow
----@param rowB LDT_RecordsTableRow
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
 ---@return boolean
 local function compareDuration(rowA, rowB)
   return rowA.duration < rowB.duration
 end
 
----@param rowA LDT_RecordsTableRow
----@param rowB LDT_RecordsTableRow
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
 ---@return boolean
 local function compareStartedDescending(rowA, rowB)
   return rowA.startedAt > rowB.startedAt
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number
-local function activeElapsed(record)
-  if addon.Capture.clockReady and record.result == Constants.runResult.Active then
-    return addon.Capture:Elapsed(record)
+local function activeElapsed(run)
+  if addon.Capture.clockReady and run.result == Constants.runResult.Active then
+    return addon.Capture:Elapsed(run)
   end
-  if record.endedElapsed then
-    return record.endedElapsed
+  if run.endedElapsed then
+    return run.endedElapsed
   end
   return 0
 end
@@ -62,9 +62,9 @@ function Module:Render()
     local windows = Data.db.global.liqui.windows
     ---@type LiqUI_WindowOptions
     local windowOptions = {
-      name = addon.name .. "Records",
-      storage = windows.Records,
-      title = "Records",
+      name = addon.name .. "History",
+      storage = windows.History,
+      title = "History",
       icon = Constants.media.Icon,
       width = 560,
       height = 420,
@@ -76,8 +76,8 @@ function Module:Render()
     local sizes = LiqUI.Constants.layout.sizes
     ---@type LiqUI_TableOptions
     local tableOptions = {
-      name = addon.name .. "Records",
-      storage = Data.db.global.liqui.tables.Records,
+      name = addon.name .. "History",
+      storage = Data.db.global.liqui.tables.History,
       header = { enabled = true, sticky = true, height = sizes.header },
       rowStyle = { height = sizes.row, striped = true },
       columns = {
@@ -133,54 +133,54 @@ function Module:Render()
     return
   end
   local character = Data:GetCharacter()
-  local records = character and character.records or {}
-  if #records == 0 then
+  local runs = character and character.runs or {}
+  if #runs == 0 then
     self.table:Hide()
-    self.window:ShowOverlay("No delve records yet.")
+    self.window:ShowOverlay("No delve runs yet.")
     return
   end
   self.window:HideOverlay()
   self.table:Show()
-  ---@type LDT_RecordsTableRow[]
+  ---@type LDT_HistoryTableRow[]
   local data = {}
-  for index = #records, 1, -1 do
-    local record = records[index]
+  for index = #runs, 1, -1 do
+    local run = runs[index]
     local delve = "Delve"
-    local instance = record.instance
+    local instance = run.instance
     if instance then
       local instanceName = instance.name
       if instanceName and instanceName ~= "" then
         delve = instanceName
       end
     end
-    local duration = Helpers.CompletionTime(record)
+    local duration = Helpers.CompletionTime(run)
     if not duration then
-      if record.result == Constants.runResult.Active then
-        duration = activeElapsed(record)
+      if run.result == Constants.runResult.Active then
+        duration = activeElapsed(run)
       else
-        duration = record.endedElapsed or 0
+        duration = run.endedElapsed or 0
       end
     end
-    local whenValue = date("%Y-%m-%d %H:%M", record.startedAt)
+    local whenValue = date("%Y-%m-%d %H:%M", run.startedAt)
     local whenText = ""
     if type(whenValue) == "string" then
       whenText = whenValue
     end
-    ---@type LDT_RecordsTableRow
+    ---@type LDT_HistoryTableRow
     local row = {
-      startedAt = record.startedAt,
+      startedAt = run.startedAt,
       delve = delve,
-      result = record.result,
+      result = run.result,
       duration = duration,
       data = {
         whenText,
         delve,
-        tostring(record.result),
+        tostring(run.result),
         Helpers.FormatElapsed(duration),
       },
       onClick = function()
-        if addon.Module_Report then
-          addon.Module_Report:ShowRecord(record)
+        if addon.Module_Run then
+          addon.Module_Run:ShowRun(run)
         end
       end,
     }

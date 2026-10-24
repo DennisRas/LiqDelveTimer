@@ -1,6 +1,6 @@
 ## Interface: 120105
 ## Title: Liq Delve Timer
-## Notes: Time delve runs and keep a record of each one
+## Notes: Time delve runs and keep a history of each run
 ## Version: @project-version@
 ## Author: Liquidor
 ## SavedVariables: LiqDelveTimerDB
@@ -26,16 +26,16 @@ Capture.lua
 LiqDelveTimer.lua
 
 Modules\Timer.lua
-Modules\Report.lua
-Modules\Records.lua
+Modules\Run.lua
+Modules\History.lua
 
 #@debug@
 Debug\ApiLog.lua
 Debug\Types\Addon.lua
 Debug\Types\Constants.lua
 Debug\Types\Data.lua
-Debug\Types\Record.lua
-Debug\Types\Report.lua
+Debug\Types\Run.lua
+Debug\Types\RunWindow.lua
 Debug\Types\Timer.lua
 Debug\Commands.lua
 #@end-debug@

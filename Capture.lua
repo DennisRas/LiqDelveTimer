@@ -91,34 +91,34 @@ local function isStepComplete(scenario)
   return true
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number
-function Capture:Elapsed(record)
-  return record.sessionOffset + (GetTime() - record.sessionStart)
+function Capture:Elapsed(run)
+  return run.sessionOffset + (GetTime() - run.sessionStart)
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param noteReload boolean|nil
-function Capture:EnsureClock(record, noteReload)
+function Capture:EnsureClock(run, noteReload)
   if not self.clockReady then
-    record.sessionOffset = GetServerTime() - record.startedAt
-    record.sessionStart = GetTime()
+    run.sessionOffset = GetServerTime() - run.startedAt
+    run.sessionStart = GetTime()
     self.clockReady = true
   end
   if noteReload and not self.reloadNoted then
     self.reloadNoted = true
-    self:AppendLog(record, Constants.logKind.Reload, "Reloaded")
+    self:AppendLog(run, Constants.logKind.Reload, "Reloaded")
   end
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param kind LDT_LogKindId
 ---@param text string
 ---@param detail LDT_LogDetail|nil
 ---@param elapsed number|nil
-function Capture:AppendLog(record, kind, text, detail, elapsed)
+function Capture:AppendLog(run, kind, text, detail, elapsed)
   if elapsed == nil then
-    elapsed = self:Elapsed(record)
+    elapsed = self:Elapsed(run)
   end
   ---@type LDT_LogEntry
   local entry = {
@@ -128,10 +128,10 @@ function Capture:AppendLog(record, kind, text, detail, elapsed)
     text = text,
     detail = detail,
   }
-  local log = record.log
+  local log = run.log
   log[#log + 1] = entry
   if addon.ApiLog then
-    addon.ApiLog:Log("record", format("%s %s", Helpers.FormatElapsed(elapsed), text))
+    addon.ApiLog:Log("run", format("%s %s", Helpers.FormatElapsed(elapsed), text))
   end
 end
 
@@ -450,11 +450,11 @@ function Capture:ReadVault()
   return progress, rows
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param name string
 ---@return LDT_Chamber
-function Capture:EnsureChamber(record, name)
-  local chambers = record.chambers
+function Capture:EnsureChamber(run, name)
+  local chambers = run.chambers
   for index = 1, #chambers do
     local chamber = chambers[index]
     if chamber.name == name then
@@ -464,33 +464,33 @@ function Capture:EnsureChamber(record, name)
   ---@type LDT_Chamber
   local chamber = {
     name = name,
-    enteredElapsed = self:Elapsed(record),
+    enteredElapsed = self:Elapsed(run),
   }
   chambers[#chambers + 1] = chamber
   return chamber
 end
 
----@param record LDT_Record
-function Capture:FillStart(record)
-  record.player = self:ReadPlayer()
-  record.entrance = self:ReadEntrance()
-  record.companion = self:ReadCompanion()
-  record.instance = self:ReadInstance()
-  record.place = {
-    zone = record.instance.zone,
-    subzone = record.instance.subzone,
-    mapID = record.instance.mapID,
-    mapName = record.instance.mapName,
+---@param run LDT_Run
+function Capture:FillStart(run)
+  run.player = self:ReadPlayer()
+  run.entrance = self:ReadEntrance()
+  run.companion = self:ReadCompanion()
+  run.instance = self:ReadInstance()
+  run.place = {
+    zone = run.instance.zone,
+    subzone = run.instance.subzone,
+    mapID = run.instance.mapID,
+    mapName = run.instance.mapName,
   }
-  record.labyrinth = detectLabyrinth(record.instance)
+  run.labyrinth = detectLabyrinth(run.instance)
   local progress, rows = self:ReadVault()
   if progress ~= nil then
-    record.vault.startProgress = progress
-    record.vault.progress = progress
-    record.vault.activities = rows
+    run.vault.startProgress = progress
+    run.vault.progress = progress
+    run.vault.activities = rows
   end
 
-  local instance = record.instance
+  local instance = run.instance
   local parts = {}
   if instance.name and instance.name ~= "" then
     parts[#parts + 1] = instance.name
@@ -498,7 +498,7 @@ function Capture:FillStart(record)
   if instance.difficultyName and instance.difficultyName ~= "" then
     parts[#parts + 1] = instance.difficultyName
   end
-  local tier = record.entrance.tierInfo and record.entrance.tierInfo.tier
+  local tier = run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     parts[#parts + 1] = format("tier %d", tier)
   end
@@ -506,70 +506,70 @@ function Capture:FillStart(record)
   if #parts > 0 then
     started = format("Started %s", table.concat(parts, ", "))
   end
-  self:AppendLog(record, Constants.logKind.Start, started)
+  self:AppendLog(run, Constants.logKind.Start, started)
 
-  local companion = record.companion
+  local companion = run.companion
   if companion.name and companion.name ~= "" then
     local companionText = format("Companion: %s", companion.name)
     if companion.flavorName and companion.flavorName ~= "" then
       companionText = format("%s, %s", companionText, companion.flavorName)
     end
-    self:AppendLog(record, Constants.logKind.Start, companionText)
+    self:AppendLog(run, Constants.logKind.Start, companionText)
   end
 
-  local activeSpells = spellList(record.entrance.activeSpellIDs)
+  local activeSpells = spellList(run.entrance.activeSpellIDs)
   if activeSpells ~= "" then
-    self:AppendLog(record, Constants.logKind.Start, format("Active spells: %s", activeSpells))
+    self:AppendLog(run, Constants.logKind.Start, format("Active spells: %s", activeSpells))
   end
-  local affixSpells = spellList(record.entrance.affixSpellIDs)
+  local affixSpells = spellList(run.entrance.affixSpellIDs)
   if affixSpells ~= "" then
-    self:AppendLog(record, Constants.logKind.Start, format("Season affixes: %s", affixSpells))
+    self:AppendLog(run, Constants.logKind.Start, format("Season affixes: %s", affixSpells))
   end
 end
 
----@param record LDT_Record
-function Capture:RefreshSnapshots(record)
-  local entrance = record.entrance
+---@param run LDT_Run
+function Capture:RefreshSnapshots(run)
+  local entrance = run.entrance
   if entrance and not entrance.tierInfo and C_DelvesUI.HasActiveDelve() then
     local tierInfo = C_DelvesUI.GetActiveDelveTier()
     if tierInfo and tierInfo.tier and tierInfo.tier > 0 then
       entrance.tierInfo = TableCopy(tierInfo)
     end
   end
-  local companion = record.companion
+  local companion = run.companion
   if companion and not companion.name then
     local latest = self:ReadCompanion()
     local gainedName = latest.name and latest.name ~= ""
     local gainedId = (not companion.companionID or companion.companionID <= 0) and latest.companionID and latest.companionID > 0
     if gainedName or gainedId then
-      record.companion = latest
+      run.companion = latest
     end
   end
-  local instance = record.instance
+  local instance = run.instance
   if instance and (not instance.name or instance.name == "") then
-    record.instance = self:ReadInstance()
-    record.labyrinth = detectLabyrinth(record.instance)
+    run.instance = self:ReadInstance()
+    run.labyrinth = detectLabyrinth(run.instance)
   end
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param instance LDT_Instance
 ---@return boolean
-function Capture:ObservePlace(record, instance)
-  local watch = record.watch
+function Capture:ObservePlace(run, instance)
+  local watch = run.watch
   if instance.zone == watch.zone and instance.subzone == watch.subzone then
     return false
   end
   watch.zone = instance.zone
   watch.subzone = instance.subzone
-  record.place = {
+  run.place = {
     zone = instance.zone,
     subzone = instance.subzone,
     mapID = instance.mapID,
     mapName = instance.mapName,
   }
   if detectLabyrinth(instance) then
-    record.labyrinth = true
+    run.labyrinth = true
   end
   local subzone = instance.subzone
   if not subzone or subzone == "" then
@@ -581,24 +581,24 @@ function Capture:ObservePlace(record, instance)
     subzone = subzone,
     mapID = instance.mapID,
   }
-  self:AppendLog(record, Constants.logKind.Zone, format("Entered %s", subzone), detail)
+  self:AppendLog(run, Constants.logKind.Zone, format("Entered %s", subzone), detail)
   return true
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param scenario LDT_Scenario
 ---@param placeChanged boolean
-function Capture:ObserveScenario(record, scenario, placeChanged)
-  record.scenario = scenario
-  local entrance = record.entrance
+function Capture:ObserveScenario(run, scenario, placeChanged)
+  run.scenario = scenario
+  local entrance = run.entrance
   if entrance then
     local spells = C_ScenarioInfo.GetTieredEntranceActiveSpells()
     if spells then
       entrance.activeSpellIDs = copySpellIDs(spells)
     end
   end
-  local watch = record.watch
-  local sealed = (record.sawDelveComplete or record.finishedElapsed) and not record.labyrinth
+  local watch = run.watch
+  local sealed = (run.sawDelveComplete or run.finishedElapsed) and not run.labyrinth
   local step = scenario.step
   local stepID = step and step.stepID
   if stepID ~= watch.stepID then
@@ -616,8 +616,8 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
         end
         state.completed = true
         local description
-        for logIndex = #record.log, 1, -1 do
-          local entry = record.log[logIndex]
+        for logIndex = #run.log, 1, -1 do
+          local entry = run.log[logIndex]
           local detail = entry.detail
           if detail and detail.criteriaID == criteriaID and detail.description and detail.description ~= "" then
             description = detail.description
@@ -632,14 +632,14 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
           criteriaID = criteriaID,
           description = description,
         }
-        self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
+        self:AppendLog(run, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
       end)
     end
     watch.stepID = stepID
     local stepTitle = step and step.title
     local previousStep = watch.routeStep
     if previousStep and previousStep ~= stepTitle then
-      Data:StampStep(record, previousStep, self:Elapsed(record))
+      Data:StampStep(run, previousStep, self:Elapsed(run))
     end
     if not sealed and stepTitle and stepTitle ~= "" then
       ---@type LDT_LogDetail
@@ -647,12 +647,12 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
         stepID = stepID,
         stepTitle = stepTitle,
       }
-      self:AppendLog(record, Constants.logKind.Step, format("Step: %s", stepTitle), detail)
-      if record.labyrinth then
-        self:EnsureChamber(record, stepTitle)
-        record.watch.routeStep = stepTitle
+      self:AppendLog(run, Constants.logKind.Step, format("Step: %s", stepTitle), detail)
+      if run.labyrinth then
+        self:EnsureChamber(run, stepTitle)
+        run.watch.routeStep = stepTitle
       else
-        Data:NoteShownStep(record, stepTitle)
+        Data:NoteShownStep(run, stepTitle)
       end
     end
   end
@@ -688,9 +688,9 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
           criteriaID = criteriaID,
           description = description,
         }
-        self:AppendLog(record, Constants.logKind.Objective, format("Objective: %s", description), detail)
+        self:AppendLog(run, Constants.logKind.Objective, format("Objective: %s", description), detail)
         if completed then
-          self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
+          self:AppendLog(run, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
         end
       end
     elseif previous then
@@ -704,7 +704,7 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
           criteriaID = criteriaID,
           description = description,
         }
-        self:AppendLog(record, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
+        self:AppendLog(run, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
         criteriaFinished = true
       elseif not completed and previous.completed then
         previous.completed = false
@@ -719,7 +719,7 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
           criteriaID = criteriaID,
           description = description,
         }
-        self:AppendLog(record, Constants.logKind.ObjectiveFailed, format("Objective failed: %s", description), detail)
+        self:AppendLog(run, Constants.logKind.ObjectiveFailed, format("Objective failed: %s", description), detail)
       end
     end
   end
@@ -736,30 +736,30 @@ function Capture:ObserveScenario(record, scenario, placeChanged)
     chamberCleared = stepComplete and (criteriaFinished or freshCriteria)
   end
   local stepTitle = step and step.title
-  if record.labyrinth and chamberCleared and stepTitle and stepTitle ~= "" then
-    local chamber = self:EnsureChamber(record, stepTitle)
+  if run.labyrinth and chamberCleared and stepTitle and stepTitle ~= "" then
+    local chamber = self:EnsureChamber(run, stepTitle)
     if not chamber.completedElapsed then
-      chamber.completedElapsed = self:Elapsed(record)
-      self:AppendLog(record, Constants.logKind.Chamber, format("Chamber complete: %s", stepTitle), { stepTitle = stepTitle })
+      chamber.completedElapsed = self:Elapsed(run)
+      self:AppendLog(run, Constants.logKind.Chamber, format("Chamber complete: %s", stepTitle), { stepTitle = stepTitle })
     end
   end
 
   local scenarioComplete = scenario.info and scenario.info.isComplete
   if scenarioComplete and not watch.scenarioComplete then
     watch.scenarioComplete = true
-    self:AppendLog(record, Constants.logKind.Scenario, "Scenario complete")
+    self:AppendLog(run, Constants.logKind.Scenario, "Scenario complete")
   elseif scenario.info and not scenario.info.isComplete then
     watch.scenarioComplete = false
   end
 end
 
----@param record LDT_Record
-function Capture:ObserveVault(record)
+---@param run LDT_Run
+function Capture:ObserveVault(run)
   local progress, rows = self:ReadVault()
   if progress == nil then
     return
   end
-  local vault = record.vault
+  local vault = run.vault
   if vault.startProgress == nil then
     vault.startProgress = progress
     vault.progress = progress
@@ -771,52 +771,52 @@ function Capture:ObserveVault(record)
     vault.progress = progress
     vault.credits = vault.credits + gain
     vault.activities = rows
-    self:AppendLog(record, Constants.logKind.Vault, format("Vault credit +%d (%d)", gain, progress), {
+    self:AppendLog(run, Constants.logKind.Vault, format("Vault credit +%d (%d)", gain, progress), {
       progress = progress,
       gain = gain,
     })
   end
 end
 
----@param record LDT_Record
-function Capture:MarkRunFinished(record)
-  if record.labyrinth or record.sawDelveComplete then
+---@param run LDT_Run
+function Capture:MarkRunFinished(run)
+  if run.labyrinth or run.sawDelveComplete then
     return
   end
-  record.watch.delveComplete = true
-  record.sawDelveComplete = true
-  if not record.finishedElapsed then
-    record.finishedElapsed = self:Elapsed(record)
+  run.watch.delveComplete = true
+  run.sawDelveComplete = true
+  if not run.finishedElapsed then
+    run.finishedElapsed = self:Elapsed(run)
   end
-  Data:StampStep(record, record.watch.routeStep, record.finishedElapsed)
-  self:AppendLog(record, Constants.logKind.DelveComplete, "Delve complete")
+  Data:StampStep(run, run.watch.routeStep, run.finishedElapsed)
+  self:AppendLog(run, Constants.logKind.DelveComplete, "Delve complete")
 end
 
----@param record LDT_Record
-function Capture:ObserveDelveComplete(record)
+---@param run LDT_Run
+function Capture:ObserveDelveComplete(run)
   if C_PartyInfo.IsDelveComplete() then
-    self:MarkRunFinished(record)
+    self:MarkRunFinished(run)
   end
 end
 
 function Capture:OnScenarioCompleted()
-  local record = Data:GetActiveRecord()
-  if not record then
+  local run = Data:GetActiveRun()
+  if not run then
     return
   end
-  self:EnsureClock(record, false)
-  self:MarkRunFinished(record)
+  self:EnsureClock(run, false)
+  self:MarkRunFinished(run)
 end
 
----@param record LDT_Record
-function Capture:UpdateCompanion(record)
+---@param run LDT_Run
+function Capture:UpdateCompanion(run)
   local latest = self:ReadCompanion()
-  local companion = record.companion
+  local companion = run.companion
   if not companion then
     if latest.standing ~= nil then
       latest.startStanding = latest.standing
     end
-    record.companion = latest
+    run.companion = latest
     return
   end
   if latest.name and latest.name ~= "" then
@@ -840,10 +840,10 @@ function Capture:UpdateCompanion(record)
   companion.flavorName = latest.flavorName or companion.flavorName
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return boolean?
-function Capture:ObserveBoons(record)
-  if not record.boons then
+function Capture:ObserveBoons(run)
+  if not run.boons then
     return
   end
   local aura = C_UnitAuras.GetPlayerAuraBySpellID(Data.boonSpellID)
@@ -883,7 +883,7 @@ function Capture:ObserveBoons(record)
   if #lines == 0 then
     return
   end
-  local previous = record.boons
+  local previous = run.boons
   local changed = #previous ~= #lines
   if not changed then
     for index = 1, #lines do
@@ -893,20 +893,20 @@ function Capture:ObserveBoons(record)
       end
     end
   end
-  record.boons = lines
+  run.boons = lines
   if changed and #lines > 0 then
     local parts = {}
     for index = 1, #lines do
       parts[index] = lines[index].text
     end
-    self:AppendLog(record, Constants.logKind.Boon, table.concat(parts, " | "))
+    self:AppendLog(run, Constants.logKind.Boon, table.concat(parts, " | "))
   end
   return changed
 end
 
----@param record LDT_Record
-function Capture:ObserveRenown(record)
-  if not record.renownStart or not record.renowns then
+---@param run LDT_Run
+function Capture:ObserveRenown(run)
+  if not run.renownStart or not run.renowns then
     return
   end
   local factionIDs = C_MajorFactions.GetMajorFactionIDs()
@@ -918,10 +918,10 @@ function Capture:ObserveRenown(record)
     local data = C_MajorFactions.GetMajorFactionData(factionID)
     if data and data.isUnlocked then
       local key = tostring(factionID)
-      local start = record.renownStart[key]
+      local start = run.renownStart[key]
       if not start then
-        for rowIndex = 1, #record.renowns do
-          local row = record.renowns[rowIndex]
+        for rowIndex = 1, #run.renowns do
+          local row = run.renowns[rowIndex]
           if row.factionID == factionID then
             ---@type LDT_RenownBaseline
             start = { level = row.startLevel, earned = row.startEarned }
@@ -933,12 +933,12 @@ function Capture:ObserveRenown(record)
         ---@type LDT_RenownBaseline
         start = { level = data.renownLevel, earned = data.renownReputationEarned }
       end
-      record.renownStart[key] = start
+      run.renownStart[key] = start
       if data.renownLevel ~= start.level or data.renownReputationEarned ~= start.earned then
         local existing
-        for rowIndex = 1, #record.renowns do
-          if record.renowns[rowIndex].factionID == factionID then
-            existing = record.renowns[rowIndex]
+        for rowIndex = 1, #run.renowns do
+          if run.renowns[rowIndex].factionID == factionID then
+            existing = run.renowns[rowIndex]
             break
           end
         end
@@ -960,10 +960,10 @@ function Capture:ObserveRenown(record)
             threshold = data.renownLevelThreshold,
             maxLevel = data.maxLevel,
           }
-          record.renowns[#record.renowns + 1] = row
+          run.renowns[#run.renowns + 1] = row
         end
         if levelChanged then
-          self:AppendLog(record, Constants.logKind.Renown, format("%s renown %d", data.name, data.renownLevel))
+          self:AppendLog(run, Constants.logKind.Renown, format("%s renown %d", data.name, data.renownLevel))
         end
       end
     end
@@ -971,40 +971,40 @@ function Capture:ObserveRenown(record)
 end
 
 function Capture:OnMoney()
-  local record = Data:GetActiveRecord()
-  if not record or not record.gold then
+  local run = Data:GetActiveRun()
+  if not run or not run.gold then
     return
   end
-  self:EnsureClock(record, false)
+  self:EnsureClock(run, false)
   local now = GetMoney()
-  local delta = now - record.gold.last
-  record.gold.last = now
+  local delta = now - run.gold.last
+  run.gold.last = now
   if delta <= 0 then
     return
   end
-  record.gold.gained = record.gold.gained + delta
+  run.gold.gained = run.gold.gained + delta
   ---@type LDT_GoldGain
   local gain = {
-    elapsed = self:Elapsed(record),
+    elapsed = self:Elapsed(run),
     copper = delta,
-    afterComplete = record.sawDelveComplete,
+    afterComplete = run.sawDelveComplete,
   }
-  record.gold.gains[#record.gold.gains + 1] = gain
-  self:AppendLog(record, Constants.logKind.Gold, format("Gold %s", Helpers.FormatMoney(delta)))
+  run.gold.gains[#run.gold.gains + 1] = gain
+  self:AppendLog(run, Constants.logKind.Gold, format("Gold %s", Helpers.FormatMoney(delta)))
 end
 
 ---@param currencyType number|nil
 ---@param quantity number|nil
 ---@param quantityChange number|nil
 function Capture:OnCurrency(currencyType, quantity, quantityChange)
-  local record = Data:GetActiveRecord()
-  if not record or not record.currencies or not currencyType or not quantityChange or quantityChange == 0 then
+  local run = Data:GetActiveRun()
+  if not run or not run.currencies or not currencyType or not quantityChange or quantityChange == 0 then
     return
   end
   if not Helpers.CurrencyListed(currencyType) then
     return
   end
-  self:EnsureClock(record, false)
+  self:EnsureClock(run, false)
   local info = C_CurrencyInfo.GetCurrencyInfo(currencyType)
   local name
   if info then
@@ -1016,23 +1016,23 @@ function Capture:OnCurrency(currencyType, quantity, quantityChange)
     name = name,
     change = quantityChange,
     quantity = quantity,
-    elapsed = self:Elapsed(record),
-    afterComplete = record.sawDelveComplete,
+    elapsed = self:Elapsed(run),
+    afterComplete = run.sawDelveComplete,
   }
-  record.currencies[#record.currencies + 1] = row
+  run.currencies[#run.currencies + 1] = row
   local amount = tostring(quantityChange)
   if quantityChange > 0 then
     amount = format("+%d", quantityChange)
   end
   local label = name or tostring(currencyType)
-  self:AppendLog(record, Constants.logKind.Currency, format("%s %s", amount, label))
+  self:AppendLog(run, Constants.logKind.Currency, format("%s %s", amount, label))
 end
 
 ---@param message string|nil
 ---@param guid WOWGUID|nil
 function Capture:OnLoot(message, guid)
-  local record = Data:GetActiveRecord()
-  if not record or not record.loot or not message then
+  local run = Data:GetActiveRun()
+  if not run or not run.loot or not message then
     return
   end
   local playerGUID = UnitGUID("player")
@@ -1046,15 +1046,15 @@ function Capture:OnLoot(message, guid)
   if not guid and not message:find("You receive", 1, true) then
     return
   end
-  self:EnsureClock(record, false)
+  self:EnsureClock(run, false)
   local itemID = tonumber(itemLink:match("item:(%d+)"))
   if Helpers.ItemHidden(itemID) then
     return
   end
   local quantity = tonumber(message:match("x(%d+)"))
-  local elapsed = self:Elapsed(record)
-  for index = #record.loot, 1, -1 do
-    local previous = record.loot[index]
+  local elapsed = self:Elapsed(run)
+  for index = #run.loot, 1, -1 do
+    local previous = run.loot[index]
     local sameItem = (itemID and previous.itemID == itemID) or (not itemID and previous.itemLink == itemLink)
     if sameItem and math.abs((previous.elapsed or 0) - elapsed) < 2 then
       local previousQuantity = previous.quantity or 1
@@ -1074,33 +1074,33 @@ function Capture:OnLoot(message, guid)
     itemLink = itemLink,
     itemID = itemID,
     quantity = quantity,
-    afterComplete = record.sawDelveComplete,
+    afterComplete = run.sawDelveComplete,
   }
-  record.loot[#record.loot + 1] = row
-  self:AppendLog(record, Constants.logKind.Loot, itemLink)
+  run.loot[#run.loot + 1] = row
+  self:AppendLog(run, Constants.logKind.Loot, itemLink)
 end
 
 function Capture:OnDeath()
-  local record = Data:GetActiveRecord()
-  if not record then
+  local run = Data:GetActiveRun()
+  if not run then
     return
   end
-  self:EnsureClock(record, false)
-  record.deaths = (record.deaths or 0) + 1
-  self:AppendLog(record, Constants.logKind.Death, format("Death %d", record.deaths))
+  self:EnsureClock(run, false)
+  run.deaths = (run.deaths or 0) + 1
+  self:AppendLog(run, Constants.logKind.Death, format("Death %d", run.deaths))
 end
 
----@param record LDT_Record
-function Capture:Observe(record)
-  self:RefreshSnapshots(record)
-  self:UpdateCompanion(record)
+---@param run LDT_Run
+function Capture:Observe(run)
+  self:RefreshSnapshots(run)
+  self:UpdateCompanion(run)
   local instance = self:ReadInstance()
-  local placeChanged = self:ObservePlace(record, instance)
-  self:ObserveDelveComplete(record)
-  self:ObserveScenario(record, self:ReadScenario(), placeChanged)
-  self:ObserveVault(record)
-  self:ObserveBoons(record)
-  self:ObserveRenown(record)
+  local placeChanged = self:ObservePlace(run, instance)
+  self:ObserveDelveComplete(run)
+  self:ObserveScenario(run, self:ReadScenario(), placeChanged)
+  self:ObserveVault(run)
+  self:ObserveBoons(run)
+  self:ObserveRenown(run)
   self:OnMoney()
 end
 
@@ -1109,53 +1109,53 @@ function Capture:EnsureRun()
   if not character then
     return
   end
-  local active = Data:GetActiveRecord()
+  local active = Data:GetActiveRun()
   if active then
     self:EnsureClock(active, true)
     self:Observe(active)
     return
   end
-  local record = Data:CreateRecord()
-  if not record then
+  local run = Data:CreateRun()
+  if not run then
     return
   end
   self.clockReady = true
   self.reloadNoted = true
-  self:FillStart(record)
-  self:Observe(record)
+  self:FillStart(run)
+  self:Observe(run)
   if self.onRunStored then
     self.onRunStored()
   end
 end
 
 function Capture:Finish()
-  local record = Data:GetActiveRecord()
-  if not record then
+  local run = Data:GetActiveRun()
+  if not run then
     return
   end
   local resumed = not self.clockReady
-  self:EnsureClock(record, false)
-  local ended = self:Elapsed(record)
+  self:EnsureClock(run, false)
+  local ended = self:Elapsed(run)
   if resumed then
-    local last = record.log[#record.log]
+    local last = run.log[#run.log]
     if last then
       ended = last.elapsed
     end
   end
-  record.endedElapsed = ended
-  if record.sawDelveComplete or record.bossElapsed then
-    record.result = Constants.runResult.Complete
+  run.endedElapsed = ended
+  if run.sawDelveComplete or run.bossElapsed then
+    run.result = Constants.runResult.Complete
   else
-    record.result = Constants.runResult.Left
+    run.result = Constants.runResult.Left
   end
   local text = "Left the delve"
-  if record.result == Constants.runResult.Complete then
+  if run.result == Constants.runResult.Complete then
     text = "Run finished"
   end
-  self:AppendLog(record, Constants.logKind.End, text, nil, ended)
+  self:AppendLog(run, Constants.logKind.End, text, nil, ended)
   local character = Data:GetCharacter()
   if character then
-    character.activeRecordID = nil
+    character.activeRunID = nil
   end
   if self.onRunStored then
     self.onRunStored()
@@ -1168,12 +1168,12 @@ end
 ---@param groupSize number
 ---@param success number
 function Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
-  local record = Data:GetActiveRecord()
-  if not record then
+  local run = Data:GetActiveRun()
+  if not run then
     return
   end
-  self:EnsureClock(record, true)
-  local elapsed = self:Elapsed(record)
+  self:EnsureClock(run, true)
+  local elapsed = self:Elapsed(run)
   ---@type LDT_Encounter
   local encounter = {
     encounterID = encounterID,
@@ -1183,17 +1183,17 @@ function Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupS
     success = success,
     elapsed = elapsed,
   }
-  record.encounters[#record.encounters + 1] = encounter
+  run.encounters[#run.encounters + 1] = encounter
   if success == 1 then
-    record.bossName = encounterName
-    record.bossElapsed = elapsed
-    self:AppendLog(record, Constants.logKind.Boss, format("Defeated %s", encounterName), {
+    run.bossName = encounterName
+    run.bossElapsed = elapsed
+    self:AppendLog(run, Constants.logKind.Boss, format("Defeated %s", encounterName), {
       encounterID = encounterID,
       encounterName = encounterName,
     })
     return
   end
-  self:AppendLog(record, Constants.logKind.Encounter, format("Encounter failed: %s", encounterName), {
+  self:AppendLog(run, Constants.logKind.Encounter, format("Encounter failed: %s", encounterName), {
     encounterID = encounterID,
     encounterName = encounterName,
   })
@@ -1318,13 +1318,13 @@ function Capture:Sync()
     if inDelve then
       self:EnsureRun()
     else
-      local active = Data:GetActiveRecord()
+      local active = Data:GetActiveRun()
       if active then
         self:EnsureClock(active, true)
         self:Observe(active)
       end
     end
-  elseif self.zoneKnown and Data:GetActiveRecord() then
+  elseif self.zoneKnown and Data:GetActiveRun() then
     self:Finish()
   end
   local context = nil
@@ -1372,11 +1372,11 @@ function Capture:Register()
     if unit ~= "player" then
       return
     end
-    local record = Data:GetActiveRecord()
-    if not record then
+    local run = Data:GetActiveRun()
+    if not run then
       return
     end
-    Capture:ObserveBoons(record)
+    Capture:ObserveBoons(run)
   end
 
   ---@param _frame Frame
@@ -1424,12 +1424,12 @@ function Capture:Register()
     "UPDATE_FACTION",
     "MAJOR_FACTION_RENOWN_LEVEL_CHANGED",
   }, function()
-    local record = Data:GetActiveRecord()
-    if not record then
+    local run = Data:GetActiveRun()
+    if not run then
       return
     end
-    Capture:UpdateCompanion(record)
-    Capture:ObserveRenown(record)
+    Capture:UpdateCompanion(run)
+    Capture:ObserveRenown(run)
   end, true)
   Events:RegisterEvent({
     "ZONE_CHANGED",

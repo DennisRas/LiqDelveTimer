@@ -87,40 +87,40 @@ function Helpers.FormatDelta(delta)
   return sign .. Helpers.FormatElapsed(delta)
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number|nil
-function Helpers.RunTier(record)
-  local tier = record.entrance and record.entrance.tierInfo and record.entrance.tierInfo.tier
+function Helpers.RunTier(run)
+  local tier = run.entrance and run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     return tier
   end
   return nil
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number|nil
-function Helpers.CompletionTime(record)
-  if record.finishedElapsed then
-    return record.finishedElapsed
+function Helpers.CompletionTime(run)
+  if run.finishedElapsed then
+    return run.finishedElapsed
   end
-  if record.bossElapsed then
-    return record.bossElapsed
+  if run.bossElapsed then
+    return run.bossElapsed
   end
-  if record.result ~= addon.Constants.runResult.Active and record.endedElapsed then
-    return record.endedElapsed
+  if run.result ~= addon.Constants.runResult.Active and run.endedElapsed then
+    return run.endedElapsed
   end
   return nil
 end
 
----@param record LDT_Record
----@return LDT_Record|nil
-function Helpers.BestRun(record)
+---@param run LDT_Run
+---@return LDT_Run|nil
+function Helpers.BestRun(run)
   local character = addon.Data:GetCharacter()
-  local instance = record.instance
+  local instance = run.instance
   if not character or not instance then
     return nil
   end
-  local tier = Helpers.RunTier(record)
+  local tier = Helpers.RunTier(run)
   if not tier then
     return nil
   end
@@ -128,8 +128,8 @@ function Helpers.BestRun(record)
   local name = instance.name
   local best
   local bestTime
-  TableForEach(character.records, function(candidate)
-    if candidate == record or candidate.result ~= addon.Constants.runResult.Complete then
+  TableForEach(character.runs, function(candidate)
+    if candidate == run or candidate.result ~= addon.Constants.runResult.Complete then
       return
     end
     if Helpers.RunTier(candidate) ~= tier then

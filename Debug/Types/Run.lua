@@ -210,7 +210,7 @@
 ---@field text string
 ---@field detail LDT_LogDetail|nil
 
----@class LDT_Record
+---@class LDT_Run
 ---@field id string
 ---@field result LDT_RunResultId
 ---@field labyrinth boolean

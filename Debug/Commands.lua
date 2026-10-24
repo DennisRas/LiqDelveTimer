@@ -16,13 +16,13 @@ function Debug:OnChatCommand(input)
   if not command or command:lower() ~= "dump" then
     return false
   end
-  local record = Data:GetActiveRecord() or Data:GetLatestRecord()
-  if not record then
-    addon.Core:Print("No delve record yet.")
+  local run = Data:GetActiveRun() or Data:GetLatestRun()
+  if not run then
+    addon.Core:Print("No delve run yet.")
     return true
   end
-  addon.Core:Print(format("Record %s (%s)", record.id, record.result))
-  local chambers = record.chambers
+  addon.Core:Print(format("Run %s (%s)", run.id, run.result))
+  local chambers = run.chambers
   for index = 1, #chambers do
     local chamber = chambers[index]
     local completed = "open"
@@ -31,7 +31,7 @@ function Debug:OnChatCommand(input)
     end
     addon.Core:Print(format("Chamber %s entered %s complete %s", chamber.name, Helpers.FormatElapsed(chamber.enteredElapsed), completed))
   end
-  local log = record.log
+  local log = run.log
   local first = #log - 29
   if first < 1 then
     first = 1

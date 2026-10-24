@@ -34,8 +34,8 @@ function Core:OnInitialize()
   local function onLauncherClick(displayFrame, mouseButton)
     local shifted = IsShiftKeyDown()
     if shifted then
-      if addon.Module_Records then
-        addon.Module_Records:ToggleWindow()
+      if addon.Module_History then
+        addon.Module_History:ToggleWindow()
       end
       return
     end
@@ -55,7 +55,7 @@ function Core:OnInitialize()
     tooltip:SetText(addon.title, 1, 1, 1)
     tooltip:AddLine("|cff00ff00Left click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
     tooltip:AddLine("|cff00ff00Right click|r to open timer settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-    tooltip:AddLine("|cff00ff00Shift click|r to open records.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    tooltip:AddLine("|cff00ff00Shift click|r to open History.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
   end
 
   ---@type LibDataBroker.DataObject
@@ -98,9 +98,9 @@ function Core:OnChatCommand(input)
     end
     return
   end
-  if token == "history" or token == "records" then
-    if addon.Module_Records then
-      addon.Module_Records:ToggleWindow()
+  if token == "history" then
+    if addon.Module_History then
+      addon.Module_History:ToggleWindow()
     end
     return
   end

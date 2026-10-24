@@ -41,7 +41,7 @@
 ---@field rowFrames LDT_WidgetRowFrame[]
 ---@field rows LDT_RowModel[]
 
----@class LDT_RecordsTableRow : LiqUI_TableDataRowExtended
+---@class LDT_HistoryTableRow : LiqUI_TableDataRowExtended
 ---@field startedAt number
 ---@field delve string
 ---@field result string

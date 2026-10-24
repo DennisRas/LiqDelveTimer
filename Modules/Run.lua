@@ -1,9 +1,9 @@
 ---@class LDT_Addon
 local addon = select(2, ...)
 
----@class LDT_Module_Report
-local Module = addon.Core:NewModule("Report")
-addon.Module_Report = Module
+---@class LDT_Module_Run
+local Module = addon.Core:NewModule("Run")
+addon.Module_Run = Module
 
 local Data = addon.Data
 local Constants = addon.Constants
@@ -128,40 +128,40 @@ local function splitRow(label, elapsed, bestElapsed, large)
   return row
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number
-local function liveElapsed(record)
-  if record.result == Constants.runResult.Active then
+local function liveElapsed(run)
+  if run.result == Constants.runResult.Active then
     if Capture.clockReady then
-      return Capture:Elapsed(record)
+      return Capture:Elapsed(run)
     end
-    local last = record.log[#record.log]
+    local last = run.log[#run.log]
     if last then
       return last.elapsed
     end
     return 0
   end
-  if record.endedElapsed then
-    return record.endedElapsed
+  if run.endedElapsed then
+    return run.endedElapsed
   end
   return 0
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number
-local function headlineElapsed(record)
-  if record.finishedElapsed or record.bossElapsed then
-    return Helpers.CompletionTime(record) or liveElapsed(record)
+local function headlineElapsed(run)
+  if run.finishedElapsed or run.bossElapsed then
+    return Helpers.CompletionTime(run) or liveElapsed(run)
   end
-  return liveElapsed(record)
+  return liveElapsed(run)
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param kind LDT_LogKindId
 ---@return LDT_LogEntry|nil
-local function lastLog(record, kind)
-  for index = #record.log, 1, -1 do
-    local entry = record.log[index]
+local function lastLog(run, kind)
+  for index = #run.log, 1, -1 do
+    local entry = run.log[index]
     if entry.kind == kind then
       return entry
     end
@@ -169,7 +169,7 @@ local function lastLog(record, kind)
   return nil
 end
 
----@param best LDT_Record|nil
+---@param best LDT_Run|nil
 ---@param encounterName string
 ---@return number|nil
 local function bestEncounterTime(best, encounterName)
@@ -185,7 +185,7 @@ local function bestEncounterTime(best, encounterName)
   return match.elapsed
 end
 
----@param best LDT_Record|nil
+---@param best LDT_Run|nil
 ---@param chamberName string
 ---@return number|nil
 local function bestChamberTime(best, chamberName)
@@ -201,10 +201,10 @@ local function bestChamberTime(best, chamberName)
   return match.completedElapsed
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return string
-local function runTitle(record)
-  local instance = record.instance
+local function runTitle(run)
+  local instance = run.instance
   local name = instance and instance.name
   if not name or name == "" then
     return "Delve"
@@ -212,12 +212,12 @@ local function runTitle(record)
   return name
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return LDT_RowModel[]
-local function runRows(record)
+local function runRows(run)
   ---@type LDT_RowModel[]
   local rows = {}
-  local player = record.player
+  local player = run.player
   local portrait = textColumn("", 36, "LEFT")
   portrait.width = 36
   if player and player.guid and UnitGUID("player") == player.guid then
@@ -237,7 +237,7 @@ local function runRows(record)
     height = 28,
   }
   local delve = "Delve"
-  local instance = record.instance
+  local instance = run.instance
   local instanceName
   if instance then
     instanceName = instance.name
@@ -250,7 +250,7 @@ local function runRows(record)
     end
   end
   if not namedDelve then
-    local place = record.place
+    local place = run.place
     if place then
       local placeName = place.subzone
       if not placeName then
@@ -261,10 +261,10 @@ local function runRows(record)
       end
     end
   end
-  if record.variant and record.variant ~= "" then
-    delve = format("%s, %s", delve, record.variant)
+  if run.variant and run.variant ~= "" then
+    delve = format("%s, %s", delve, run.variant)
   end
-  local tier = Helpers.RunTier(record)
+  local tier = Helpers.RunTier(run)
   local tierText = ""
   if tier then
     tierText = format("Tier %d", tier)
@@ -279,17 +279,17 @@ local function runRows(record)
   return rows
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@param now number
 ---@return { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
-local function objectiveRows(record, now)
+local function objectiveRows(run, now)
   ---@type { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
   local order = {}
   ---@type table<number|string, { description: string, appeared: number, completed: number|nil, failed: boolean|nil }>
   local byKey = {}
-  local completion = record.finishedElapsed
+  local completion = run.finishedElapsed
   local sealed = {}
-  local log = record.log or {}
+  local log = run.log or {}
   for index = 1, #log do
     local entry = log[index]
     local kind = entry.kind
@@ -325,8 +325,8 @@ local function objectiveRows(record, now)
       end
     end
   end
-  local runFinished = record.sawDelveComplete or record.finishedElapsed
-  local scenario = record.scenario
+  local runFinished = run.sawDelveComplete or run.finishedElapsed
+  local scenario = run.scenario
   local criteria = scenario and scenario.criteria
   if criteria and not runFinished then
     for index = 1, #criteria do
@@ -350,13 +350,13 @@ local function objectiveRows(record, now)
   return order
 end
 
----@param record LDT_Record
----@param best LDT_Record|nil
+---@param run LDT_Run
+---@param best LDT_Run|nil
 ---@return LDT_RowModel[]
-local function timerRows(record, best)
+local function timerRows(run, best)
   ---@type LDT_RowModel[]
   local rows = {}
-  local now = headlineElapsed(record)
+  local now = headlineElapsed(run)
   local bestFinish = best and Helpers.CompletionTime(best) or nil
   local red, green, blue = 0.95, 0.95, 0.95
   if bestFinish then
@@ -388,16 +388,16 @@ local function timerRows(record, best)
     },
     height = ROW_HEIGHT,
   }
-  if record.labyrinth then
-    for index = 1, #record.chambers do
-      local chamber = record.chambers[index]
+  if run.labyrinth then
+    for index = 1, #run.chambers do
+      local chamber = run.chambers[index]
       rows[#rows + 1] = splitRow(chamber.name, chamber.completedElapsed, nil, false)
     end
     return rows
   end
   local route
-  if record.routeID then
-    route = Data.db.global.routes[record.routeID]
+  if run.routeID then
+    route = Data.db.global.routes[run.routeID]
   end
   ---@type string[]
   local steps = {}
@@ -406,8 +406,8 @@ local function timerRows(record, best)
   end
   for index = 1, #steps do
     local stepName = steps[index]
-    local elapsed = record.splits and record.splits[stepName]
-    rows[#rows + 1] = splitRow(stepName, elapsed, Data:BestSplit(record, stepName), false)
+    local elapsed = run.splits and run.splits[stepName]
+    rows[#rows + 1] = splitRow(stepName, elapsed, Data:BestSplit(run, stepName), false)
   end
   if #steps == 0 then
     rows[#rows + 1] = { columns = { textColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
@@ -415,12 +415,12 @@ local function timerRows(record, best)
   return rows
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return LDT_RowModel[]
-local function companionRows(record)
+local function companionRows(run)
   ---@type LDT_RowModel[]
   local rows = {}
-  local companion = record.companion
+  local companion = run.companion
   if not companion or not companion.name or companion.name == "" then
     rows[1] = { columns = { textColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
@@ -546,12 +546,12 @@ local function appendBoonStats(text, stats)
   end
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return LDT_RowModel[]
-local function boonRows(record)
+local function boonRows(run)
   ---@type LDT_RowModel[]
   local rows = {}
-  local boons = record.boons or {}
+  local boons = run.boons or {}
   ---@type { label: string, value: string }[]
   local stats = {}
   for index = 1, #boons do
@@ -602,12 +602,12 @@ local function signedCount(amount)
   return tostring(amount)
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return LDT_RowModel[]
-local function gainsRows(record)
+local function gainsRows(run)
   ---@type LDT_RowModel[]
   local rows = {}
-  local gold = record.gold
+  local gold = run.gold
   if gold and gold.gained and gold.gained > 0 then
     rows[#rows + 1] = {
       columns = {
@@ -618,7 +618,7 @@ local function gainsRows(record)
       goldCopper = gold.gained,
     }
   end
-  local changes = record.currencies or {}
+  local changes = run.currencies or {}
   ---@type table<number, number>
   local seen = {}
   ---@type number[]
@@ -660,7 +660,7 @@ local function gainsRows(record)
       }
     end
   end
-  local loot = record.loot or {}
+  local loot = run.loot or {}
   ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, elapsed: number, quality: number, qualityKnown: boolean, name: string }[]
   local items = {}
   for index = 1, #loot do
@@ -779,12 +779,12 @@ local function gainsRows(record)
   return rows
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return LDT_RowModel[]
-local function renownRows(record)
+local function renownRows(run)
   ---@type LDT_RowModel[]
   local rows = {}
-  local renowns = record.renowns or {}
+  local renowns = run.renowns or {}
   if #renowns == 0 then
     rows[1] = { columns = { textColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
     return rows
@@ -1029,7 +1029,7 @@ function Module:Layout()
   if not window or not panels then
     return
   end
-  local collapsed = Data.db.global.report.collapsed
+  local collapsed = Data.db.global.run.collapsed
   local body = window.body
   local y = 0
   for index = 1, #Constants.sections do
@@ -1056,9 +1056,9 @@ function Module:Layout()
   window:SetBodySize(PANEL_WIDTH, math.max(ROW_HEIGHT, -y))
 end
 
----@return LDT_Record, LDT_Record
-local function demoRecord()
-  ---@type LDT_Record
+---@return LDT_Run, LDT_Run
+local function demoRun()
+  ---@type LDT_Run
   local best = {
     id = "demo-best",
     result = Constants.runResult.Complete,
@@ -1090,8 +1090,8 @@ local function demoRecord()
     splits = {},
     watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
   }
-  ---@type LDT_Record
-  local record = {
+  ---@type LDT_Run
+  local run = {
     id = "demo",
     result = Constants.runResult.Complete,
     labyrinth = true,
@@ -1192,18 +1192,18 @@ local function demoRecord()
     splits = {},
     watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
   }
-  return record, best
+  return run, best
 end
 
----@param record LDT_Record|nil
-function Module:Fill(record)
+---@param run LDT_Run|nil
+function Module:Fill(run)
   local panels = self.panels
   local window = self.window
   if not panels or not window then
     return
   end
-  if not record then
-    window:SetTitle("Report")
+  if not run then
+    window:SetTitle("Run")
     panels[Constants.sectionId.Run].rows = {}
     panels[Constants.sectionId.Timers].rows = {}
     panels[Constants.sectionId.Companion].rows = {}
@@ -1212,14 +1212,14 @@ function Module:Fill(record)
     panels[Constants.sectionId.Renown].rows = {}
     return
   end
-  local best = Helpers.BestRun(record)
-  window:SetTitle(runTitle(record))
-  panels[Constants.sectionId.Run].rows = runRows(record)
-  panels[Constants.sectionId.Timers].rows = timerRows(record, best)
-  panels[Constants.sectionId.Companion].rows = companionRows(record)
-  panels[Constants.sectionId.Boons].rows = boonRows(record)
-  panels[Constants.sectionId.Gains].rows = gainsRows(record)
-  panels[Constants.sectionId.Renown].rows = renownRows(record)
+  local best = Helpers.BestRun(run)
+  window:SetTitle(runTitle(run))
+  panels[Constants.sectionId.Run].rows = runRows(run)
+  panels[Constants.sectionId.Timers].rows = timerRows(run, best)
+  panels[Constants.sectionId.Companion].rows = companionRows(run)
+  panels[Constants.sectionId.Boons].rows = boonRows(run)
+  panels[Constants.sectionId.Gains].rows = gainsRows(run)
+  panels[Constants.sectionId.Renown].rows = renownRows(run)
 end
 
 function Module:Render()
@@ -1227,9 +1227,9 @@ function Module:Render()
     local windows = Data.db.global.liqui.windows
     ---@type LiqUI_WindowOptions
     local windowOptions = {
-      name = addon.name .. "Report",
-      storage = windows.Report,
-      title = "Report",
+      name = addon.name .. "Run",
+      storage = windows.Run,
+      title = "Run",
       icon = Constants.media.Icon,
       width = PANEL_WIDTH,
       height = 200,
@@ -1275,7 +1275,7 @@ function Module:Render()
       panelTitle:SetWordWrap(false)
       panelTitle:SetText(info.label)
       panelHeader:SetScript("OnClick", function()
-        local collapsed = Data.db.global.report.collapsed
+        local collapsed = Data.db.global.run.collapsed
         collapsed[info.id] = not collapsed[info.id]
         Module:Render()
       end)
@@ -1291,10 +1291,10 @@ function Module:Render()
   if not self.window or not self.window:IsShown() then
     return
   end
-  local record = self.pinnedRecord or Data:GetActiveRecord()
-  self:Fill(record)
+  local run = self.pinnedRun or Data:GetActiveRun()
+  self:Fill(run)
   self:Layout()
-  if record and record.result == Constants.runResult.Active then
+  if run and run.result == Constants.runResult.Active then
     if self.window:GetScript("OnUpdate") ~= onPaintUpdate then
       paintRemaining = 0
       self.window:SetScript("OnUpdate", onPaintUpdate)
@@ -1304,19 +1304,19 @@ function Module:Render()
   self.window:SetScript("OnUpdate", nil)
 end
 
----@param record LDT_Record|nil
-function Module:ShowRecord(record)
+---@param run LDT_Run|nil
+function Module:ShowRun(run)
   if not self.window then
     self:Render()
   end
   if not self.window then
     return
   end
-  if self.window:IsShown() and self.pinnedRecord == record then
+  if self.window:IsShown() and self.pinnedRun == run then
     self.window:Hide()
     return
   end
-  self.pinnedRecord = record
+  self.pinnedRun = run
   if self.window:IsShown() then
     self:Render()
     self.window:Raise()
@@ -1324,10 +1324,6 @@ function Module:ShowRecord(record)
   end
   self.window:Show()
   self.window:Raise()
-end
-
-function Module:ShowRun()
-  self:ShowRecord(Data:GetActiveRecord())
 end
 
 function Module:ToggleWindow()
@@ -1341,7 +1337,7 @@ function Module:ToggleWindow()
     self.window:Hide()
     return
   end
-  self:ShowRecord(Data:GetActiveRecord())
+  self:ShowRun(Data:GetActiveRun())
 end
 
 function Module:OnEnable()
