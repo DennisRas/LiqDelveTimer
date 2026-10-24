@@ -41,13 +41,11 @@
 ---@field timeHeader FontString|nil
 ---@field bestHeader FontString|nil
 ---@field rows LDT_TimerRow[]|nil
----@field ticker TickerCallback|nil
 
 ---@class LDT_Module_Report : AceModule
 ---@field window LiqUI_WindowInstance|nil
 ---@field panels table<LDT_SectionId, LDT_WidgetPanel>|nil
 ---@field pinnedRecord LDT_Record|nil
----@field ticker TickerCallback|nil
 
 ---@class LDT_Module_Records : AceModule
 ---@field window LiqUI_WindowInstance|nil

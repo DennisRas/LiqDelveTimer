@@ -111,20 +111,18 @@ local function bestChamberTime(record, stepName)
   return best
 end
 
-function Timer:StartTicker()
-  if self.ticker then
+local PAINT_INTERVAL = 0.1
+local paintRemaining = 0
+
+---@param _frame Frame
+---@param elapsed number
+local function onPaintUpdate(_frame, elapsed)
+  paintRemaining = paintRemaining - elapsed
+  if paintRemaining > 0 then
     return
   end
-  self.ticker = C_Timer.NewTicker(0.1, function()
-    Timer:Render()
-  end)
-end
-
-function Timer:StopTicker()
-  if self.ticker then
-    self.ticker:Cancel()
-    self.ticker = nil
-  end
+  paintRemaining = PAINT_INTERVAL
+  Timer:Render()
 end
 
 ---@param rootMenu RootMenuDescriptionProxy
@@ -194,132 +192,33 @@ function Timer:Place()
   frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
 end
 
-function Timer:Build()
-  if self.frame then
+---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
+---@param shown boolean
+---@param fromGame boolean|nil
+function Timer:SetFrameShown(shown, fromGame)
+  if not self.frame then
+    self:Render()
+  end
+  local frame = self.frame
+  if not frame then
     return
   end
-  local options = Data.db.global.timer
-  ---@type LDT_TimerFrame
-  local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
-  frame:SetSize(280, 80)
-  frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
-  frame:SetMovable(true)
-  frame:SetClampedToScreen(true)
-  frame:SetFrameStrata("HIGH")
-  self.frame = frame
-
-  local header = CreateFrame("Button", nil, frame)
-  header:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -4)
-  header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -4)
-  header:SetHeight(HEADER_HEIGHT)
-  header:RegisterForDrag("LeftButton")
-  header:SetScript("OnDragStart", function()
-    frame:StartMoving()
-  end)
-  header:SetScript("OnDragStop", function()
-    frame:StopMovingOrSizing()
-    Timer:SaveScreenPoint()
-  end)
-  self.header = header
-
-  local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("LEFT", header, "LEFT", 0, 0)
-  title:SetJustifyH("LEFT")
-  title:SetWordWrap(false)
-  self.title = title
-
-  local closeButton = CreateFrame("Button", nil, header)
-  closeButton:SetSize(ICON_SIZE, ICON_SIZE)
-  closeButton:SetPoint("RIGHT", header, "RIGHT", 0, 0)
-  local closeIcon = closeButton:CreateTexture(nil, "ARTWORK")
-  closeIcon:SetAllPoints()
-  closeIcon:SetAtlas("common-search-clearbutton")
-  closeButton:SetScript("OnClick", function()
+  if shown then
+    if fromGame then
+      if not frame:IsShown() then
+        Capture.timerFromGame = true
+      end
+    else
+      Capture.timerFromGame = false
+    end
+    frame:Show()
+    frame:Raise()
+    return
+  end
+  if not fromGame then
     Capture.timerFromGame = false
-    frame:Hide()
-  end)
-  bindTooltip(closeButton, "Close")
-
-  local settingsButton = CreateFrame("DropdownButton", nil, header)
-  settingsButton:SetSize(ICON_SIZE, ICON_SIZE)
-  settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
-  local settingsIcon = settingsButton:CreateTexture(nil, "ARTWORK")
-  settingsIcon:SetAllPoints()
-  settingsIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
-  settingsButton:SetScript("OnClick", function()
-    Timer:OpenMenu(settingsButton)
-  end)
-  bindTooltip(settingsButton, "Settings")
-
-  local recordsButton = CreateFrame("Button", nil, header)
-  recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
-  recordsButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
-  local recordsIcon = recordsButton:CreateTexture(nil, "ARTWORK")
-  recordsIcon:SetAllPoints()
-  recordsIcon:SetTexture(Constants.media.Icon)
-  recordsButton:SetScript("OnClick", function()
-    if addon.Module_Records then
-      addon.Module_Records:ToggleWindow()
-    end
-  end)
-  bindTooltip(recordsButton, "Records")
-
-  local reportButton = CreateFrame("Button", nil, header)
-  reportButton:SetSize(ICON_SIZE, ICON_SIZE)
-  reportButton:SetPoint("RIGHT", recordsButton, "LEFT", -ICON_GAP, 0)
-  local reportIcon = reportButton:CreateTexture(nil, "ARTWORK")
-  reportIcon:SetAllPoints()
-  reportIcon:SetAtlas("poi-door-arrow-down")
-  reportButton:SetScript("OnClick", function()
-    if addon.Module_Report then
-      addon.Module_Report:ShowRecord(Data:GetActiveRecord())
-    end
-  end)
-  bindTooltip(reportButton, "Report")
-
-  local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  deaths:SetPoint("RIGHT", reportButton, "LEFT", -8, 0)
-  deaths:SetJustifyH("RIGHT")
-  self.deaths = deaths
-  title:SetPoint("RIGHT", deaths, "LEFT", -8, 0)
-
-  local spells = CreateFrame("Frame", nil, frame)
-  spells:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
-  spells:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -2)
-  spells:SetHeight(ICON_SIZE)
-  self.spells = spells
-  ---@type LDT_TimerSpell[]
-  self.spellButtons = {}
-
-  local clock = frame:CreateFontString(nil, "OVERLAY")
-  clock:SetJustifyH("LEFT")
-  self.clock = clock
-
-  local phrase = frame:CreateFontString(nil, "OVERLAY")
-  phrase:SetJustifyH("LEFT")
-  self.phrase = phrase
-
-  local timeHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  timeHeader:SetJustifyH("RIGHT")
-  timeHeader:SetText("Time")
-  self.timeHeader = timeHeader
-
-  local bestHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  bestHeader:SetJustifyH("RIGHT")
-  bestHeader:SetText("Best")
-  self.bestHeader = bestHeader
-
-  ---@type LDT_TimerRow[]
-  self.rows = {}
-
-  frame:SetScript("OnShow", function()
-    Timer:Place()
-    Timer:StartTicker()
-    Timer:Render()
-  end)
-  frame:SetScript("OnHide", function()
-    Timer:StopTicker()
-  end)
+  end
+  frame:Hide()
 end
 
 ---@param parent Frame
@@ -414,7 +313,131 @@ function Timer:PreviewRows(preview)
 end
 
 function Timer:Render()
-  self:Build()
+  if not self.frame then
+    local options = Data.db.global.timer
+    ---@type LDT_TimerFrame
+    local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
+    frame:SetSize(280, 80)
+    frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:SetFrameStrata("HIGH")
+    self.frame = frame
+
+    local header = CreateFrame("Button", nil, frame)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -4)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -4)
+    header:SetHeight(HEADER_HEIGHT)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function()
+      frame:StartMoving()
+    end)
+    header:SetScript("OnDragStop", function()
+      frame:StopMovingOrSizing()
+      Timer:SaveScreenPoint()
+    end)
+    self.header = header
+
+    local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("LEFT", header, "LEFT", 0, 0)
+    title:SetJustifyH("LEFT")
+    title:SetWordWrap(false)
+    self.title = title
+
+    local closeButton = CreateFrame("Button", nil, header)
+    closeButton:SetSize(ICON_SIZE, ICON_SIZE)
+    closeButton:SetPoint("RIGHT", header, "RIGHT", 0, 0)
+    local closeIcon = closeButton:CreateTexture(nil, "ARTWORK")
+    closeIcon:SetAllPoints()
+    closeIcon:SetAtlas("common-search-clearbutton")
+    closeButton:SetScript("OnClick", function()
+      Timer:SetFrameShown(false, false)
+    end)
+    bindTooltip(closeButton, "Close")
+
+    local settingsButton = CreateFrame("DropdownButton", nil, header)
+    settingsButton:SetSize(ICON_SIZE, ICON_SIZE)
+    settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
+    local settingsIcon = settingsButton:CreateTexture(nil, "ARTWORK")
+    settingsIcon:SetAllPoints()
+    settingsIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
+    settingsButton:SetScript("OnClick", function()
+      Timer:OpenMenu(settingsButton)
+    end)
+    bindTooltip(settingsButton, "Settings")
+
+    local recordsButton = CreateFrame("Button", nil, header)
+    recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
+    recordsButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
+    local recordsIcon = recordsButton:CreateTexture(nil, "ARTWORK")
+    recordsIcon:SetAllPoints()
+    recordsIcon:SetTexture(Constants.media.Icon)
+    recordsButton:SetScript("OnClick", function()
+      if addon.Module_Records then
+        addon.Module_Records:ToggleWindow()
+      end
+    end)
+    bindTooltip(recordsButton, "Records")
+
+    local reportButton = CreateFrame("Button", nil, header)
+    reportButton:SetSize(ICON_SIZE, ICON_SIZE)
+    reportButton:SetPoint("RIGHT", recordsButton, "LEFT", -ICON_GAP, 0)
+    local reportIcon = reportButton:CreateTexture(nil, "ARTWORK")
+    reportIcon:SetAllPoints()
+    reportIcon:SetAtlas("poi-door-arrow-down")
+    reportButton:SetScript("OnClick", function()
+      if addon.Module_Report then
+        addon.Module_Report:ShowRecord(Data:GetActiveRecord())
+      end
+    end)
+    bindTooltip(reportButton, "Report")
+
+    local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    deaths:SetPoint("RIGHT", reportButton, "LEFT", -8, 0)
+    deaths:SetJustifyH("RIGHT")
+    self.deaths = deaths
+    title:SetPoint("RIGHT", deaths, "LEFT", -8, 0)
+
+    local spells = CreateFrame("Frame", nil, frame)
+    spells:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
+    spells:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -2)
+    spells:SetHeight(ICON_SIZE)
+    self.spells = spells
+    ---@type LDT_TimerSpell[]
+    self.spellButtons = {}
+
+    local clock = frame:CreateFontString(nil, "OVERLAY")
+    clock:SetJustifyH("LEFT")
+    self.clock = clock
+
+    local phrase = frame:CreateFontString(nil, "OVERLAY")
+    phrase:SetJustifyH("LEFT")
+    self.phrase = phrase
+
+    local timeHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    timeHeader:SetJustifyH("RIGHT")
+    timeHeader:SetText("Time")
+    self.timeHeader = timeHeader
+
+    local bestHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bestHeader:SetJustifyH("RIGHT")
+    bestHeader:SetText("Best")
+    self.bestHeader = bestHeader
+
+    ---@type LDT_TimerRow[]
+    self.rows = {}
+
+    frame:Hide()
+    frame:SetScript("OnShow", function(shownFrame)
+      paintRemaining = 0
+      shownFrame:SetScript("OnUpdate", onPaintUpdate)
+      Timer:Place()
+      Timer:Render()
+    end)
+    frame:SetScript("OnHide", function(hiddenFrame)
+      hiddenFrame:SetScript("OnUpdate", nil)
+    end)
+  end
   local frame = self.frame
   if not frame or not frame:IsShown() then
     return
@@ -677,30 +700,21 @@ function Timer:Render()
 end
 
 function Timer:ShowRun()
-  self:Build()
-  if not self.frame or self.frame:IsShown() then
-    return
-  end
-  self.frame:Show()
-  self.frame:Raise()
+  self:SetFrameShown(true, true)
 end
 
 function Timer:HideRun()
-  if self.frame then
-    self.frame:Hide()
-  end
+  self:SetFrameShown(false, true)
 end
 
 function Timer:ToggleWindow()
-  self:Build()
+  if not self.frame then
+    self:Render()
+  end
   if not self.frame then
     return
   end
-  if self.frame:IsShown() then
-    self.frame:Hide()
-    return
-  end
-  self.frame:Show()
+  self:SetFrameShown(not self.frame:IsShown(), false)
 end
 
 function Timer:OnEnable()

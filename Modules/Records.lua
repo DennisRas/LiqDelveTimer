@@ -190,15 +190,12 @@ function Module:Render()
 end
 
 function Module:ToggleWindow()
-  self:Render()
   if not self.window then
-    return
+    self:Render()
   end
-  if self.window:IsShown() then
-    self.window:Hide()
-    return
+  if self.window then
+    self.window:Toggle()
   end
-  self.window:Show()
 end
 
 function Module:OnEnable()

@@ -26,6 +26,20 @@ local FONT_CLOCK = "GameFontNormalLarge"
 local FONT_PANEL = "GameFontHighlight_NoShadow"
 local FONT_ROW = "GameFontHighlight_NoShadow"
 
+local PAINT_INTERVAL = 0.1
+local paintRemaining = 0
+
+---@param _frame Frame
+---@param elapsed number
+local function onPaintUpdate(_frame, elapsed)
+  paintRemaining = paintRemaining - elapsed
+  if paintRemaining > 0 then
+    return
+  end
+  paintRemaining = PAINT_INTERVAL
+  Module:Render()
+end
+
 ---@param text string
 ---@param width number|nil
 ---@param align "LEFT"|"CENTER"|"RIGHT"|nil
@@ -1009,76 +1023,6 @@ local function layoutPanel(panel)
   panel:SetHeight(-y)
 end
 
-function Module:Build()
-  if self.window then
-    return
-  end
-  local windows = Data.db.global.liqui.windows
-  ---@type LiqUI_WindowOptions
-  local windowOptions = {
-    name = addon.name .. "Report",
-    storage = windows.Report,
-    title = "Report",
-    icon = Constants.media.Icon,
-    width = PANEL_WIDTH,
-    height = 200,
-    onShow = function()
-      Module:StartTicker()
-      Module:Render()
-    end,
-  }
-  self.window = LiqUI:NewElement("Window", windowOptions)
-  self.window:HookScript("OnHide", function()
-    Module:StopTicker()
-  end)
-  local body = self.window.body
-
-  ---@type table<LDT_SectionId, LDT_WidgetPanel>
-  local panels = {}
-  for index = 1, #Constants.sections do
-    local info = Constants.sections[index]
-    ---@type LDT_WidgetPanel
-    local panel = CreateFrame("Frame", nil, body)
-    panel.id = info.id
-    panel.rowFrames = {}
-    panel.rows = {}
-    local panelHeader = CreateFrame("Button", nil, panel)
-    panelHeader:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
-    panelHeader:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
-    panelHeader:SetHeight(ROW_HEIGHT)
-    SetBackgroundColor(panelHeader, 0, 0, 0, 0.3)
-    panelHeader:SetScript("OnEnter", function()
-      SetHighlightColor(panelHeader, 1, 1, 1, 0.05)
-    end)
-    panelHeader:SetScript("OnLeave", function()
-      SetHighlightColor(panelHeader, 1, 1, 1, 0)
-    end)
-    local chevron = panelHeader:CreateTexture(nil, "ARTWORK")
-    chevron:SetSize(16, 16)
-    chevron:SetPoint("RIGHT", panelHeader, "RIGHT", -8, 0)
-    chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-    local panelTitle = panelHeader:CreateFontString(nil, "OVERLAY", FONT_PANEL)
-    panelTitle:SetPoint("LEFT", panelHeader, "LEFT", 8, 0)
-    panelTitle:SetPoint("RIGHT", panelHeader, "RIGHT", -28, 0)
-    panelTitle:SetJustifyH("LEFT")
-    panelTitle:SetJustifyV("MIDDLE")
-    panelTitle:SetWordWrap(false)
-    panelTitle:SetText(info.label)
-    panelHeader:SetScript("OnClick", function()
-      local collapsed = Data.db.global.report.collapsed
-      collapsed[info.id] = not collapsed[info.id]
-      self:Render()
-    end)
-    panel.header = panelHeader
-    panel.title = panelTitle
-    panel.chevron = chevron
-    panelTitle:SetTextColor(1, 0.82, 0)
-    panels[info.id] = panel
-  end
-
-  self.panels = panels
-end
-
 function Module:Layout()
   local window = self.window
   local panels = self.panels
@@ -1279,38 +1223,92 @@ function Module:Fill(record)
 end
 
 function Module:Render()
-  self:Build()
+  if not self.window then
+    local windows = Data.db.global.liqui.windows
+    ---@type LiqUI_WindowOptions
+    local windowOptions = {
+      name = addon.name .. "Report",
+      storage = windows.Report,
+      title = "Report",
+      icon = Constants.media.Icon,
+      width = PANEL_WIDTH,
+      height = 200,
+      onShow = function()
+        Module:Render()
+      end,
+    }
+    self.window = LiqUI:NewElement("Window", windowOptions)
+    self.window:HookScript("OnHide", function(hiddenFrame)
+      hiddenFrame:SetScript("OnUpdate", nil)
+    end)
+    local body = self.window.body
+
+    ---@type table<LDT_SectionId, LDT_WidgetPanel>
+    local panels = {}
+    for index = 1, #Constants.sections do
+      local info = Constants.sections[index]
+      ---@type LDT_WidgetPanel
+      local panel = CreateFrame("Frame", nil, body)
+      panel.id = info.id
+      panel.rowFrames = {}
+      panel.rows = {}
+      local panelHeader = CreateFrame("Button", nil, panel)
+      panelHeader:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+      panelHeader:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
+      panelHeader:SetHeight(ROW_HEIGHT)
+      SetBackgroundColor(panelHeader, 0, 0, 0, 0.3)
+      panelHeader:SetScript("OnEnter", function()
+        SetHighlightColor(panelHeader, 1, 1, 1, 0.05)
+      end)
+      panelHeader:SetScript("OnLeave", function()
+        SetHighlightColor(panelHeader, 1, 1, 1, 0)
+      end)
+      local chevron = panelHeader:CreateTexture(nil, "ARTWORK")
+      chevron:SetSize(16, 16)
+      chevron:SetPoint("RIGHT", panelHeader, "RIGHT", -8, 0)
+      chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
+      local panelTitle = panelHeader:CreateFontString(nil, "OVERLAY", FONT_PANEL)
+      panelTitle:SetPoint("LEFT", panelHeader, "LEFT", 8, 0)
+      panelTitle:SetPoint("RIGHT", panelHeader, "RIGHT", -28, 0)
+      panelTitle:SetJustifyH("LEFT")
+      panelTitle:SetJustifyV("MIDDLE")
+      panelTitle:SetWordWrap(false)
+      panelTitle:SetText(info.label)
+      panelHeader:SetScript("OnClick", function()
+        local collapsed = Data.db.global.report.collapsed
+        collapsed[info.id] = not collapsed[info.id]
+        Module:Render()
+      end)
+      panel.header = panelHeader
+      panel.title = panelTitle
+      panel.chevron = chevron
+      panelTitle:SetTextColor(1, 0.82, 0)
+      panels[info.id] = panel
+    end
+
+    self.panels = panels
+  end
   if not self.window or not self.window:IsShown() then
     return
   end
   local record = self.pinnedRecord or Data:GetActiveRecord()
   self:Fill(record)
   self:Layout()
-  if not record or record.result ~= Constants.runResult.Active then
-    self:StopTicker()
-  end
-end
-
-function Module:StartTicker()
-  local record = self.pinnedRecord or Data:GetActiveRecord()
-  if not record or record.result ~= Constants.runResult.Active or self.ticker then
+  if record and record.result == Constants.runResult.Active then
+    if self.window:GetScript("OnUpdate") ~= onPaintUpdate then
+      paintRemaining = 0
+      self.window:SetScript("OnUpdate", onPaintUpdate)
+    end
     return
   end
-  self.ticker = C_Timer.NewTicker(0.1, function()
-    Module:Render()
-  end)
-end
-
-function Module:StopTicker()
-  if self.ticker then
-    self.ticker:Cancel()
-    self.ticker = nil
-  end
+  self.window:SetScript("OnUpdate", nil)
 end
 
 ---@param record LDT_Record|nil
 function Module:ShowRecord(record)
-  self:Build()
+  if not self.window then
+    self:Render()
+  end
   if not self.window then
     return
   end
@@ -1319,10 +1317,13 @@ function Module:ShowRecord(record)
     return
   end
   self.pinnedRecord = record
+  if self.window:IsShown() then
+    self:Render()
+    self.window:Raise()
+    return
+  end
   self.window:Show()
   self.window:Raise()
-  self:StartTicker()
-  self:Render()
 end
 
 function Module:ShowRun()
@@ -1330,6 +1331,16 @@ function Module:ShowRun()
 end
 
 function Module:ToggleWindow()
+  if not self.window then
+    self:Render()
+  end
+  if not self.window then
+    return
+  end
+  if self.window:IsShown() then
+    self.window:Hide()
+    return
+  end
   self:ShowRecord(Data:GetActiveRecord())
 end
 

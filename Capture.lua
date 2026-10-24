@@ -1345,11 +1345,7 @@ function Capture:Sync()
     return
   end
   if context then
-    local shown = timer.frame and timer.frame:IsShown()
-    if not shown then
-      timer:ShowRun()
-      self.timerFromGame = true
-    end
+    timer:ShowRun()
     return
   end
   if self.timerFromGame then
