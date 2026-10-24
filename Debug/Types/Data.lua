@@ -1,38 +1,35 @@
----@class LDT_WidgetSection
----@field enabled boolean
----@field collapsed boolean
+---@class LDT_AceDB : AceDBObject-3.0
+---@field global LDT_Global
 
----@class LDT_WidgetBorder
----@field enabled boolean
----@field color ColorTable
+---@class LDT_ReportOptions
+---@field collapsed table<LDT_SectionId, boolean>
 
----@class LDT_Widget
----@field shown boolean
----@field minimized boolean
+---@class LDT_Route
+---@field id string
+---@field mapID number|nil
+---@field name string|nil
+---@field steps string[]
+
+---@class LDT_TimerOptions
 ---@field point string
 ---@field relativePoint string
 ---@field x number
 ---@field y number
----@field spacing LDT_SpacingId
----@field sectionGap number
----@field theme LDT_ThemeId
----@field backgroundColor ColorTable
----@field headerBackgroundColor ColorTable
----@field headerFontColor ColorTable
----@field panelHeaderBackgroundColor ColorTable
----@field panelHeaderFontColor ColorTable
----@field sectionRuleColor ColorTable
----@field sectionBackgroundColor ColorTable
----@field bodyFontColor ColorTable
----@field border LDT_WidgetBorder
----@field sections table<LDT_SectionId, LDT_WidgetSection>
+---@field fontSize number
+---@field replaceTracker boolean
+---@field aheadColor ColorRGBAData
+---@field behindColor ColorRGBAData
+---@field backgroundColor ColorRGBAData
+---@field borderColor ColorRGBAData
 
 ---@class LDT_Global
 ---@field dbVersion number
 ---@field minimap { minimapPos: number, hide: boolean, lock: boolean }
 ---@field liqui LiqUI_DB
----@field widget LDT_Widget
+---@field report LDT_ReportOptions
 ---@field logs LiqUI_LoggerDB
+---@field timer LDT_TimerOptions
+---@field routes table<string, LDT_Route>
 ---@field characters table<WOWGUID, LDT_Character>
 
 ---@class LDT_Character
@@ -44,4 +41,7 @@
 ---@field dbVersion number
 ---@field defaultDB table
 ---@field defaultCharacter LDT_Character
----@field db AceDBObject-3.0
+---@field db LDT_AceDB
+---@field labyrinthMapID number
+---@field boonSpellID number
+---@field hiddenItemIDs table<number, boolean>

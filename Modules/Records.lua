@@ -10,15 +10,44 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 
----@class LDT_RecordsTableRow : LiqUI_TableDataRowExtended
----@field startedAt number
----@field delve string
----@field result string
----@field duration number
+---@param rowA LDT_RecordsTableRow
+---@param rowB LDT_RecordsTableRow
+---@return boolean
+local function compareStartedAscending(rowA, rowB)
+  return rowA.startedAt < rowB.startedAt
+end
+
+---@param rowA LDT_RecordsTableRow
+---@param rowB LDT_RecordsTableRow
+---@return boolean
+local function compareDelve(rowA, rowB)
+  return strcmputf8i(rowA.delve, rowB.delve) < 0
+end
+
+---@param rowA LDT_RecordsTableRow
+---@param rowB LDT_RecordsTableRow
+---@return boolean
+local function compareResult(rowA, rowB)
+  return strcmputf8i(rowA.result, rowB.result) < 0
+end
+
+---@param rowA LDT_RecordsTableRow
+---@param rowB LDT_RecordsTableRow
+---@return boolean
+local function compareDuration(rowA, rowB)
+  return rowA.duration < rowB.duration
+end
+
+---@param rowA LDT_RecordsTableRow
+---@param rowB LDT_RecordsTableRow
+---@return boolean
+local function compareStartedDescending(rowA, rowB)
+  return rowA.startedAt > rowB.startedAt
+end
 
 ---@param record LDT_Record
 ---@return number
-local function ActiveElapsed(record)
+local function activeElapsed(record)
   if addon.Capture.clockReady and record.result == Constants.runResult.Active then
     return addon.Capture:Elapsed(record)
   end
@@ -31,7 +60,8 @@ end
 function Module:Render()
   if not self.window then
     local windows = Data.db.global.liqui.windows
-    self.window = LiqUI:NewElement("Window", {
+    ---@type LiqUI_WindowOptions
+    local windowOptions = {
       name = addon.name .. "Records",
       storage = windows.Records,
       title = "Records",
@@ -41,9 +71,11 @@ function Module:Render()
       onShow = function()
         Module:Render()
       end,
-    })
+    }
+    self.window = LiqUI:NewElement("Window", windowOptions)
     local sizes = LiqUI.Constants.layout.sizes
-    self.table = LiqUI:NewElement("Table", {
+    ---@type LiqUI_TableOptions
+    local tableOptions = {
       name = addon.name .. "Records",
       storage = Data.db.global.liqui.tables.Records,
       header = { enabled = true, sticky = true, height = sizes.header },
@@ -55,9 +87,7 @@ function Module:Render()
           width = 150,
           sorting = {
             enabled = true,
-            compare = function(rowA, rowB)
-              return rowA.startedAt < rowB.startedAt
-            end,
+            compare = compareStartedAscending,
           },
         },
         {
@@ -66,9 +96,7 @@ function Module:Render()
           width = 190,
           sorting = {
             enabled = true,
-            compare = function(rowA, rowB)
-              return strcmputf8i(rowA.delve, rowB.delve) < 0
-            end,
+            compare = compareDelve,
           },
         },
         {
@@ -77,9 +105,7 @@ function Module:Render()
           width = 100,
           sorting = {
             enabled = true,
-            compare = function(rowA, rowB)
-              return strcmputf8i(rowA.result, rowB.result) < 0
-            end,
+            compare = compareResult,
           },
         },
         {
@@ -88,20 +114,17 @@ function Module:Render()
           width = 100,
           sorting = {
             enabled = true,
-            compare = function(rowA, rowB)
-              return rowA.duration < rowB.duration
-            end,
+            compare = compareDuration,
           },
         },
       },
       sorting = {
         enabled = true,
         defaultOrder = "desc",
-        defaultCompare = function(rowA, rowB)
-          return rowA.startedAt > rowB.startedAt
-        end,
+        defaultCompare = compareStartedDescending,
       },
-    })
+    }
+    self.table = LiqUI:NewElement("Table", tableOptions)
     self.table:SetParent(self.window.body)
     self.table:SetPoint("TOPLEFT", self.window.body, "TOPLEFT", 0, 0)
     self.table:SetPoint("BOTTOMRIGHT", self.window.body, "BOTTOMRIGHT", 0, 0)
@@ -122,13 +145,26 @@ function Module:Render()
   local data = {}
   for index = #records, 1, -1 do
     local record = records[index]
-    local delve = record.instance and record.instance.name
-    if not delve or delve == "" then
-      delve = "Delve"
+    local delve = "Delve"
+    local instance = record.instance
+    if instance then
+      local instanceName = instance.name
+      if instanceName and instanceName ~= "" then
+        delve = instanceName
+      end
     end
-    local duration = record.endedElapsed or 0
-    if record.result == Constants.runResult.Active then
-      duration = ActiveElapsed(record)
+    local duration = Helpers.CompletionTime(record)
+    if not duration then
+      if record.result == Constants.runResult.Active then
+        duration = activeElapsed(record)
+      else
+        duration = record.endedElapsed or 0
+      end
+    end
+    local whenValue = date("%Y-%m-%d %H:%M", record.startedAt)
+    local whenText = ""
+    if type(whenValue) == "string" then
+      whenText = whenValue
     end
     ---@type LDT_RecordsTableRow
     local row = {
@@ -137,13 +173,15 @@ function Module:Render()
       result = record.result,
       duration = duration,
       data = {
-        date("%Y-%m-%d %H:%M", record.startedAt),
+        whenText,
         delve,
-        record.result,
+        tostring(record.result),
         Helpers.FormatElapsed(duration),
       },
       onClick = function()
-        Module:ShowDetail(record)
+        if addon.Module_Report then
+          addon.Module_Report:ShowRecord(record)
+        end
       end,
     }
     data[#data + 1] = row
@@ -153,12 +191,20 @@ end
 
 function Module:ToggleWindow()
   self:Render()
-  self.window:Toggle()
-  self:Render()
+  if not self.window then
+    return
+  end
+  if self.window:IsShown() then
+    self.window:Hide()
+    return
+  end
+  self.window:Show()
 end
 
 function Module:OnEnable()
-  C_Timer.NewTicker(0.5, function()
-    Module:Render()
-  end)
+  addon.Capture.onRunStored = function()
+    if Module.window and Module.window:IsShown() then
+      Module:Render()
+    end
+  end
 end

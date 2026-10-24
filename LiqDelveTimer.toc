@@ -21,18 +21,21 @@ Boot.lua
 Constants.lua
 Helpers.lua
 Data.lua
+Data\Items.lua
 Capture.lua
-ApiLog.lua
 LiqDelveTimer.lua
 
-Modules\Main\Module.lua
-Modules\Records\Module.lua
-Modules\Records\Detail.lua
+Modules\Timer.lua
+Modules\Report.lua
+Modules\Records.lua
 
 #@debug@
+Debug\ApiLog.lua
 Debug\Types\Addon.lua
 Debug\Types\Constants.lua
 Debug\Types\Data.lua
 Debug\Types\Record.lua
+Debug\Types\Report.lua
+Debug\Types\Timer.lua
 Debug\Commands.lua
 #@end-debug@

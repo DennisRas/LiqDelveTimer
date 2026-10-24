@@ -16,18 +16,6 @@
 ---@field rewardType number
 ---@field context number
 
----@class LDT_TierInfo
----@field tier number
----@field suggestedILvl number
----@field overrideTooltipSpellID number
----@field unlocked boolean
----@field tierDescription string
----@field rewards LDT_TierReward[]
----@field modifierUIWidgetSetID number
----@field lockedReason string|nil
----@field queueAsLFG boolean
----@field difficultyID number
-
 ---@class LDT_Entrance
 ---@field entranceType number|nil
 ---@field title string|nil
@@ -39,7 +27,7 @@
 ---@field worldTierDifficulty number|nil
 ---@field affixSpellIDs number[]|nil
 ---@field activeSpellIDs number[]|nil
----@field tierInfo LDT_TierInfo|nil
+---@field tierInfo TieredEntranceTierInfo|nil
 
 ---@class LDT_Companion
 ---@field companionID number|nil
@@ -51,13 +39,18 @@
 ---@field maxLevel number|nil
 ---@field flavorName string|nil
 ---@field flavorNodeID number|nil
+---@field flavorSpellID number|nil
 ---@field roleNodeID number|nil
 ---@field traitTreeID number|nil
 ---@field combatCurioNodeID number|nil
 ---@field utilityCurioNodeID number|nil
 ---@field roleName string|nil
+---@field roleSpellID number|nil
+---@field roleAtlas string|nil
 ---@field combatCurioName string|nil
+---@field combatCurioSpellID number|nil
 ---@field utilityCurioName string|nil
+---@field utilityCurioSpellID number|nil
 ---@field standing number|nil
 ---@field reactionThreshold number|nil
 ---@field nextThreshold number|nil
@@ -155,7 +148,10 @@
 ---@field maxLevel number
 
 ---@class LDT_BoonStat
----@field text string
+---@field label string|nil
+---@field amount number|nil
+---@field percent boolean|nil
+---@field text string|nil
 
 ---@class LDT_LootRow
 ---@field elapsed number
@@ -168,6 +164,9 @@
 ---@field name string
 ---@field enteredElapsed number
 ---@field completedElapsed number|nil
+
+---@class LDT_DelvesDifficultyPickerFrame : Frame
+---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
 
 ---@class LDT_Encounter
 ---@field encounterID number
@@ -188,6 +187,7 @@
 ---@field criteriaSignature string|nil
 ---@field scenarioComplete boolean
 ---@field delveComplete boolean
+---@field routeStep string|nil
 ---@field criteria table<number, LDT_CriteriaWatch>
 
 ---@class LDT_LogDetail
@@ -222,6 +222,7 @@
 ---@field bossName string|nil
 ---@field bossElapsed number|nil
 ---@field sawDelveComplete boolean
+---@field variant string|nil
 ---@field deaths number
 ---@field lives number|nil
 ---@field player LDT_Player|nil
@@ -239,5 +240,7 @@
 ---@field loot LDT_LootRow[]
 ---@field chambers LDT_Chamber[]
 ---@field encounters LDT_Encounter[]
+---@field routeID string|nil
+---@field splits table<string, number>
 ---@field log LDT_LogEntry[]
 ---@field watch LDT_Watch

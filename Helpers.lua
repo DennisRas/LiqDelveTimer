@@ -5,14 +5,44 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
+local LiqUI = addon.libs.LiqUI
+local TableForEach = LiqUI.Utils.TableForEach
+
+---@param value string
+---@return number|nil, boolean
+function Helpers.BoonAmount(value)
+  local cleaned = value:gsub("%s+$", ""):gsub("%.$", "")
+  local percent = cleaned:find("%%", 1, true) ~= nil
+  local numberText = cleaned:match("([%+%-]?%d+%.?%d*)")
+  if not numberText then
+    return nil, percent
+  end
+  return tonumber(numberText), percent
+end
+
+---@param amount number
+---@return string
+function Helpers.FormatBoonAmount(amount)
+  local text
+  if amount % 1 == 0 then
+    text = format("%d", amount)
+  else
+    text = format("%.1f", amount)
+  end
+  return text .. "%"
+end
+
 ---@param elapsed number|nil
 ---@return string
 function Helpers.FormatElapsed(elapsed)
-  if not elapsed or elapsed < 0 then
-    elapsed = 0
+  local secondsElapsed = 0
+  if elapsed then
+    if elapsed >= 0 then
+      secondsElapsed = elapsed
+    end
   end
-  local tenths = math.floor((elapsed * 10) % 10)
-  local whole = math.floor(elapsed)
+  local tenths = math.floor((secondsElapsed * 10) % 10)
+  local whole = math.floor(secondsElapsed)
   local seconds = whole % 60
   local minutes = math.floor(whole / 60)
   local hours = math.floor(minutes / 60)
@@ -26,18 +56,19 @@ end
 ---@param copper number|nil
 ---@return string
 function Helpers.FormatMoney(copper)
-  if not copper or copper < 0 then
-    copper = 0
+  local copperAmount = 0
+  if copper then
+    if copper >= 0 then
+      copperAmount = copper
+    end
   end
-  local gold = math.floor(copper / 10000)
-  local silver = math.floor((copper % 10000) / 100)
-  if gold > 0 then
-    return format("%dg %ds", gold, silver)
-  end
-  if silver > 0 then
-    return format("%ds", silver)
-  end
-  return format("%dc", copper)
+  return C_CurrencyInfo.GetCoinTextureString(copperAmount, 12)
+end
+
+---@param itemID number|nil
+---@return boolean
+function Helpers.ItemHidden(itemID)
+  return itemID ~= nil and addon.Data.hiddenItemIDs[itemID] == true
 end
 
 ---@param delta number|nil
@@ -97,7 +128,7 @@ function Helpers.BestRun(record)
   local name = instance.name
   local best
   local bestTime
-  addon.libs.LiqUI.Utils.TableForEach(character.records, function(candidate)
+  TableForEach(character.records, function(candidate)
     if candidate == record or candidate.result ~= addon.Constants.runResult.Complete then
       return
     end
