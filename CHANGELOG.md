@@ -1,6 +1,5 @@
 # Changelog
 
-## v0.1.0 - TBD
+## v1.0.0 - TBD
 
-- First release.
-- Updated performance.
+- First release <3

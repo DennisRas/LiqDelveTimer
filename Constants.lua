@@ -10,8 +10,9 @@ Constants.prefix = format("<%s> ", addon.name)
 ---@enum LDT_RunResultId
 Constants.runResult = {
   Active = "active",
-  Complete = "complete",
-  Left = "left",
+  PersonalBest = "personalBest",
+  Completed = "completed",
+  Abandoned = "abandoned",
 }
 
 ---@enum LDT_LogKindId
@@ -25,7 +26,6 @@ Constants.logKind = {
   ObjectiveFailed = "objectiveFailed",
   Chamber = "chamber",
   Scenario = "scenario",
-  Vault = "vault",
   Encounter = "encounter",
   Boss = "boss",
   DelveComplete = "delveComplete",
@@ -34,27 +34,24 @@ Constants.logKind = {
   Currency = "currency",
   Renown = "renown",
   Loot = "loot",
+  Level = "level",
+  Experience = "xp",
+  CompanionLevel = "companionLevel",
+  CompanionExperience = "companionXp",
   Death = "death",
   Boon = "boon",
 }
 
----@enum LDT_SectionId
-Constants.sectionId = {
-  Run = "run",
-  Timers = "timers",
-  Companion = "companion",
-  Boons = "boons",
-  Gains = "gains",
+---@enum LDT_GainTypeId
+Constants.gainType = {
+  Gold = "gold",
+  Currency = "currency",
   Renown = "renown",
-}
-
-Constants.sections = {
-  { id = Constants.sectionId.Run, label = "Run" },
-  { id = Constants.sectionId.Timers, label = "Timers" },
-  { id = Constants.sectionId.Companion, label = "Companion" },
-  { id = Constants.sectionId.Boons, label = "Boons" },
-  { id = Constants.sectionId.Gains, label = "Gains" },
-  { id = Constants.sectionId.Renown, label = "Renown" },
+  Loot = "loot",
+  Level = "level",
+  Experience = "xp",
+  CompanionLevel = "companionLevel",
+  CompanionExperience = "companionXp",
 }
 
 Constants.boonStatColors = {

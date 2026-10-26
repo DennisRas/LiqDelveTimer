@@ -6,19 +6,65 @@ local Timer = addon.Core:NewModule("Timer")
 addon.Module_Timer = Timer
 
 local Data = addon.Data
-local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
-local TableForEach = LiqUI.Utils.TableForEach
 
-local HEADER_HEIGHT = 28
-local ICON_SIZE = 16
+local HEADER_HEIGHT = 40
+local HEADER_PAD = 10
+local ICON_SIZE = 20
 local ICON_GAP = 4
-local TIME_WIDTH = 72
-local COLUMN_GAP = 20
-local ROW_HEIGHT = 16
+local SPELL_GAP = 12
+local STAGES_WIDTH = 150
+local DELTA_WIDTH = 75
+local TIME_WIDTH = 75
+local BEST_WIDTH = 75
+local CELL_PADDING = 8
+local ROW_HEIGHT = 28
+local OBJECTIVE_ROW_HEIGHT = 20
+local OBJECTIVE_INDENT = 8
+local OBJECTIVE_ICON = 14
+local OBJECTIVE_GAP_AFTER = 4
+local OBJECTIVE_NUB = "ui-questtracker-objective-nub"
+local OBJECTIVE_CHECK = "ui-questtracker-tracker-check"
+local CLOCK_HEIGHT = 36
+local TITLE_SIZE = 16
+local META_SIZE = 14
+local CLOCK_SIZE = 22
+local PHRASE_SIZE = 14
 local NUMBER_FONT = "Fonts\\ARIALN.TTF"
+local SKULL_ATLAS = "DungeonSkull"
+local HEART_ATLAS = "delves-scenario-heart-icon"
+---@type ColorRGBAData
+local ACTIVE_ROW_COLOR = { r = 0.12, g = 0.32, b = 0.72, a = 0.7 }
+
+---@param icon Texture
+---@param text FontString
+---@param atlas string
+---@param count number|nil
+---@param anchor Region
+---@param point string
+---@param offsetX number
+---@return Region
+---@return string
+---@return number
+local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
+  text:SetFont(NUMBER_FONT, META_SIZE, "")
+  icon:ClearAllPoints()
+  text:ClearAllPoints()
+  if count == nil then
+    icon:Hide()
+    text:Hide()
+    return anchor, point, offsetX
+  end
+  icon:SetAtlas(atlas)
+  icon:Show()
+  text:SetText(tostring(count))
+  text:Show()
+  icon:SetPoint("RIGHT", anchor, point, offsetX, 0)
+  text:SetPoint("RIGHT", icon, "LEFT", -ICON_GAP, 0)
+  return text, "LEFT", -ICON_GAP
+end
 
 ---@param color ColorRGBAData
 ---@param apply function
@@ -69,48 +115,6 @@ local function showColorPicker(color, apply)
   ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
 end
 
----@param owner Frame
----@param text string
-local function bindTooltip(owner, text)
-  owner:SetScript("OnEnter", function()
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:SetText(text, 1, 1, 1)
-    GameTooltip:Show()
-  end)
-  owner:SetScript("OnLeave", GameTooltip_Hide)
-end
-
----@param run LDT_Run
----@param stepName string
----@return number|nil
-local function bestChamberTime(run, stepName)
-  local character = Data:GetCharacter()
-  if not character then
-    return nil
-  end
-  local tier = Helpers.RunTier(run)
-  local mapID = run.instance and run.instance.mapID
-  local best
-  TableForEach(character.runs, function(candidate)
-    if candidate == run or candidate.result ~= Constants.runResult.Complete or not candidate.labyrinth then
-      return
-    end
-    if tier and Helpers.RunTier(candidate) ~= tier then
-      return
-    end
-    local candidateMap = candidate.instance and candidate.instance.mapID
-    if mapID and candidateMap ~= mapID then
-      return
-    end
-    TableForEach(candidate.chambers, function(chamber)
-      if chamber.name == stepName and chamber.completedElapsed and (not best or chamber.completedElapsed < best) then
-        best = chamber.completedElapsed
-      end
-    end)
-  end)
-  return best
-end
-
 local PAINT_INTERVAL = 0.1
 local paintRemaining = 0
 
@@ -147,21 +151,22 @@ function Timer:OpenMenu(owner)
       options.replaceTracker = not options.replaceTracker
       Capture:Sync()
     end)
+    rootMenu:CreateCheckbox("Show objectives", function()
+      return options.showObjectives ~= false
+    end, function()
+      options.showObjectives = options.showObjectives == false
+      Timer:Render()
+    end)
+    rootMenu:CreateCheckbox("Show objective counts", function()
+      return options.showObjectiveCounts ~= false
+    end, function()
+      options.showObjectiveCounts = options.showObjectiveCounts == false
+      Timer:Render()
+    end)
     addColorSwatch(rootMenu, "Faster than best", options.aheadColor)
     addColorSwatch(rootMenu, "Slower than best", options.behindColor)
     addColorSwatch(rootMenu, "Background", options.backgroundColor)
     addColorSwatch(rootMenu, "Border", options.borderColor)
-    local sizeMenu = rootMenu:CreateButton("Font size")
-    local sizes = { 10, 12, 14, 16 }
-    for index = 1, #sizes do
-      local size = sizes[index]
-      sizeMenu:CreateRadio(tostring(size), function()
-        return options.fontSize == size
-      end, function()
-        options.fontSize = size
-        Timer:Render()
-      end)
-    end
   end)
 end
 
@@ -221,95 +226,291 @@ function Timer:SetFrameShown(shown, fromGame)
   frame:Hide()
 end
 
----@param parent Frame
----@return LDT_TimerRow
-function Timer:CreateRow(parent)
-  local highlight = parent:CreateTexture(nil, "BACKGROUND")
-  highlight:SetColorTexture(1, 1, 1, 0.06)
-  highlight:Hide()
-  local name = parent:CreateFontString(nil, "OVERLAY")
-  name:SetJustifyH("LEFT")
-  name:SetWordWrap(false)
-  local timeText = parent:CreateFontString(nil, "OVERLAY")
-  timeText:SetJustifyH("RIGHT")
-  local bestText = parent:CreateFontString(nil, "OVERLAY")
-  bestText:SetJustifyH("RIGHT")
-  ---@type LDT_TimerRow
-  local row = {
-    name = name,
-    time = timeText,
-    best = bestText,
-    highlight = highlight,
-  }
-  return row
-end
-
 ---@param run LDT_Run
----@return { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
+---@return LDT_StepRow[]
 function Timer:StepRows(run)
-  ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
+  ---@type LDT_StepRow[]
   local rows = {}
   if run.labyrinth then
     local currentName = run.watch and run.watch.routeStep
     local chambers = run.chambers or {}
+    local bestChambers = run.best and run.best.chambers
     for index = 1, #chambers do
       local chamber = chambers[index]
+      local elapsed = chamber.completedElapsed
+      local best
+      if bestChambers then
+        for bestIndex = 1, #bestChambers do
+          local bestChamber = bestChambers[bestIndex]
+          if bestChamber.name == chamber.name then
+            best = bestChamber.completedElapsed
+            break
+          end
+        end
+      end
       rows[#rows + 1] = {
         name = chamber.name,
-        elapsed = chamber.completedElapsed,
-        best = bestChamberTime(run, chamber.name),
-        current = chamber.name == currentName and chamber.completedElapsed == nil,
+        elapsed = elapsed,
+        best = best,
+        current = chamber.name == currentName and elapsed == nil,
       }
     end
     return rows
   end
-  local route
-  if run.routeID then
-    route = Data.db.global.routes[run.routeID]
+  return Data:StepRows(run)
+end
+
+local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
+local SAMPLE_CLOCK = 154000
+
+---@param stepRows LDT_StepRow[]
+---@return number|nil
+local function currentBest(stepRows)
+  for index = 1, #stepRows do
+    local row = stepRows[index]
+    if row.current then
+      return row.best
+    end
   end
-  ---@type string[]
-  local steps = {}
-  if route then
-    steps = route.steps
+  return nil
+end
+
+---@param name string
+---@param done number
+---@param total number
+---@param showCounts boolean
+---@return string
+local function sampleStageName(name, done, total, showCounts)
+  if not showCounts then
+    return name
   end
-  local currentName = run.watch and run.watch.routeStep
-  for index = 1, #steps do
-    local stepName = steps[index]
-    local elapsed = run.splits and run.splits[stepName]
-    rows[#rows + 1] = {
-      name = stepName,
-      elapsed = elapsed,
-      best = Data:BestSplit(run, stepName),
-      current = stepName == currentName and elapsed == nil,
-    }
-  end
+  return format("%s (%d/%d)", name, done, total)
+end
+
+---@param showCounts boolean
+---@return LDT_StepRow[]
+local function sampleRows(showCounts)
+  ---@type LDT_StepRow[]
+  local rows = {}
+  ---@type LDT_StepRow
+  local stageOne = { name = sampleStageName("Stage 1", 1, 1, showCounts), elapsed = 84200, best = 90000, current = false }
+  ---@type LDT_ObjectiveLine
+  local openGate = { text = "(1/1) Open the gate", completed = true }
+  ---@type LDT_ObjectiveLine
+  local cultists = { text = "(1/3) Kill the cultists", completed = false }
+  ---@type LDT_ObjectiveLine
+  local ritual = { text = "(40%) Disrupt the ritual", completed = false }
+  ---@type LDT_ObjectiveLine[]
+  local sampleObjectives = { openGate, cultists, ritual }
+  ---@type LDT_StepRow
+  local stageTwo = {
+    name = sampleStageName("Stage 2", 0, 3, showCounts),
+    elapsed = nil,
+    best = 160000,
+    current = true,
+    objectives = sampleObjectives,
+  }
+  ---@type LDT_StepRow
+  local stageThree = { name = sampleStageName("Stage 3", 0, 2, showCounts), elapsed = nil, best = 230000, current = false }
+  ---@type LDT_StepRow
+  local stageFour = { name = sampleStageName("Stage 4", 0, 1, showCounts), elapsed = nil, best = 310000, current = false }
+  ---@type LDT_StepRow
+  local stageFive = { name = sampleStageName("Stage 5", 0, 4, showCounts), elapsed = nil, best = 390000, current = false }
+  rows[1] = stageOne
+  rows[2] = stageTwo
+  rows[3] = stageThree
+  rows[4] = stageFour
+  rows[5] = stageFive
   return rows
 end
 
----@param preview LDT_Preview
----@return { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-function Timer:PreviewRows(preview)
-  ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-  local rows = {}
-  local route
-  if preview.routeID then
-    route = Data.db.global.routes[preview.routeID]
+---@param criteria LDT_RunCriteria
+---@return string|nil
+local function objectiveLabel(criteria)
+  local description = criteria.description or ""
+  local progress
+  if criteria.isWeightedProgress then
+    if criteria.quantity ~= nil then
+      progress = format("%d%%", criteria.quantity)
+    elseif criteria.quantityString and criteria.quantityString ~= "" then
+      progress = criteria.quantityString
+    end
+  elseif criteria.quantity ~= nil and criteria.totalQuantity ~= nil and criteria.totalQuantity > 0 then
+    progress = format("%d/%d", criteria.quantity, criteria.totalQuantity)
+  elseif criteria.quantityString and criteria.quantityString ~= "" then
+    progress = criteria.quantityString
   end
-  ---@type string[]
-  local steps = {}
-  if route then
-    steps = route.steps
+  if progress and progress ~= "" then
+    if description ~= "" then
+      return format("(%s) %s", progress, description)
+    end
+    return format("(%s)", progress)
   end
+  if description == "" then
+    return nil
+  end
+  return description
+end
+
+---@param rows LDT_StepRow[]
+---@param run LDT_Run
+local function fillObjectives(rows, run)
+  local steps = run.steps
+  local stepID = run.watch and run.watch.stepID
+  if not steps or not stepID then
+    return
+  end
+  local criteria
   for index = 1, #steps do
-    local stepName = steps[index]
-    rows[#rows + 1] = {
-      name = stepName,
-      elapsed = nil,
-      best = Data:BestSplitFor(preview.routeID, preview.tier, stepName),
-      current = false,
-    }
+    local step = steps[index]
+    if step.stepID == stepID then
+      criteria = step.criteria
+      break
+    end
   end
-  return rows
+  if not criteria or #criteria == 0 then
+    return
+  end
+  ---@type LDT_ObjectiveLine[]
+  local lines = {}
+  for index = 1, #criteria do
+    local criteriaRow = criteria[index]
+    local label = objectiveLabel(criteriaRow)
+    if label then
+      ---@type LDT_ObjectiveLine
+      local line = { text = label, completed = criteriaRow.completed == true }
+      lines[#lines + 1] = line
+    end
+  end
+  if #lines == 0 then
+    return
+  end
+  for index = 1, #rows do
+    if rows[index].current then
+      rows[index].objectives = lines
+    end
+  end
+end
+
+---@param line LDT_ObjectiveLine
+---@return string
+local function objectiveLineText(line)
+  local atlas = OBJECTIVE_NUB
+  if line.completed then
+    atlas = OBJECTIVE_CHECK
+  end
+  local icon = CreateAtlasMarkup(atlas, OBJECTIVE_ICON, OBJECTIVE_ICON) or ""
+  local textColor = CreateColor(0.85, 0.9, 1)
+  if line.completed then
+    textColor = CreateColor(0.65, 0.85, 0.65)
+  end
+  return format("%s %s", icon, textColor:WrapTextInColorCode(line.text))
+end
+
+---@param stepRows LDT_StepRow[]
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@param showObjectives boolean
+---@return LiqUI_TableData
+local function timetableRows(stepRows, ahead, behind, showObjectives)
+  ---@type LiqUI_TableData
+  local data = {}
+  for index = 1, #stepRows do
+    local model = stepRows[index]
+    local timeText = ""
+    local deltaText = ""
+    if model.elapsed then
+      timeText = Helpers.FormatElapsed(model.elapsed) or ""
+      local delta = 0
+      if model.best then
+        delta = Helpers.ShownDelta(model.elapsed, model.best)
+      end
+      local deltaColor = ahead
+      if delta > 0 then
+        deltaColor = behind
+      end
+      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(Helpers.FormatDelta(delta))
+    end
+    local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
+    if model.best then
+      bestText = Helpers.FormatElapsed(model.best) or ""
+    end
+    ---@type ColorRGBAData|nil
+    local backgroundColor
+    if model.current then
+      backgroundColor = ACTIVE_ROW_COLOR
+    end
+    local objectives = model.objectives
+    local showLines = model.current and showObjectives and objectives and #objectives > 0
+    ---@type LiqUI_TableDataRowExtended
+    local row = {
+      backgroundColor = backgroundColor,
+      -- paddingBottom = showLines and 2 or nil,
+      data = {
+        model.name,
+        deltaText,
+        timeText,
+        bestText,
+      },
+    }
+    data[#data + 1] = row
+    if showLines and objectives then
+      for objectiveIndex = 1, #objectives do
+        ---@type LiqUI_TableDataRowExtended
+        local objectiveRow = {
+          height = OBJECTIVE_ROW_HEIGHT,
+          indent = OBJECTIVE_INDENT,
+          padding = 0,
+          span = true,
+          skipStripe = true,
+          gapBefore = objectiveIndex == 1 and OBJECTIVE_GAP_AFTER or nil,
+          gapAfter = objectiveIndex == #objectives and OBJECTIVE_GAP_AFTER or nil,
+          data = { objectiveLineText(objectives[objectiveIndex]), "", "", "" },
+        }
+        data[#data + 1] = objectiveRow
+      end
+    end
+  end
+  return data
+end
+
+---@param run LDT_Run
+---@param tier number|nil
+---@return string
+local function runTitle(run, tier)
+  local name = run.instance and run.instance.name
+  if not name or name == "" then
+    local placeName = run.place and (run.place.subzone or run.place.zone)
+    if placeName and placeName ~= "" then
+      name = placeName
+    else
+      name = "Delve"
+    end
+  end
+  local variant = run.variant
+  if not variant or variant == "" then
+    local header = run.entrance and run.entrance.header
+    if header and header ~= "" and header ~= name then
+      variant = header
+    end
+  end
+  local title = name
+  if variant and variant ~= name then
+    local withVariant = format("%s - %s", name, variant)
+    if withVariant then
+      title = withVariant
+    end
+  end
+  if tier then
+    local withTier = format("%s (Tier %d)", title, tier)
+    if withTier then
+      title = withTier
+    end
+  end
+  if type(title) ~= "string" or title == "" then
+    return "Delve"
+  end
+  return title
 end
 
 function Timer:Render()
@@ -317,17 +518,22 @@ function Timer:Render()
     local options = Data.db.global.timer
     ---@type LDT_TimerFrame
     local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
-    frame:SetSize(280, 80)
+    frame:SetSize(STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH, HEADER_HEIGHT)
     frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
     frame:SetFrameStrata("HIGH")
     self.frame = frame
 
-    local header = CreateFrame("Button", nil, frame)
-    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -4)
-    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -4)
+    local header = CreateFrame("Frame", nil, frame)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     header:SetHeight(HEADER_HEIGHT)
+    local headerBackground = header:CreateTexture(nil, "BACKGROUND")
+    headerBackground:SetPoint("TOPLEFT", header, "TOPLEFT", 1, -1)
+    headerBackground:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -1, 0)
+    headerBackground:SetColorTexture(0, 0, 0, 1)
+    header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
       frame:StartMoving()
@@ -336,96 +542,95 @@ function Timer:Render()
       frame:StopMovingOrSizing()
       Timer:SaveScreenPoint()
     end)
+    header:SetScript("OnMouseUp", function(_, button)
+      if button == "RightButton" then
+        Timer:OpenMenu(header)
+      end
+    end)
     self.header = header
 
-    local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("LEFT", header, "LEFT", 0, 0)
-    title:SetJustifyH("LEFT")
-    title:SetWordWrap(false)
-    self.title = title
+    local livesIcon = header:CreateTexture(nil, "ARTWORK")
+    livesIcon:SetSize(ICON_SIZE, ICON_SIZE)
+    self.livesIcon = livesIcon
 
-    local closeButton = CreateFrame("Button", nil, header)
-    closeButton:SetSize(ICON_SIZE, ICON_SIZE)
-    closeButton:SetPoint("RIGHT", header, "RIGHT", 0, 0)
-    local closeIcon = closeButton:CreateTexture(nil, "ARTWORK")
-    closeIcon:SetAllPoints()
-    closeIcon:SetAtlas("common-search-clearbutton")
-    closeButton:SetScript("OnClick", function()
-      Timer:SetFrameShown(false, false)
-    end)
-    bindTooltip(closeButton, "Close")
+    local lives = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lives:SetJustifyH("RIGHT")
+    lives:SetWordWrap(false)
+    self.lives = lives
 
-    local settingsButton = CreateFrame("DropdownButton", nil, header)
-    settingsButton:SetSize(ICON_SIZE, ICON_SIZE)
-    settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
-    local settingsIcon = settingsButton:CreateTexture(nil, "ARTWORK")
-    settingsIcon:SetAllPoints()
-    settingsIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
-    settingsButton:SetScript("OnClick", function()
-      Timer:OpenMenu(settingsButton)
-    end)
-    bindTooltip(settingsButton, "Settings")
+    local deathsIcon = header:CreateTexture(nil, "ARTWORK")
+    deathsIcon:SetSize(ICON_SIZE, ICON_SIZE)
+    self.deathsIcon = deathsIcon
 
-    local historyButton = CreateFrame("Button", nil, header)
-    historyButton:SetSize(ICON_SIZE, ICON_SIZE)
-    historyButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
-    local historyIcon = historyButton:CreateTexture(nil, "ARTWORK")
-    historyIcon:SetAllPoints()
-    historyIcon:SetTexture(Constants.media.Icon)
-    historyButton:SetScript("OnClick", function()
-      if addon.Module_History then
-        addon.Module_History:ToggleWindow()
-      end
-    end)
-    bindTooltip(historyButton, "History")
-
-    local runButton = CreateFrame("Button", nil, header)
-    runButton:SetSize(ICON_SIZE, ICON_SIZE)
-    runButton:SetPoint("RIGHT", historyButton, "LEFT", -ICON_GAP, 0)
-    local runIcon = runButton:CreateTexture(nil, "ARTWORK")
-    runIcon:SetAllPoints()
-    runIcon:SetAtlas("poi-door-arrow-down")
-    runButton:SetScript("OnClick", function()
-      if addon.Module_Run then
-        addon.Module_Run:ShowRun(Data:GetActiveRun())
-      end
-    end)
-    bindTooltip(runButton, "Run")
-
-    local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    deaths:SetPoint("RIGHT", runButton, "LEFT", -8, 0)
+    local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     deaths:SetJustifyH("RIGHT")
+    deaths:SetWordWrap(false)
     self.deaths = deaths
-    title:SetPoint("RIGHT", deaths, "LEFT", -8, 0)
 
-    local spells = CreateFrame("Frame", nil, frame)
-    spells:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
-    spells:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -2)
+    local spells = CreateFrame("Frame", nil, header)
     spells:SetHeight(ICON_SIZE)
     self.spells = spells
     ---@type LDT_TimerSpell[]
     self.spellButtons = {}
 
-    local clock = frame:CreateFontString(nil, "OVERLAY")
-    clock:SetJustifyH("LEFT")
+    local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    title:SetPoint("LEFT", header, "LEFT", HEADER_PAD, 0)
+    title:SetPoint("RIGHT", spells, "LEFT", -HEADER_PAD, 0)
+    title:SetJustifyH("LEFT")
+    title:SetWordWrap(false)
+    self.title = title
+
+    ---@type LiqUI_TableOptions
+    local tableOptions = {
+      name = addon.name .. "Timer",
+      header = {
+        enabled = true,
+        sticky = false,
+        height = ROW_HEIGHT,
+        fontObject = "GameFontNormal",
+        backgroundAlpha = 0,
+      },
+      rowStyle = {
+        height = ROW_HEIGHT,
+        highlight = false,
+        striped = true,
+        stripeColor = { r = 1, g = 1, b = 1, a = 0.08 },
+      },
+      cellStyle = {
+        padding = CELL_PADDING,
+        highlight = false,
+        fontObject = "GameFontHighlight",
+      },
+      columns = {
+        { id = "stage", headerText = "Stages", width = STAGES_WIDTH, align = "LEFT" },
+        { id = "delta", headerText = "Delta", width = DELTA_WIDTH, align = "RIGHT" },
+        { id = "time", headerText = "Time", width = TIME_WIDTH, align = "RIGHT" },
+        { id = "best", headerText = "Best", width = BEST_WIDTH, align = "RIGHT" },
+      },
+    }
+    local timetable = LiqUI:NewElement("Table", tableOptions)
+    timetable:SetParent(frame)
+    timetable:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    self.table = timetable
+
+    local clockFrame = CreateFrame("Frame", nil, frame)
+    clockFrame:SetPoint("TOPLEFT", timetable, "BOTTOMLEFT", 0, 0)
+    clockFrame:SetPoint("TOPRIGHT", timetable, "BOTTOMRIGHT", 0, 0)
+    clockFrame:SetHeight(CLOCK_HEIGHT)
+    self.clockFrame = clockFrame
+
+    local clock = clockFrame:CreateFontString(nil, "OVERLAY")
+    clock:SetPoint("RIGHT", clockFrame, "RIGHT", -HEADER_PAD, 0)
+    clock:SetJustifyH("RIGHT")
+    clock:SetWordWrap(false)
     self.clock = clock
 
-    local phrase = frame:CreateFontString(nil, "OVERLAY")
-    phrase:SetJustifyH("LEFT")
+    local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
+    phrase:SetPoint("LEFT", clockFrame, "LEFT", HEADER_PAD, 0)
+    phrase:SetPoint("RIGHT", clock, "LEFT", -12, 0)
+    phrase:SetJustifyH("RIGHT")
+    phrase:SetWordWrap(false)
     self.phrase = phrase
-
-    local timeHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    timeHeader:SetJustifyH("RIGHT")
-    timeHeader:SetText("Time")
-    self.timeHeader = timeHeader
-
-    local bestHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    bestHeader:SetJustifyH("RIGHT")
-    bestHeader:SetText("Best")
-    self.bestHeader = bestHeader
-
-    ---@type LDT_TimerRow[]
-    self.rows = {}
 
     frame:Hide()
     frame:SetScript("OnShow", function(shownFrame)
@@ -438,29 +643,49 @@ function Timer:Render()
       hiddenFrame:SetScript("OnUpdate", nil)
     end)
   end
+
   local frame = self.frame
   if not frame or not frame:IsShown() then
     return
   end
+
+  local header = self.header
   local titleText = self.title
   local deathsText = self.deaths
+  local deathsIcon = self.deathsIcon
+  local livesText = self.lives
+  local livesIcon = self.livesIcon
   local spells = self.spells
   local spellButtons = self.spellButtons
-  local clock = self.clock
+  local timetable = self.table
+  local clockFrame = self.clockFrame
+  local clockString = self.clock
   local phrase = self.phrase
-  local timeHeader = self.timeHeader
-  local bestHeader = self.bestHeader
-  local rows = self.rows
-  if not titleText or not deathsText or not spells or not spellButtons or not clock or not phrase or not timeHeader or not bestHeader or not rows then
+  if
+    not header
+    or not titleText
+    or not deathsText
+    or not deathsIcon
+    or not livesText
+    or not livesIcon
+    or not spells
+    or not spellButtons
+    or not timetable
+    or not clockFrame
+    or not clockString
+    or not phrase
+  then
     return
   end
+
   local options = Data.db.global.timer
   local inside = Capture:IsInside() or Capture:InInstance()
-  local run = inside and Data:GetActiveRun() or nil
-  local preview = (not run) and Capture.preview or nil
-  local fontSize = options.fontSize or 12
+  local activeRun = inside and Data:GetActiveRun() or nil
   local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
   local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
+  local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
+  local behind = options.behindColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+
   frame:SetBackdrop({
     bgFile = "Interface/Buttons/WHITE8X8",
     edgeFile = "Interface/Buttons/WHITE8X8",
@@ -469,41 +694,38 @@ function Timer:Render()
   frame:SetBackdropColor(background.r, background.g, background.b, background.a)
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
+  local headerInfo
   local title = "Delve"
-  if run then
-    local delve = run.instance and run.instance.name
-    if not delve or delve == "" then
-      delve = run.place and (run.place.subzone or run.place.zone) or "Delve"
+  if activeRun then
+    if not Capture:Ended(activeRun) then
+      headerInfo = Capture:ApplyDelveHeader(activeRun)
     end
-    local tier = Helpers.RunTier(run)
-    if tier then
-      title = format("%s  Tier %d", delve, tier)
-    else
-      title = delve
-    end
-    deathsText:SetText(format("Deaths %d", run.deaths or 0))
-  elseif preview then
-    local delve = preview.name or "Delve"
-    if preview.variant then
-      delve = format("%s  %s", delve, preview.variant)
-    end
-    if preview.tier then
-      title = format("%s  Tier %d", delve, preview.tier)
-    else
-      title = delve
-    end
-    deathsText:SetText("")
+    title = runTitle(activeRun, Helpers.RunTier(activeRun))
   else
-    deathsText:SetText("")
+    title = "The Shadow Enclave (Tier 11)"
   end
+  titleText:SetFont(NUMBER_FONT, TITLE_SIZE, "")
+  titleText:SetTextColor(1, 1, 1)
   titleText:SetText(title)
-  deathsText:SetFont(NUMBER_FONT, fontSize, "")
+  local deathsCount
+  local livesCount
+  if activeRun then
+    deathsCount = activeRun.deaths
+    livesCount = activeRun.lives
+  else
+    deathsCount = 1
+    livesCount = 4
+  end
+  local countAnchor, countPoint, countOffset = placeCount(livesIcon, livesText, HEART_ATLAS, livesCount, header, "RIGHT", -HEADER_PAD)
+  countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, SKULL_ATLAS, deathsCount, countAnchor, countPoint, countOffset)
 
   local spellIDs = {}
-  if run and run.entrance and run.entrance.activeSpellIDs then
-    spellIDs = run.entrance.activeSpellIDs
-  elseif preview and preview.activeSpellIDs then
-    spellIDs = preview.activeSpellIDs
+  if headerInfo and #headerInfo.spellIDs > 0 then
+    spellIDs = headerInfo.spellIDs
+  elseif activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
+    spellIDs = activeRun.entrance.activeSpellIDs
+  elseif not activeRun then
+    spellIDs = SAMPLE_SPELLS
   end
   local spellCount = 0
   for index = 1, #spellIDs do
@@ -537,7 +759,7 @@ function Timer:Render()
         spell.spellID = spellID
         spell.icon:SetTexture(texture)
         spell.button:ClearAllPoints()
-        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (ICON_SIZE + 4), 0)
+        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (ICON_SIZE + ICON_GAP), 0)
         spell.button:Show()
       end
     end
@@ -545,158 +767,80 @@ function Timer:Render()
   for index = spellCount + 1, #spellButtons do
     spellButtons[index].button:Hide()
   end
-  local spellHeight = 0
+  local spellWidth = 0
   if spellCount > 0 then
-    spellHeight = ICON_SIZE + 6
+    spellWidth = spellCount * ICON_SIZE + (spellCount - 1) * ICON_GAP
   end
-  spells:SetHeight(math.max(spellHeight, 1))
+  local spellOffset = countOffset
+  if spellWidth > 0 and (deathsCount ~= nil or livesCount ~= nil) then
+    spellOffset = -SPELL_GAP
+  end
+  spells:SetWidth(spellWidth)
+  spells:ClearAllPoints()
+  spells:SetPoint("RIGHT", countAnchor, countPoint, spellOffset, 0)
 
-  local clockSize = fontSize + 8
-  clock:SetFont(NUMBER_FONT, clockSize, "")
-  phrase:SetFont(NUMBER_FONT, fontSize, "")
-  timeHeader:SetFont(NUMBER_FONT, fontSize, "")
-  bestHeader:SetFont(NUMBER_FONT, fontSize, "")
-  timeHeader:SetTextColor(0.7, 0.7, 0.7)
-  bestHeader:SetTextColor(0.7, 0.7, 0.7)
+  local stepRows = {}
+  if activeRun then
+    stepRows = self:StepRows(activeRun)
+    if options.showObjectives ~= false then
+      fillObjectives(stepRows, activeRun)
+    end
+  else
+    stepRows = sampleRows(options.showObjectiveCounts ~= false)
+  end
 
   local clockValue
   local phraseText
-  local phraseColor = options.aheadColor
-  if not phraseColor then
-    phraseColor = { r = 0.2, g = 1, b = 0.2, a = 1 }
-  end
-  if run and Capture.clockReady then
-    local frozen = run.finishedElapsed or run.bossElapsed
+  local phraseColor = ahead
+  if activeRun and Capture.clockReady then
+    local frozen = Helpers.Duration(activeRun)
     if frozen then
-      clockValue = Helpers.CompletionTime(run) or frozen
-    elseif run.result == Constants.runResult.Active then
-      clockValue = Capture:Elapsed(run)
+      clockValue = frozen
     else
-      clockValue = run.endedElapsed
+      clockValue = Capture:Elapsed(activeRun)
     end
     local compare
     if frozen then
-      local bestRun = Helpers.BestRun(run)
-      compare = bestRun and Helpers.CompletionTime(bestRun) or nil
-    elseif run.watch and run.watch.routeStep then
-      compare = Data:BestSplit(run, run.watch.routeStep)
+      compare = Helpers.BestDuration(activeRun)
+    else
+      compare = currentBest(stepRows)
     end
     if clockValue and compare then
-      local gap = compare - clockValue
-      if gap >= 0 then
-        phraseText = format("%s faster", Helpers.FormatElapsed(gap))
-        phraseColor = options.aheadColor
-      else
-        phraseText = format("%s slower", Helpers.FormatElapsed(-gap))
-        phraseColor = options.behindColor
+      local delta = Helpers.ShownDelta(clockValue, compare)
+      phraseText = Helpers.FormatDelta(delta)
+      if delta > 0 then
+        phraseColor = behind
       end
     end
-  elseif preview and preview.bestFinish then
-    clockValue = preview.bestFinish
+  elseif not activeRun then
+    clockValue = SAMPLE_CLOCK
+    local compare = currentBest(stepRows)
+    if compare then
+      phraseText = Helpers.FormatDelta(Helpers.ShownDelta(SAMPLE_CLOCK, compare))
+    end
   end
+  clockString:SetFont(NUMBER_FONT, CLOCK_SIZE, "")
+  phrase:SetFont(NUMBER_FONT, PHRASE_SIZE, "")
   if clockValue then
-    clock:SetText(Helpers.FormatElapsed(clockValue))
-  elseif preview then
-    clock:SetText("")
+    clockString:SetText(Helpers.FormatElapsed(clockValue))
   else
-    clock:SetText("0:00.0")
+    clockString:SetText("0:00.00")
   end
   phrase:SetText(phraseText or "")
   phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
 
-  local rightPad = 8
-  local bestRight = -rightPad
-  local timeRight = -(rightPad + TIME_WIDTH + COLUMN_GAP)
-  local nameRight = timeRight - TIME_WIDTH - 8
-  local clockY = -(4 + HEADER_HEIGHT + spellHeight)
-  clock:ClearAllPoints()
-  clock:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, clockY)
-  phrase:ClearAllPoints()
-  phrase:SetPoint("LEFT", clock, "RIGHT", 12, 0)
-  local headerY = clockY - clockSize - 6
-  timeHeader:ClearAllPoints()
-  timeHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, headerY)
-  timeHeader:SetWidth(TIME_WIDTH)
-  bestHeader:ClearAllPoints()
-  bestHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, headerY)
-  bestHeader:SetWidth(TIME_WIDTH)
+  timetable:SetData(timetableRows(stepRows, ahead, behind, options.showObjectives ~= false))
 
-  local stepRows = {}
-  if run then
-    stepRows = self:StepRows(run)
-  elseif preview then
-    stepRows = self:PreviewRows(preview)
+  local tableWidth, tableHeight = timetable:GetSize()
+  if tableWidth < 1 then
+    tableWidth = STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH
   end
-  local y = headerY - fontSize - 2
-  for index = 1, #stepRows do
-    local model = stepRows[index]
-    local row = rows[index]
-    if not row then
-      row = self:CreateRow(frame)
-      rows[index] = row
-    end
-    row.name:SetFont(NUMBER_FONT, fontSize, "")
-    row.time:SetFont(NUMBER_FONT, fontSize, "")
-    row.best:SetFont(NUMBER_FONT, fontSize, "")
-    row.name:SetText(model.name)
-    if model.current then
-      row.name:SetTextColor(1, 0.82, 0)
-    else
-      row.name:SetTextColor(0.9, 0.9, 0.9)
-    end
-    if model.elapsed then
-      row.time:SetText(Helpers.FormatElapsed(model.elapsed))
-      if model.best and model.elapsed < model.best - 0.05 then
-        row.time:SetTextColor(options.aheadColor.r, options.aheadColor.g, options.aheadColor.b)
-      elseif model.best and model.elapsed > model.best + 0.05 then
-        row.time:SetTextColor(options.behindColor.r, options.behindColor.g, options.behindColor.b)
-      else
-        row.time:SetTextColor(0.95, 0.95, 0.95)
-      end
-    else
-      row.time:SetText("")
-    end
-    if model.best then
-      row.best:SetText(Helpers.FormatElapsed(model.best))
-      row.best:SetTextColor(0.55, 0.55, 0.55)
-    else
-      row.best:SetText("")
-    end
-    row.highlight:ClearAllPoints()
-    row.highlight:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, y)
-    row.highlight:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, y)
-    row.highlight:SetHeight(ROW_HEIGHT)
-    if model.current then
-      row.highlight:Show()
-    else
-      row.highlight:Hide()
-    end
-    row.name:ClearAllPoints()
-    row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, y)
-    row.name:SetPoint("TOPRIGHT", frame, "TOPRIGHT", nameRight, y)
-    row.name:SetHeight(ROW_HEIGHT)
-    row.best:ClearAllPoints()
-    row.best:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, y)
-    row.best:SetWidth(TIME_WIDTH)
-    row.best:SetHeight(ROW_HEIGHT)
-    row.time:ClearAllPoints()
-    row.time:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, y)
-    row.time:SetWidth(TIME_WIDTH)
-    row.time:SetHeight(ROW_HEIGHT)
-    row.name:Show()
-    row.time:Show()
-    row.best:Show()
-    y = y - ROW_HEIGHT
+  if tableHeight < 1 then
+    tableHeight = ROW_HEIGHT
   end
-  for index = #stepRows + 1, #rows do
-    local row = rows[index]
-    row.name:Hide()
-    row.time:Hide()
-    row.best:Hide()
-    row.highlight:Hide()
-  end
-  frame:SetWidth(280)
-  frame:SetHeight(math.max(80, -y + 8))
+  timetable:SetSize(tableWidth, tableHeight)
+  clockFrame:SetHeight(CLOCK_HEIGHT)
+  frame:SetSize(tableWidth, HEADER_HEIGHT + tableHeight + CLOCK_HEIGHT)
 end
 
 function Timer:ShowRun()

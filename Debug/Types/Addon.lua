@@ -16,14 +16,14 @@
 ---@field Constants LDT_Constants
 ---@field Helpers LDT_Helpers
 ---@field Capture LDT_Capture
----@field ApiLog LDT_ApiLog
+---@field Log LDT_Log
 ---@field logger LiqUI_LoggerHandle
 ---@field Module_Timer LDT_Module_Timer
 ---@field Module_Run LDT_Module_Run
 ---@field Module_History LDT_Module_History
 ---@field Debug LDT_Debug|nil
 
----@class LDT_ApiLog
+---@class LDT_Log
 ---@field lastPacked string|nil
 ---@field lastLines string[]|nil
 
@@ -31,21 +31,35 @@
 
 ---@class LDT_Module_Timer : AceModule
 ---@field frame LDT_TimerFrame|nil
----@field title FontString|nil
 ---@field header Frame|nil
----@field clock FontString|nil
----@field phrase FontString|nil
+---@field title FontString|nil
 ---@field deaths FontString|nil
+---@field deathsIcon Texture|nil
+---@field lives FontString|nil
+---@field livesIcon Texture|nil
 ---@field spells Frame|nil
 ---@field spellButtons LDT_TimerSpell[]|nil
----@field timeHeader FontString|nil
----@field bestHeader FontString|nil
----@field rows LDT_TimerRow[]|nil
+---@field table LiqUI_TableInstance|nil
+---@field clockFrame Frame|nil
+---@field clock FontString|nil
+---@field phrase FontString|nil
 
 ---@class LDT_Module_Run : AceModule
 ---@field window LiqUI_WindowInstance|nil
----@field panels table<LDT_SectionId, LDT_WidgetPanel>|nil
+---@field summary LiqUI_TableInstance|nil
+---@field stages LiqUI_TableInstance|nil
+---@field boons LiqUI_TableInstance|nil
+---@field gains LiqUI_TableInstance|nil
+---@field companion LDT_RunCompanion|nil
+---@field companionHeader LDT_RunBlockHeader|nil
+---@field boonsHeader LDT_RunBlockHeader|nil
+---@field gainsHeader LDT_RunBlockHeader|nil
+---@field summaryData LiqUI_TableData|nil
+---@field stagesData LiqUI_TableData|nil
+---@field boonsData LiqUI_TableData|nil
+---@field gainsData LiqUI_TableData|nil
 ---@field pinnedRun LDT_Run|nil
+---@field showingRun boolean|nil
 
 ---@class LDT_Module_History : AceModule
 ---@field window LiqUI_WindowInstance|nil
@@ -54,12 +68,12 @@
 ---@class LDT_Capture
 ---@field ready boolean
 ---@field clockReady boolean
+---@field clockOrigin number
 ---@field reloadNoted boolean
 ---@field zoneKnown boolean
 ---@field entranceNoted boolean
 ---@field timerFromGame boolean|nil
----@field timerContext "run"|"preview"|nil
----@field preview LDT_Preview|nil
+---@field timerContext "run"|nil
 ---@field trackerHidden boolean|nil
 ---@field onRunStored function|nil
 

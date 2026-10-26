@@ -30,7 +30,7 @@ Modules\Run.lua
 Modules\History.lua
 
 #@debug@
-Debug\ApiLog.lua
+Debug\Log.lua
 Debug\Types\Addon.lua
 Debug\Types\Constants.lua
 Debug\Types\Data.lua

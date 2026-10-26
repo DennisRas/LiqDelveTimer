@@ -13,7 +13,23 @@ local Helpers = addon.Helpers
 function Debug:OnChatCommand(input)
   ---@type string?
   local command = addon.Core:GetArgs(input or "", 1)
-  if not command or command:lower() ~= "dump" then
+  if type(command) ~= "string" then
+    return false
+  end
+  local token = command:lower()
+  local stepID
+  if type(select(2, addon.Core:GetArgs(input or "", 2))) == "string" then
+    stepID = tonumber(select(2, addon.Core:GetArgs(input or "", 2)))
+  end
+  if token == "probe" then
+    if not stepID or not addon.Log then
+      addon.Core:Print(format("Usage: /%s probe <stepID>", addon.name:lower()))
+      return true
+    end
+    addon.Log:ReadStep(stepID)
+    return true
+  end
+  if token ~= "dump" then
     return false
   end
   local run = Data:GetActiveRun() or Data:GetLatestRun()

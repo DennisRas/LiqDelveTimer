@@ -22,11 +22,11 @@ function Core:OnInitialize()
 
   self:RegisterChatCommand(addon.name:lower(), "OnChatCommand")
   Data:Initialize()
-  Data:MigrateDB()
   addon.logger = LiqUI:NewLogger({
     name = addon.name,
     title = "Delve Log",
     storage = Data.db.global.logs,
+    maxLines = 10000,
   })
 
   ---@param displayFrame Frame
@@ -34,8 +34,8 @@ function Core:OnInitialize()
   local function onLauncherClick(displayFrame, mouseButton)
     local shifted = IsShiftKeyDown()
     if shifted then
-      if addon.Module_History then
-        addon.Module_History:ToggleWindow()
+      if addon.Module_Timer then
+        addon.Module_Timer:ToggleWindow()
       end
       return
     end
@@ -45,17 +45,17 @@ function Core:OnInitialize()
       end
       return
     end
-    if addon.Module_Timer then
-      addon.Module_Timer:ToggleWindow()
+    if addon.Module_History then
+      addon.Module_History:ToggleWindow()
     end
   end
 
   ---@param tooltip GameTooltip
   local function showLauncherTooltip(tooltip)
     tooltip:SetText(addon.title, 1, 1, 1)
-    tooltip:AddLine("|cff00ff00Left click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    tooltip:AddLine("|cff00ff00Left click|r to open History.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
     tooltip:AddLine("|cff00ff00Right click|r to open timer settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
-    tooltip:AddLine("|cff00ff00Shift click|r to open History.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    tooltip:AddLine("|cff00ff00Shift click|r to show or hide the timer.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
   end
 
   ---@type LibDataBroker.DataObject
@@ -76,9 +76,9 @@ function Core:OnEnable()
     return
   end
   Capture:Register()
-  if addon.logger and addon.ApiLog then
-    addon.ApiLog:Log("log", "ready")
-    addon.ApiLog:LogState()
+  if addon.logger and addon.Log then
+    addon.Log:Log("log", "ready")
+    addon.Log:LogState()
     addon.logger:Show()
   end
 end
@@ -107,7 +107,7 @@ function Core:OnChatCommand(input)
   if addon.Debug and addon.Debug:OnChatCommand(input) then
     return
   end
-  self:Print(format("Usage: /%s [history|log]", addon.name:lower()))
+  self:Print(format("Usage: /%s [history|log|probe stepID]", addon.name:lower()))
 end
 
 function Core:ToggleWindow()

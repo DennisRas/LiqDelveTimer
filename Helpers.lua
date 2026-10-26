@@ -5,9 +5,6 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
-local LiqUI = addon.libs.LiqUI
-local TableForEach = LiqUI.Utils.TableForEach
-
 ---@param value string
 ---@return number|nil, boolean
 function Helpers.BoonAmount(value)
@@ -32,25 +29,42 @@ function Helpers.FormatBoonAmount(amount)
   return text .. "%"
 end
 
----@param elapsed number|nil
----@return string
-function Helpers.FormatElapsed(elapsed)
-  local secondsElapsed = 0
-  if elapsed then
-    if elapsed >= 0 then
-      secondsElapsed = elapsed
-    end
+---@param milliseconds number|nil
+---@return number
+function Helpers.Shown(milliseconds)
+  local ms = milliseconds or 0
+  local sign = 1
+  if ms < 0 then
+    sign = -1
+    ms = -ms
   end
-  local tenths = math.floor((secondsElapsed * 10) % 10)
-  local whole = math.floor(secondsElapsed)
+  return sign * math.floor(ms / 10 + 0.5) * 10
+end
+
+---@param left number
+---@param right number
+---@return number
+function Helpers.ShownDelta(left, right)
+  return Helpers.Shown(left) - Helpers.Shown(right)
+end
+
+---@param milliseconds number|nil
+---@return string
+function Helpers.FormatElapsed(milliseconds)
+  local shown = Helpers.Shown(milliseconds)
+  if shown < 0 then
+    shown = -shown
+  end
+  local hundredths = math.floor(shown / 10) % 100
+  local whole = math.floor(shown / 1000)
   local seconds = whole % 60
   local minutes = math.floor(whole / 60)
   local hours = math.floor(minutes / 60)
   minutes = minutes % 60
   if hours > 0 then
-    return format("%d:%02d:%02d.%d", hours, minutes, seconds, tenths)
+    return format("%d:%02d:%02d.%02d", hours, minutes, seconds, hundredths)
   end
-  return format("%d:%02d.%d", minutes, seconds, tenths)
+  return format("%d:%02d.%02d", minutes, seconds, hundredths)
 end
 
 ---@param copper number|nil
@@ -77,14 +91,64 @@ function Helpers.FormatDelta(delta)
   if not delta then
     return ""
   end
+  local shown = Helpers.Shown(delta)
   local sign = "+"
-  if delta < -0.05 then
+  if shown < 0 then
     sign = "-"
-    delta = -delta
-  elseif delta <= 0.05 then
-    return Helpers.FormatElapsed(0)
+    shown = -shown
   end
-  return sign .. Helpers.FormatElapsed(delta)
+  local text = format("%s%s", sign, Helpers.FormatElapsed(shown))
+  if text then
+    return text
+  end
+  return ""
+end
+
+---@param result string|nil
+---@return boolean
+function Helpers.IsCleared(result)
+  return result == addon.Constants.runResult.Completed or result == addon.Constants.runResult.PersonalBest or result == "complete"
+end
+
+---@param result string|nil
+---@return boolean
+function Helpers.IsAbandoned(result)
+  return result == addon.Constants.runResult.Abandoned or result == "left"
+end
+
+---@param result string|nil
+---@return string
+function Helpers.ResultLabel(result)
+  if result == addon.Constants.runResult.PersonalBest then
+    return "Personal Best"
+  end
+  if Helpers.IsCleared(result) then
+    return "Completed"
+  end
+  if Helpers.IsAbandoned(result) then
+    return "Abandoned"
+  end
+  if result == addon.Constants.runResult.Active then
+    return "In progress"
+  end
+  return ""
+end
+
+---@param result string|nil
+---@return number, number, number
+function Helpers.ResultColor(result)
+  if result == addon.Constants.runResult.PersonalBest then
+    local timer = addon.Data.db and addon.Data.db.global.timer
+    local color = timer and timer.aheadColor
+    if color then
+      return color.r, color.g, color.b
+    end
+    return 0.35, 0.9, 0.5
+  end
+  if Helpers.IsAbandoned(result) then
+    return 1, 0.35, 0.35
+  end
+  return 0.95, 0.95, 0.95
 end
 
 ---@param run LDT_Run
@@ -99,27 +163,31 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.CompletionTime(run)
-  if run.finishedElapsed then
-    return run.finishedElapsed
+function Helpers.Duration(run)
+  if not run.endedAt then
+    return nil
   end
-  if run.bossElapsed then
-    return run.bossElapsed
+  return run.endedAt - run.startedAt
+end
+
+---@param milliseconds number
+---@return string
+function Helpers.FormatDate(milliseconds)
+  local text = date("%Y-%m-%d %H:%M", math.floor(milliseconds / 1000))
+  if type(text) ~= "string" then
+    return ""
   end
-  if run.result ~= addon.Constants.runResult.Active and run.endedElapsed then
-    return run.endedElapsed
-  end
-  return nil
+  return text
 end
 
 ---@param run LDT_Run
 ---@return LDT_Run|nil
 function Helpers.BestRun(run)
-  local character = addon.Data:GetCharacter()
   local instance = run.instance
-  if not character or not instance then
+  if not instance then
     return nil
   end
+  local scenarioID = run.scenarioID
   local tier = Helpers.RunTier(run)
   if not tier then
     return nil
@@ -128,33 +196,49 @@ function Helpers.BestRun(run)
   local name = instance.name
   local best
   local bestTime
-  TableForEach(character.runs, function(candidate)
-    if candidate == run or candidate.result ~= addon.Constants.runResult.Complete then
+  addon.Data:ForEachRun(function(saved)
+    if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.RunTier(candidate) ~= tier then
+    if Helpers.RunTier(saved) ~= tier then
       return
     end
-    local candidateInstance = candidate.instance
-    local samePlace = false
-    if mapID and candidateInstance and candidateInstance.mapID == mapID then
-      samePlace = true
-    elseif name and name ~= "" and candidateInstance and candidateInstance.name == name then
-      samePlace = true
+    if scenarioID then
+      if saved.scenarioID ~= scenarioID then
+        return
+      end
+    else
+      local savedInstance = saved.instance
+      local samePlace = false
+      if mapID and savedInstance and savedInstance.mapID == mapID then
+        samePlace = true
+      elseif name and name ~= "" and savedInstance and savedInstance.name == name then
+        samePlace = true
+      end
+      if not samePlace then
+        return
+      end
     end
-    if not samePlace then
-      return
-    end
-    local time = Helpers.CompletionTime(candidate)
+    local time = Helpers.Duration(saved)
     if not time then
       return
     end
     if not bestTime or time < bestTime then
-      best = candidate
+      best = saved
       bestTime = time
     end
   end)
   return best
+end
+
+---@param run LDT_Run
+---@return number|nil
+function Helpers.BestDuration(run)
+  local best = run.best
+  if not best or not best.endedAt or not best.startedAt then
+    return nil
+  end
+  return best.endedAt - best.startedAt
 end
 
 local listedCurrencyIDs

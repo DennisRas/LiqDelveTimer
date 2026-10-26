@@ -10,6 +10,28 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 
+local HISTORY_MAX_BODY = 420
+
+---@param text string
+---@param red number
+---@param green number
+---@param blue number
+---@return string
+local function colorText(text, red, green, blue)
+  local colored = format("|cff%02x%02x%02x%s|r", math.floor(red * 255 + 0.5), math.floor(green * 255 + 0.5), math.floor(blue * 255 + 0.5), text)
+  if colored then
+    return colored
+  end
+  return text
+end
+
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
+---@return boolean
+local function compareCharacter(rowA, rowB)
+  return strcmputf8i(rowA.character, rowB.character) < 0
+end
+
 ---@param rowA LDT_HistoryTableRow
 ---@param rowB LDT_HistoryTableRow
 ---@return boolean
@@ -22,6 +44,13 @@ end
 ---@return boolean
 local function compareDelve(rowA, rowB)
   return strcmputf8i(rowA.delve, rowB.delve) < 0
+end
+
+---@param rowA LDT_HistoryTableRow
+---@param rowB LDT_HistoryTableRow
+---@return boolean
+local function compareTier(rowA, rowB)
+  return rowA.tier < rowB.tier
 end
 
 ---@param rowA LDT_HistoryTableRow
@@ -45,18 +74,6 @@ local function compareStartedDescending(rowA, rowB)
   return rowA.startedAt > rowB.startedAt
 end
 
----@param run LDT_Run
----@return number
-local function activeElapsed(run)
-  if addon.Capture.clockReady and run.result == Constants.runResult.Active then
-    return addon.Capture:Elapsed(run)
-  end
-  if run.endedElapsed then
-    return run.endedElapsed
-  end
-  return 0
-end
-
 function Module:Render()
   if not self.window then
     local windows = Data.db.global.liqui.windows
@@ -66,7 +83,7 @@ function Module:Render()
       storage = windows.History,
       title = "History",
       icon = Constants.media.Icon,
-      width = 560,
+      width = 740,
       height = 420,
       onShow = function()
         Module:Render()
@@ -82,21 +99,31 @@ function Module:Render()
       rowStyle = { height = sizes.row, striped = true },
       columns = {
         {
-          id = "when",
-          headerText = "When",
-          width = 150,
+          id = "tier",
+          headerText = "Tier",
+          width = 52,
+          align = "CENTER",
           sorting = {
             enabled = true,
-            compare = compareStartedAscending,
+            compare = compareTier,
           },
         },
         {
           id = "delve",
           headerText = "Delve",
-          width = 190,
+          width = 170,
           sorting = {
             enabled = true,
             compare = compareDelve,
+          },
+        },
+        {
+          id = "character",
+          headerText = "Character",
+          width = 130,
+          sorting = {
+            enabled = true,
+            compare = compareCharacter,
           },
         },
         {
@@ -111,10 +138,20 @@ function Module:Render()
         {
           id = "time",
           headerText = "Time",
-          width = 100,
+          width = 90,
+          align = "RIGHT",
           sorting = {
             enabled = true,
             compare = compareDuration,
+          },
+        },
+        {
+          id = "when",
+          headerText = "Date",
+          width = 140,
+          sorting = {
+            enabled = true,
+            compare = compareStartedAscending,
           },
         },
       },
@@ -132,19 +169,9 @@ function Module:Render()
   if not self.window:IsShown() or not self.table then
     return
   end
-  local character = Data:GetCharacter()
-  local runs = character and character.runs or {}
-  if #runs == 0 then
-    self.table:Hide()
-    self.window:ShowOverlay("No delve runs yet.")
-    return
-  end
-  self.window:HideOverlay()
-  self.table:Show()
   ---@type LDT_HistoryTableRow[]
   local data = {}
-  for index = #runs, 1, -1 do
-    local run = runs[index]
+  Data:ForEachRun(function(run)
     local delve = "Delve"
     local instance = run.instance
     if instance then
@@ -153,30 +180,50 @@ function Module:Render()
         delve = instanceName
       end
     end
-    local duration = Helpers.CompletionTime(run)
-    if not duration then
-      if run.result == Constants.runResult.Active then
-        duration = activeElapsed(run)
-      else
-        duration = run.endedElapsed or 0
+    local inProgress = run.endedAt == nil
+    local duration = Helpers.Duration(run) or 0
+    local whenText = Helpers.FormatDate(run.startedAt)
+    local characterName = ""
+    local characterText = ""
+    local character = run.character
+    if character and character.name and character.name ~= "" then
+      characterName = character.name
+      characterText = characterName
+      local classFile = character.classFile
+      if classFile then
+        local classColor = C_ClassColor.GetClassColor(classFile)
+        if classColor and classColor.r and classColor.g and classColor.b then
+          characterText = colorText(characterName, classColor.r, classColor.g, classColor.b)
+        end
       end
     end
-    local whenValue = date("%Y-%m-%d %H:%M", run.startedAt)
-    local whenText = ""
-    if type(whenValue) == "string" then
-      whenText = whenValue
+    local tier = Helpers.RunTier(run) or 0
+    local tierText = "-"
+    if tier > 0 then
+      tierText = tostring(tier)
+    end
+    local label = Helpers.ResultLabel(run.result)
+    local red, green, blue = Helpers.ResultColor(run.result)
+    local resultText = colorText(label, red, green, blue)
+    local durationText = "-"
+    if not inProgress then
+      durationText = Helpers.FormatElapsed(duration)
     end
     ---@type LDT_HistoryTableRow
     local row = {
-      startedAt = run.startedAt,
+      tier = tier,
       delve = delve,
-      result = run.result,
+      character = characterName,
+      startedAt = run.startedAt,
+      result = label,
       duration = duration,
       data = {
-        whenText,
+        tierText,
         delve,
-        tostring(run.result),
-        Helpers.FormatElapsed(duration),
+        characterText,
+        resultText,
+        durationText,
+        whenText,
       },
       onClick = function()
         if addon.Module_Run then
@@ -185,8 +232,25 @@ function Module:Render()
       end,
     }
     data[#data + 1] = row
+  end)
+  if #data == 0 then
+    self.table:Hide()
+    self.window:ShowOverlay("No delve runs yet.")
+    return
   end
+  self.window:HideOverlay()
+  self.table:Show()
   self.table:SetData(data)
+  local tableWidth, tableHeight = self.table:GetSize()
+  if tableWidth < 1 then
+    tableWidth = 682
+  end
+  local bodyHeight = tableHeight
+  if bodyHeight > HISTORY_MAX_BODY then
+    bodyHeight = HISTORY_MAX_BODY
+    tableWidth = tableWidth + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  end
+  self.window:SetBodySize(tableWidth, bodyHeight)
 end
 
 function Module:ToggleWindow()

@@ -8,23 +8,27 @@ addon.Module_Run = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
-local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
-local SetHighlightColor = LiqUI.Utils.SetHighlightColor
-local TableFind = LiqUI.Utils.TableFind
 
-local PANEL_WIDTH = 360
-local ROW_HEIGHT = 22
-local PAD = 8
-local COLUMN_GAP = 6
-local TIME_WIDTH = 72
-local CLOCK_TIME_WIDTH = 88
-local VALUE_WIDTH = 72
+local STAGE_WIDTH = 120
+local NUMBER_WIDTH = 70
+local BODY_WIDTH = STAGE_WIDTH + (NUMBER_WIDTH * 3)
+local LABEL_WIDTH = 110
+local VALUE_WIDTH = BODY_WIDTH - LABEL_WIDTH
+local GAIN_AMOUNT_WIDTH = NUMBER_WIDTH * 2
+local GAIN_NAME_WIDTH = BODY_WIDTH - GAIN_AMOUNT_WIDTH
+local BOON_VALUE_WIDTH = 64
+local BOON_LABEL_WIDTH = (BODY_WIDTH - (BOON_VALUE_WIDTH * 2)) / 2
+local CELL_PADDING = 8
+local STAGE_TEXT_WIDTH = STAGE_WIDTH - (CELL_PADDING * 2)
+local COMPANION_PAD = 8
+local ICON_SIZE = 16
+local BAR_HEIGHT = 16
+local BLOCK_HEADER = 22
 
-local FONT_CLOCK = "GameFontNormalLarge"
-local FONT_PANEL = "GameFontHighlight_NoShadow"
-local FONT_ROW = "GameFontHighlight_NoShadow"
+local measureText = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+measureText:Hide()
+measureText:SetWordWrap(false)
 
 local PAINT_INTERVAL = 0.1
 local paintRemaining = 0
@@ -41,457 +45,318 @@ local function onPaintUpdate(_frame, elapsed)
 end
 
 ---@param text string
----@param width number|nil
----@param align "LEFT"|"CENTER"|"RIGHT"|nil
----@param font string|nil
----@param r number|nil
----@param g number|nil
----@param b number|nil
----@return LDT_RowColumn
-local function textColumn(text, width, align, font, r, g, b)
-  ---@type LDT_RowColumn
-  local column = {
-    text = text,
-    width = width,
-    align = align,
-    font = font,
-    r = r,
-    g = g,
-    b = b,
-  }
-  return column
-end
-
----@param text string
----@param minValue number
----@param maxValue number
----@param value number
----@param textOnBar "center"|"left"|"right"|"above"|nil
----@return LDT_RowModel
-local function barRow(text, minValue, maxValue, value, textOnBar)
-  local place = textOnBar or "center"
-  ---@type LDT_RowColumn
-  local column = {
-    text = text,
-    barMin = minValue,
-    barMax = maxValue,
-    barValue = value,
-    textOnBar = place,
-    align = "CENTER",
-    r = 1,
-    g = 1,
-    b = 1,
-  }
-  if place == "left" or place == "above" then
-    column.align = "LEFT"
-  elseif place == "right" then
-    column.align = "RIGHT"
+---@param width number
+---@return string, boolean
+local function fitText(text, width)
+  measureText:SetText(text)
+  if measureText:GetStringWidth() <= width then
+    return text, false
   end
-  ---@type LDT_RowModel
-  local row = {
-    columns = { column },
-    height = place == "above" and 30 or ROW_HEIGHT,
-  }
-  return row
+  local trimmed = text
+  while #trimmed > 0 do
+    trimmed = trimmed:sub(1, #trimmed - 1)
+    measureText:SetText(trimmed .. "...")
+    if measureText:GetStringWidth() <= width then
+      return trimmed .. "...", true
+    end
+  end
+  return "...", true
 end
 
 ---@param label string
----@param elapsed number|nil
----@param bestElapsed number|nil
----@param large boolean|nil
----@return LDT_RowModel
-local function splitRow(label, elapsed, bestElapsed, large)
-  local font = FONT_ROW
-  local timeWidth = TIME_WIDTH
-  local height = ROW_HEIGHT
-  if large then
-    font = FONT_CLOCK
-    timeWidth = CLOCK_TIME_WIDTH
-    height = 24
-  end
-  local red, green, blue = 0.95, 0.95, 0.95
-  if elapsed and bestElapsed then
-    if elapsed < bestElapsed - 0.05 then
-      red, green, blue = 0.35, 0.9, 0.5
-    elseif elapsed > bestElapsed + 0.05 then
-      red, green, blue = 1, 0.4, 0.4
-    end
-  end
-  ---@type LDT_RowColumn[]
-  local columns = {
-    textColumn(label, nil, "LEFT", font, 0.95, 0.95, 0.95),
-    textColumn(elapsed and Helpers.FormatElapsed(elapsed) or "", timeWidth, "RIGHT", font, red, green, blue),
-    textColumn(bestElapsed and Helpers.FormatElapsed(bestElapsed) or "", timeWidth, "RIGHT", font, 0.55, 0.55, 0.55),
+---@param value string
+---@return LiqUI_TableDataRowExtended
+local function valueRow(label, value)
+  ---@type LiqUI_TableDataRowExtended
+  local row = {
+    data = { label, value },
   }
-  ---@type LDT_RowModel
-  local row = { columns = columns, height = height }
+  return row
+end
+
+---@param text string
+---@param columns number
+---@return LiqUI_TableDataRowExtended
+local function noteRow(text, columns)
+  ---@type LiqUI_TableDataCellValue[]
+  local cells = {}
+  cells[1] = text
+  for index = 2, columns do
+    cells[index] = ""
+  end
+  ---@type LiqUI_TableDataRowExtended
+  local row = {
+    span = true,
+    data = cells,
+  }
   return row
 end
 
 ---@param run LDT_Run
----@return number
-local function liveElapsed(run)
-  if run.result == Constants.runResult.Active then
-    if Capture.clockReady then
-      return Capture:Elapsed(run)
-    end
-    local last = run.log[#run.log]
-    if last then
-      return last.elapsed
-    end
-    return 0
+---@return string
+local function windowTitle(run)
+  local instance = run.instance
+  local rawName = instance and instance.name
+  local name = "Delve"
+  if type(rawName) == "string" and rawName ~= "" then
+    name = rawName
   end
-  if run.endedElapsed then
-    return run.endedElapsed
+  local title = name
+  local variant = run.variant
+  if type(variant) == "string" and variant ~= "" and variant ~= name then
+    title = format("%s - %s", name, variant) or name
   end
-  return 0
+  local tier = Helpers.RunTier(run)
+  if tier then
+    title = format("%s (Tier %d)", title, tier) or title
+  end
+  return title
+end
+
+---@param elapsed number|nil
+---@param bestElapsed number|nil
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return string
+local function deltaText(elapsed, bestElapsed, ahead, behind)
+  if not elapsed then
+    return ""
+  end
+  local delta = 0
+  if bestElapsed then
+    delta = Helpers.ShownDelta(elapsed, bestElapsed)
+  end
+  local color = ahead
+  if delta > 0 then
+    color = behind
+  end
+  return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(Helpers.FormatDelta(delta))
+end
+
+---@param name string
+---@return LiqUI_TableDataCellValue
+local function stageCell(name)
+  local shown, trimmed = fitText(name, STAGE_TEXT_WIDTH)
+  if not trimmed then
+    return shown
+  end
+  ---@param cellFrame LiqUI_TableCellFrame
+  local function showStageName(cellFrame)
+    GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+    GameTooltip:SetText(name, 1, 1, 1)
+    GameTooltip:Show()
+  end
+  ---@type LiqUI_TableDataCellExtended
+  local cell = {
+    data = shown,
+    onEnter = showStageName,
+    onLeave = GameTooltip_Hide,
+  }
+  return cell
+end
+
+---@param name string
+---@param elapsed number|nil
+---@param bestElapsed number|nil
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return LiqUI_TableDataRowExtended
+local function stageRow(name, elapsed, bestElapsed, ahead, behind)
+  local timeText = ""
+  if elapsed then
+    timeText = Helpers.FormatElapsed(elapsed) or ""
+  end
+  local bestText = "-"
+  if bestElapsed then
+    bestText = Helpers.FormatElapsed(bestElapsed) or ""
+  end
+  ---@type LiqUI_TableDataRowExtended
+  local row = {
+    data = {
+      stageCell(name),
+      deltaText(elapsed, bestElapsed, ahead, behind),
+      timeText,
+      bestText,
+    },
+  }
+  return row
 end
 
 ---@param run LDT_Run
----@return number
-local function headlineElapsed(run)
-  if run.finishedElapsed or run.bossElapsed then
-    return Helpers.CompletionTime(run) or liveElapsed(run)
+---@param chamberName string
+---@return number|nil
+local function bestChamberTime(run, chamberName)
+  local best = run.best
+  if not best then
+    return nil
   end
-  return liveElapsed(run)
-end
-
----@param run LDT_Run
----@param kind LDT_LogKindId
----@return LDT_LogEntry|nil
-local function lastLog(run, kind)
-  for index = #run.log, 1, -1 do
-    local entry = run.log[index]
-    if entry.kind == kind then
-      return entry
+  for index = 1, #best.chambers do
+    local chamber = best.chambers[index]
+    if chamber.name == chamberName then
+      return chamber.completedElapsed
     end
   end
   return nil
 end
 
----@param best LDT_Run|nil
----@param encounterName string
----@return number|nil
-local function bestEncounterTime(best, encounterName)
-  if not best or not best.encounters then
-    return nil
-  end
-  local match = TableFind(best.encounters, function(encounter)
-    return encounter.encounterName == encounterName and encounter.success == 1
-  end)
-  if not match then
-    return nil
-  end
-  return match.elapsed
-end
-
----@param best LDT_Run|nil
----@param chamberName string
----@return number|nil
-local function bestChamberTime(best, chamberName)
-  if not best or not best.chambers then
-    return nil
-  end
-  local match = TableFind(best.chambers, function(chamber)
-    return chamber.name == chamberName and chamber.completedElapsed ~= nil
-  end)
-  if not match then
-    return nil
-  end
-  return match.completedElapsed
-end
-
 ---@param run LDT_Run
----@return string
-local function runTitle(run)
-  local instance = run.instance
-  local name = instance and instance.name
-  if not name or name == "" then
-    return "Delve"
-  end
-  return name
-end
-
----@param run LDT_Run
----@return LDT_RowModel[]
-local function runRows(run)
-  ---@type LDT_RowModel[]
-  local rows = {}
-  local player = run.player
-  local portrait = textColumn("", 36, "LEFT")
-  portrait.width = 36
-  if player and player.guid and UnitGUID("player") == player.guid then
-    portrait.unit = "player"
-  elseif player and player.classFile then
-    local atlas = GetClassAtlas(player.classFile)
-    if atlas then
-      portrait.atlas = atlas
-    end
-  end
-  local name = player and player.name or ""
-  if player and player.specName and player.specName ~= "" then
-    name = format("%s, %s", name, player.specName)
-  end
-  rows[#rows + 1] = {
-    columns = { portrait, textColumn(name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95) },
-    height = 28,
-  }
-  local delve = "Delve"
-  local instance = run.instance
-  local instanceName
-  if instance then
-    instanceName = instance.name
-  end
-  local namedDelve = false
-  if instanceName then
-    if instanceName ~= "" then
-      delve = instanceName
-      namedDelve = true
-    end
-  end
-  if not namedDelve then
-    local place = run.place
-    if place then
-      local placeName = place.subzone
-      if not placeName then
-        placeName = place.zone
-      end
-      if placeName then
-        delve = placeName
-      end
-    end
-  end
-  if run.variant and run.variant ~= "" then
-    delve = format("%s, %s", delve, run.variant)
-  end
-  local tier = Helpers.RunTier(run)
-  local tierText = ""
-  if tier then
-    tierText = format("Tier %d", tier)
-  end
-  rows[#rows + 1] = {
-    columns = {
-      textColumn(delve, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
-      textColumn(tierText, 72, "RIGHT", FONT_PANEL, 0.95, 0.95, 0.95),
-    },
-    height = 22,
-  }
-  return rows
-end
-
----@param run LDT_Run
----@param now number
----@return { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
-local function objectiveRows(run, now)
-  ---@type { description: string, appeared: number, completed: number|nil, failed: boolean|nil }[]
-  local order = {}
-  ---@type table<number|string, { description: string, appeared: number, completed: number|nil, failed: boolean|nil }>
-  local byKey = {}
-  local completion = run.finishedElapsed
-  local sealed = {}
-  local log = run.log or {}
-  for index = 1, #log do
-    local entry = log[index]
-    local kind = entry.kind
-    if kind == Constants.logKind.Objective or kind == Constants.logKind.ObjectiveDone or kind == Constants.logKind.ObjectiveFailed then
-      local detail = entry.detail
-      local criteriaID = detail and detail.criteriaID
-      local key = criteriaID or entry.text
-      if completion and not byKey[key] and entry.elapsed > completion then
-        sealed[key] = true
-      end
-      local row = byKey[key]
-      if sealed[key] then
-        row = nil
-      end
-      if not sealed[key] then
-        if not row then
-          local description = detail and detail.description
-          if not description or description == "" then
-            description = entry.text
-          end
-          row = { description = description, appeared = entry.elapsed }
-          byKey[key] = row
-          order[#order + 1] = row
-        elseif detail and detail.description and detail.description ~= "" then
-          row.description = detail.description
-        end
-        if kind == Constants.logKind.ObjectiveDone then
-          row.completed = entry.elapsed
-        elseif kind == Constants.logKind.ObjectiveFailed then
-          row.failed = true
-          row.completed = entry.elapsed
-        end
-      end
-    end
-  end
-  local runFinished = run.sawDelveComplete or run.finishedElapsed
-  local scenario = run.scenario
-  local criteria = scenario and scenario.criteria
-  if criteria and not runFinished then
-    for index = 1, #criteria do
-      local info = criteria[index]
-      local criteriaID = info.criteriaID
-      local description = info.description
-      if criteriaID and not issecretvalue(criteriaID) and description and not issecretvalue(description) and description ~= "" then
-        local row = byKey[criteriaID]
-        if not row then
-          row = { description = description, appeared = now }
-          byKey[criteriaID] = row
-          order[#order + 1] = row
-        end
-        local completed = info.completed
-        if completed and not issecretvalue(completed) and completed and not row.completed then
-          row.completed = now
-        end
-      end
-    end
-  end
-  return order
-end
-
----@param run LDT_Run
----@param best LDT_Run|nil
----@return LDT_RowModel[]
-local function timerRows(run, best)
-  ---@type LDT_RowModel[]
-  local rows = {}
-  local now = headlineElapsed(run)
-  local bestFinish = best and Helpers.CompletionTime(best) or nil
-  local red, green, blue = 0.95, 0.95, 0.95
-  if bestFinish then
-    if now < bestFinish - 0.05 then
-      red, green, blue = 0.35, 0.9, 0.5
-    elseif now > bestFinish + 0.05 then
-      red, green, blue = 1, 0.4, 0.4
-    end
-  end
-  rows[#rows + 1] = {
-    columns = {
-      textColumn("This run", 72, "LEFT", FONT_ROW, 0.8, 0.8, 0.8),
-      textColumn(Helpers.FormatElapsed(now), nil, "LEFT", FONT_CLOCK, red, green, blue),
-    },
-    height = 22,
-  }
-  rows[#rows + 1] = {
-    columns = {
-      textColumn("Best", 72, "LEFT", FONT_ROW, 0.55, 0.55, 0.55),
-      textColumn(bestFinish and Helpers.FormatElapsed(bestFinish) or "", nil, "LEFT", FONT_CLOCK, 0.7, 0.7, 0.7),
-    },
-    height = 22,
-  }
-  rows[#rows + 1] = {
-    columns = {
-      textColumn("", nil, "LEFT"),
-      textColumn("Time", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
-      textColumn("Best", TIME_WIDTH, "RIGHT", FONT_ROW, 0.55, 0.55, 0.55),
-    },
-    height = ROW_HEIGHT,
-  }
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return LiqUI_TableData
+local function stageData(run, ahead, behind)
+  ---@type LiqUI_TableData
+  local data = {}
   if run.labyrinth then
     for index = 1, #run.chambers do
       local chamber = run.chambers[index]
-      rows[#rows + 1] = splitRow(chamber.name, chamber.completedElapsed, nil, false)
+      data[#data + 1] = stageRow(chamber.name, chamber.completedElapsed, bestChamberTime(run, chamber.name), ahead, behind)
     end
-    return rows
+    if #data == 0 then
+      data[1] = noteRow("No steps yet", 4)
+    end
+    return data
   end
-  local route
-  if run.routeID then
-    route = Data.db.global.routes[run.routeID]
+  local rows = Data:StepRows(run)
+  for index = 1, #rows do
+    local row = rows[index]
+    data[#data + 1] = stageRow(row.name, row.elapsed, row.best, ahead, behind)
   end
-  ---@type string[]
-  local steps = {}
-  if route then
-    steps = route.steps
+  if #data == 0 then
+    data[1] = noteRow("No steps yet", 4)
   end
-  for index = 1, #steps do
-    local stepName = steps[index]
-    local elapsed = run.splits and run.splits[stepName]
-    rows[#rows + 1] = splitRow(stepName, elapsed, Data:BestSplit(run, stepName), false)
-  end
-  if #steps == 0 then
-    rows[#rows + 1] = { columns = { textColumn("No steps yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
-  end
-  return rows
+  return data
 end
 
----@param run LDT_Run
----@return LDT_RowModel[]
-local function companionRows(run)
-  ---@type LDT_RowModel[]
-  local rows = {}
-  local companion = run.companion
-  if not companion or not companion.name or companion.name == "" then
-    rows[1] = { columns = { textColumn("No companion", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
-    return rows
-  end
-  local level = ""
-  if companion.level then
-    level = format("Level %d", companion.level)
-  end
-  local gain = ""
-  if companion.startStanding and companion.standing then
-    local gained = companion.standing - companion.startStanding
-    if gained > 0 then
-      gain = format("XP +%d", gained)
-    elseif gained < 0 then
-      gain = format("XP %d", gained)
-    else
-      gain = "XP +0"
-    end
-  end
-  rows[#rows + 1] = {
-    columns = {
-      textColumn(companion.name, nil, "LEFT", FONT_PANEL, 0.95, 0.95, 0.95),
-      textColumn(level, nil, "CENTER", FONT_ROW, 0.9, 0.9, 0.9),
-      textColumn(gain, nil, "RIGHT", FONT_ROW, 0.4, 0.8, 1),
-    },
-    height = ROW_HEIGHT,
-  }
-  ---@type LDT_RowColumn[]
-  local barColumns = {}
-  local minValue = companion.reactionThreshold
-  local maxValue = companion.nextThreshold
-  local standing = companion.standing
-  if minValue and maxValue and standing and maxValue > minValue then
-    local bar = textColumn(format("%d / %d", standing, maxValue), nil, "CENTER", FONT_ROW, 1, 1, 1)
-    bar.barMin = minValue
-    bar.barMax = maxValue
-    bar.barValue = standing
-    bar.textOnBar = "center"
-    barColumns[#barColumns + 1] = bar
-  elseif standing then
-    barColumns[#barColumns + 1] = textColumn(format("%d", standing), nil, "LEFT", FONT_ROW, 0.9, 0.9, 0.9)
-  end
-  if companion.roleAtlas then
-    local role = textColumn("", 22, "CENTER")
-    role.atlas = companion.roleAtlas
-    role.tip = companion.roleName
-    barColumns[#barColumns + 1] = role
-  elseif companion.roleName and companion.roleName ~= "" then
-    barColumns[#barColumns + 1] = textColumn(companion.roleName, 72, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9)
-  end
-  local socketSpells = {
-    companion.flavorSpellID,
-    companion.combatCurioSpellID,
-    companion.utilityCurioSpellID,
-  }
-  for index = 1, #socketSpells do
-    local spellID = socketSpells[index]
+---@param spellIDs number[]
+---@param cellFrame LiqUI_TableCellFrame
+local function showAffixes(spellIDs, cellFrame)
+  GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+  local shown = false
+  for index = 1, #spellIDs do
+    local spellID = spellIDs[index]
     if spellID and not issecretvalue(spellID) then
-      local texture = C_Spell.GetSpellTexture(spellID)
-      if texture and not issecretvalue(texture) then
-        local column = textColumn("", 22, "CENTER")
-        column.icon = texture
-        column.spellID = spellID
-        barColumns[#barColumns + 1] = column
+      if not shown then
+        GameTooltip:SetSpellByID(spellID)
+        shown = true
+      else
+        local spellName = C_Spell.GetSpellName(spellID)
+        if spellName and not issecretvalue(spellName) and spellName ~= "" then
+          GameTooltip:AddLine(spellName, 1, 1, 1)
+        end
       end
     end
   end
-  if #barColumns > 0 then
-    rows[#rows + 1] = { columns = barColumns, height = 22 }
+  if shown then
+    GameTooltip:Show()
   end
-  return rows
+end
+
+---@param elapsed number
+---@param bestElapsed number|nil
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return string
+local function comparedTime(elapsed, bestElapsed, ahead, behind)
+  local text = Helpers.FormatElapsed(elapsed) or "-"
+  if not bestElapsed then
+    return text
+  end
+  local color = ahead
+  if Helpers.ShownDelta(elapsed, bestElapsed) > 0 then
+    color = behind
+  end
+  return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(text)
+end
+
+---@param atlas string
+---@param value string
+---@return string
+local function withAtlas(atlas, value)
+  local icon = CreateAtlasMarkup(atlas, 14, 14) or ""
+  return format("%s %s", icon, value)
+end
+
+---@param run LDT_Run
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return LiqUI_TableData
+local function summaryData(run, ahead, behind)
+  ---@type LiqUI_TableData
+  local data = {}
+  local character = run.character
+  local characterText = "-"
+  if character and character.name and character.name ~= "" then
+    characterText = character.name
+    local classFile = character.classFile
+    if classFile then
+      local classColor = C_ClassColor.GetClassColor(classFile)
+      if classColor and classColor.r and classColor.g and classColor.b then
+        characterText = CreateColor(classColor.r, classColor.g, classColor.b):WrapTextInColorCode(character.name)
+      end
+    end
+    if character.specName and character.specName ~= "" then
+      characterText = format("%s, %s", characterText, character.specName)
+    end
+  end
+  data[#data + 1] = valueRow("Character", characterText)
+  data[#data + 1] = valueRow("Started", Helpers.FormatDate(run.startedAt))
+  local endedText = "-"
+  if run.endedAt then
+    endedText = Helpers.FormatDate(run.endedAt)
+  end
+  data[#data + 1] = valueRow("Ended", endedText)
+  local red, green, blue = Helpers.ResultColor(run.result)
+  data[#data + 1] = valueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(Helpers.ResultLabel(run.result)))
+  local bestTime = Helpers.BestDuration(run)
+  local timeText = "-"
+  if run.endedAt then
+    local duration = Helpers.Duration(run)
+    if duration then
+      timeText = comparedTime(duration, bestTime, ahead, behind)
+    end
+  end
+  data[#data + 1] = valueRow("Time", timeText)
+  local bestText = "-"
+  if bestTime then
+    bestText = Helpers.FormatElapsed(bestTime) or "-"
+  end
+  data[#data + 1] = valueRow("Best", bestText)
+  local deathsText = "-"
+  if run.deaths ~= nil then
+    deathsText = tostring(run.deaths)
+  end
+  data[#data + 1] = valueRow("Deaths", withAtlas("DungeonSkull", deathsText))
+  local livesText = "-"
+  if run.lives ~= nil then
+    livesText = tostring(run.lives)
+  end
+  data[#data + 1] = valueRow("Lives", withAtlas("delves-scenario-heart-icon", livesText))
+  local entrance = run.entrance
+  local spellIDs = entrance and entrance.activeSpellIDs
+  if spellIDs and #spellIDs > 0 then
+    local icons = {}
+    for index = 1, #spellIDs do
+      local spellID = spellIDs[index]
+      if spellID and not issecretvalue(spellID) then
+        local texture = C_Spell.GetSpellTexture(spellID)
+        if texture and not issecretvalue(texture) then
+          icons[#icons + 1] = format("|T%s:16|t", texture)
+        end
+      end
+    end
+    if #icons > 0 then
+      ---@param cellFrame LiqUI_TableCellFrame
+      local function showAffixRow(cellFrame)
+        showAffixes(spellIDs, cellFrame)
+      end
+      ---@type LiqUI_TableDataRowExtended
+      local affixRow = valueRow("Affixes", table.concat(icons, " "))
+      affixRow.onEnter = showAffixRow
+      affixRow.onLeave = GameTooltip_Hide
+      data[#data + 1] = affixRow
+    end
+  end
+  return data
 end
 
 local boonColorNeedles
@@ -546,11 +411,21 @@ local function appendBoonStats(text, stats)
   end
 end
 
+---@param label string
+---@return string
+local function boonLabel(label)
+  local red, green, blue = boonStatColor(label)
+  if red and green and blue then
+    return CreateColor(red, green, blue):WrapTextInColorCode(label)
+  end
+  return label
+end
+
 ---@param run LDT_Run
----@return LDT_RowModel[]
-local function boonRows(run)
-  ---@type LDT_RowModel[]
-  local rows = {}
+---@return LiqUI_TableData
+local function boonData(run)
+  ---@type LiqUI_TableData
+  local data = {}
   local boons = run.boons or {}
   ---@type { label: string, value: string }[]
   local stats = {}
@@ -563,34 +438,24 @@ local function boonRows(run)
     end
   end
   if #stats == 0 then
-    rows[1] = { columns = { textColumn("No boons", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
-    return rows
+    data[1] = noteRow("No boons", 4)
+    return data
   end
-  local index = 1
-  while index <= #stats do
-    local stat = stats[index]
-    local nextStat = stats[index + 1]
-    local nextLabel = ""
-    local nextValue = ""
-    local statR, statG, statB = boonStatColor(stat.label)
-    local nextR, nextG, nextB
-    if nextStat then
-      nextLabel = nextStat.label
-      nextValue = nextStat.value
-      nextR, nextG, nextB = boonStatColor(nextLabel)
-    end
-    rows[#rows + 1] = {
-      columns = {
-        textColumn(stat.label, nil, "LEFT", FONT_ROW, statR or 0.85, statG or 0.85, statB or 0.85),
-        textColumn(stat.value, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
-        textColumn(nextLabel, nil, "LEFT", FONT_ROW, nextR or 0.85, nextG or 0.85, nextB or 0.85),
-        textColumn(nextValue, 56, "RIGHT", FONT_ROW, 0.9, 0.9, 0.9),
+  for index = 1, #stats, 2 do
+    local left = stats[index]
+    local right = stats[index + 1]
+    ---@type LiqUI_TableDataRowExtended
+    local row = {
+      data = {
+        boonLabel(left.label),
+        left.value,
+        right and boonLabel(right.label) or "",
+        right and right.value or "",
       },
-      height = ROW_HEIGHT,
     }
-    index = index + 2
+    data[#data + 1] = row
   end
-  return rows
+  return data
 end
 
 ---@param amount number
@@ -602,105 +467,155 @@ local function signedCount(amount)
   return tostring(amount)
 end
 
+---@param copper number
+---@param cellFrame LiqUI_TableCellFrame
+local function showGold(copper, cellFrame)
+  GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+  GameTooltip:SetText("Gold", 1, 0.82, 0)
+  GameTooltip:AddLine(Helpers.FormatMoney(copper), 1, 1, 1)
+  GameTooltip:Show()
+end
+
+---@param currencyID number
+---@param cellFrame LiqUI_TableCellFrame
+local function showCurrency(currencyID, cellFrame)
+  GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+  GameTooltip:SetHyperlink(format("currency:%d", currencyID))
+  GameTooltip:Show()
+end
+
+---@param itemLink string
+---@param cellFrame LiqUI_TableCellFrame
+local function showItem(itemLink, cellFrame)
+  GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+  GameTooltip:SetHyperlink(itemLink)
+  GameTooltip:Show()
+end
+
+---@param factionID number
+---@return string
+local function factionLabel(factionID)
+  local data = C_MajorFactions.GetMajorFactionData(factionID)
+  if data and data.name and data.name ~= "" then
+    return data.name
+  end
+  local faction = C_Reputation.GetFactionDataByID(factionID)
+  if faction and faction.name and faction.name ~= "" then
+    return faction.name
+  end
+  return tostring(factionID)
+end
+
+---@param data LiqUI_TableData
+---@param name string
+---@param amount number
+local function appendAmount(data, name, amount)
+  if amount == 0 then
+    return
+  end
+  ---@type LiqUI_TableDataRowExtended
+  local row = {
+    data = {
+      name,
+      CreateColor(0.5, 0.85, 1):WrapTextInColorCode(signedCount(amount)),
+    },
+  }
+  data[#data + 1] = row
+end
+
+---@param gains LDT_Gain[]
+---@param gainType LDT_GainTypeId
+---@return number
+local function amountOfType(gains, gainType)
+  for index = 1, #gains do
+    local gain = gains[index]
+    if gain.type == gainType then
+      return gain.amount
+    end
+  end
+  return 0
+end
+
 ---@param run LDT_Run
----@return LDT_RowModel[]
-local function gainsRows(run)
-  ---@type LDT_RowModel[]
-  local rows = {}
-  local gold = run.gold
-  if gold and gold.gained and gold.gained > 0 then
-    rows[#rows + 1] = {
-      columns = {
-        textColumn("Gold", nil, "LEFT"),
-        textColumn(Helpers.FormatMoney(gold.gained), nil, "RIGHT", FONT_ROW, 1, 1, 1),
+---@return LiqUI_TableData
+local function gainsData(run)
+  ---@type LiqUI_TableData
+  local data = {}
+  local gains = run.gains or {}
+  local companionName = "Companion"
+  if run.companion and run.companion.name and run.companion.name ~= "" then
+    companionName = run.companion.name
+  end
+  appendAmount(data, "Level", amountOfType(gains, Constants.gainType.Level))
+  appendAmount(data, "Experience", amountOfType(gains, Constants.gainType.Experience))
+  appendAmount(data, companionName .. " level", amountOfType(gains, Constants.gainType.CompanionLevel))
+  appendAmount(data, companionName .. " XP", amountOfType(gains, Constants.gainType.CompanionExperience))
+  local gold = amountOfType(gains, Constants.gainType.Gold)
+  if gold > 0 then
+    local copper = gold
+    ---@param cellFrame LiqUI_TableCellFrame
+    local function showGoldRow(cellFrame)
+      showGold(copper, cellFrame)
+    end
+    ---@type LiqUI_TableDataRowExtended
+    local row = {
+      data = {
+        "Gold",
+        Helpers.FormatMoney(copper),
       },
-      height = ROW_HEIGHT,
-      goldCopper = gold.gained,
+      onEnter = showGoldRow,
+      onLeave = GameTooltip_Hide,
     }
+    data[#data + 1] = row
   end
-  local changes = run.currencies or {}
-  ---@type table<number, number>
-  local seen = {}
-  ---@type number[]
-  local order = {}
-  for index = 1, #changes do
-    local change = changes[index]
-    local total = seen[change.currencyID]
-    if not total then
-      order[#order + 1] = change.currencyID
-      seen[change.currencyID] = change.change
-    else
-      seen[change.currencyID] = total + change.change
-    end
-  end
-  for index = 1, #order do
-    local currencyID = order[index]
-    local total = seen[currencyID]
-    if total ~= 0 and Helpers.CurrencyListed(currencyID) then
+  for index = 1, #gains do
+    local change = gains[index]
+    local currencyID = change.id
+    local total = change.amount
+    if change.type == Constants.gainType.Currency and currencyID and total ~= 0 and Helpers.CurrencyListed(currencyID) then
       local name = tostring(currencyID)
-      for changeIndex = #changes, 1, -1 do
-        local change = changes[changeIndex]
-        if change.currencyID == currencyID and change.name and change.name ~= "" then
-          name = change.name
-          break
-        end
-      end
-      local nameColumn = textColumn(name, nil, "LEFT")
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
-      if info and info.iconFileID and not issecretvalue(info.iconFileID) and info.iconFileID > 0 then
-        nameColumn.icon = info.iconFileID
+      if info and info.name and info.name ~= "" then
+        name = info.name
       end
-      rows[#rows + 1] = {
-        columns = {
-          nameColumn,
-          textColumn(signedCount(total), VALUE_WIDTH, "RIGHT", FONT_ROW, 0.5, 0.85, 1),
+      if info and info.iconFileID and not issecretvalue(info.iconFileID) and info.iconFileID > 0 then
+        name = format("|T%s:16|t %s", info.iconFileID, name)
+      end
+      ---@param cellFrame LiqUI_TableCellFrame
+      local function showCurrencyRow(cellFrame)
+        showCurrency(currencyID, cellFrame)
+      end
+      ---@type LiqUI_TableDataRowExtended
+      local row = {
+        data = {
+          name,
+          CreateColor(0.5, 0.85, 1):WrapTextInColorCode(signedCount(total)),
         },
-        height = ROW_HEIGHT,
-        currencyID = currencyID,
+        onEnter = showCurrencyRow,
+        onLeave = GameTooltip_Hide,
       }
+      data[#data + 1] = row
     end
   end
-  local loot = run.loot or {}
-  ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, elapsed: number, quality: number, qualityKnown: boolean, name: string }[]
+  for index = 1, #gains do
+    local change = gains[index]
+    if change.type == Constants.gainType.Renown and change.id and change.amount ~= 0 then
+      appendAmount(data, factionLabel(change.id), change.amount)
+    end
+  end
+  ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, quality: number, qualityKnown: boolean, name: string }[]
   local items = {}
-  for index = 1, #loot do
-    local item = loot[index]
-    if not Helpers.ItemHidden(item.itemID) then
-      local quantity = item.quantity or 1
-      local elapsed = item.elapsed or 0
-      local match
-      for itemIndex = 1, #items do
-        local existing = items[itemIndex]
-        local sameItem = (item.itemID and existing.itemID == item.itemID) or (not item.itemID and existing.itemLink == item.itemLink)
-        if sameItem then
-          match = existing
-          break
-        end
-      end
-      if not match then
-        items[#items + 1] = {
-          itemID = item.itemID,
-          itemLink = item.itemLink,
-          quantity = quantity,
-          elapsed = elapsed,
-          quality = 0,
-          qualityKnown = false,
-          name = "",
-        }
-      elseif math.abs(elapsed - match.elapsed) < 2 then
-        if quantity > match.quantity then
-          match.quantity = quantity
-        end
-        if item.itemLink then
-          match.itemLink = item.itemLink
-        end
-      else
-        match.quantity = match.quantity + quantity
-        match.elapsed = elapsed
-        if item.itemLink then
-          match.itemLink = item.itemLink
-        end
-      end
+  for index = 1, #gains do
+    local item = gains[index]
+    if item.type == Constants.gainType.Loot and not Helpers.ItemHidden(item.id) then
+      items[#items + 1] = {
+        itemID = item.id,
+        itemLink = item.itemLink,
+        quantity = item.amount,
+        quality = 0,
+        qualityKnown = false,
+        name = "",
+      }
     end
   end
   for index = 1, #items do
@@ -745,481 +660,410 @@ local function gainsRows(run)
     if label == "" then
       label = "Item"
     end
-    local red, green, blue
     if item.qualityKnown then
       local colorR, colorG, colorB = C_Item.GetItemQualityColor(item.quality)
-      if colorR and not issecretvalue(colorR) then
-        red, green, blue = colorR, colorG, colorB
+      if colorR and not issecretvalue(colorR) and colorG and colorB then
+        label = CreateColor(colorR, colorG, colorB):WrapTextInColorCode(label)
       end
     end
-    ---@type LDT_RowColumn
-    local nameColumn = textColumn(label, nil, "LEFT", nil, red, green, blue)
     if item.itemID then
       local texture = C_Item.GetItemIconByID(item.itemID)
-      if texture then
-        nameColumn.icon = texture
+      if texture and not issecretvalue(texture) then
+        label = format("|T%s:16|t %s", texture, label)
       end
     end
-    ---@type LDT_RowModel
+    ---@type LiqUI_TableDataRowExtended
     local row = {
-      columns = {
-        nameColumn,
-        textColumn(tostring(item.quantity), VALUE_WIDTH, "RIGHT"),
-      },
-      height = ROW_HEIGHT,
+      data = { label, tostring(item.quantity) },
     }
-    if item.itemLink and item.itemLink:find("|H", 1, true) then
-      row.itemLink = item.itemLink
+    local itemLink = item.itemLink
+    if itemLink and itemLink:find("|H", 1, true) then
+      ---@param cellFrame LiqUI_TableCellFrame
+      local function showItemRow(cellFrame)
+        showItem(itemLink, cellFrame)
+      end
+      row.onEnter = showItemRow
+      row.onLeave = GameTooltip_Hide
     end
-    rows[#rows + 1] = row
+    data[#data + 1] = row
   end
-  if #rows == 0 then
-    rows[1] = { columns = { textColumn("No gains yet", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
+  if #data == 0 then
+    data[1] = noteRow("No gains yet", 2)
   end
-  return rows
+  return data
 end
 
----@param run LDT_Run
----@return LDT_RowModel[]
-local function renownRows(run)
-  ---@type LDT_RowModel[]
-  local rows = {}
-  local renowns = run.renowns or {}
-  if #renowns == 0 then
-    rows[1] = { columns = { textColumn("No renown change", nil, "LEFT", FONT_ROW, 0.6, 0.6, 0.6) }, height = ROW_HEIGHT }
-    return rows
+---@param companion LDT_Companion
+---@return string|nil
+local function lfgRoleAtlas(companion)
+  local name = ""
+  if companion.roleName then
+    name = companion.roleName:lower()
   end
-  for index = 1, #renowns do
-    local row = renowns[index]
-    local threshold = row.threshold
-    if not threshold or threshold <= 0 then
-      threshold = 1
-    end
-    local name = row.name or "Renown"
-    rows[#rows + 1] = barRow(format("%s  %d  %d/%d", name, row.level, row.earned, threshold), 0, threshold, math.min(row.earned, threshold), "center")
+  local stored = ""
+  if companion.roleAtlas then
+    stored = companion.roleAtlas:lower()
   end
-  return rows
+  local haystack = name .. " " .. stored
+  if haystack:find("tank", 1, true) then
+    return "ui-lfg-roleicon-tank"
+  end
+  if haystack:find("heal", 1, true) then
+    return "ui-lfg-roleicon-healer"
+  end
+  if haystack:find("dps", 1, true) or haystack:find("damage", 1, true) then
+    return "ui-lfg-roleicon-dps"
+  end
+  return companion.roleAtlas
 end
 
 ---@param parent Frame
----@return LDT_WidgetColumnFrame
-local function createColumn(parent)
-  ---@type LDT_WidgetColumnFrame
-  local column = CreateFrame("Frame", nil, parent)
-  local bar = CreateFrame("StatusBar", nil, column)
-  bar:SetStatusBarTexture("Interface/Buttons/WHITE8X8")
-  bar:SetStatusBarColor(0.25, 0.55, 0.9, 0.95)
-  bar:SetAllPoints()
-  bar:Hide()
-  local background = bar:CreateTexture(nil, "BACKGROUND")
-  background:SetAllPoints()
-  background:SetColorTexture(1, 1, 1, 0.08)
-  column.bar = bar
-  local textFrame = CreateFrame("Frame", nil, column)
-  textFrame:SetAllPoints()
-  textFrame:SetFrameLevel(bar:GetFrameLevel() + 2)
-  column.textFrame = textFrame
-  local icon = textFrame:CreateTexture(nil, "OVERLAY")
-  icon:SetSize(18, 18)
-  icon:SetPoint("LEFT", textFrame, "LEFT", 0, 0)
-  icon:Hide()
-  column.icon = icon
-  local text = textFrame:CreateFontString(nil, "OVERLAY", FONT_ROW)
-  text:SetPoint("LEFT", textFrame, "LEFT", 0, 0)
-  text:SetPoint("RIGHT", textFrame, "RIGHT", 0, 0)
-  text:SetJustifyH("LEFT")
-  text:SetJustifyV("MIDDLE")
-  text:SetWordWrap(true)
-  column.text = text
-  return column
+---@param anchor Frame|Texture
+---@param relativePoint string
+---@param x number
+---@return LDT_RunIconButton
+local function iconButton(parent, anchor, relativePoint, x)
+  ---@type LDT_RunIconButton
+  local button = CreateFrame("Button", nil, parent)
+  button:SetSize(ICON_SIZE, ICON_SIZE)
+  button:SetPoint("RIGHT", anchor, relativePoint, x, 0)
+  local icon = button:CreateTexture(nil, "ARTWORK")
+  icon:SetAllPoints()
+  button.icon = icon
+  button:SetScript("OnLeave", GameTooltip_Hide)
+  return button
 end
 
----@param column LDT_WidgetColumnFrame
----@param model LDT_RowColumn
----@param rowHeight number
-local function paintColumn(column, model, rowHeight)
-  local text = column.text
-  local bar = column.bar
-  local icon = column.icon
-  text:SetFontObject(model.font or FONT_ROW)
-  local red, green, blue = 1, 1, 1
-  text:SetTextColor(model.r or red, model.g or green, model.b or blue)
-  text:SetJustifyH(model.align or "LEFT")
-  text:SetText(model.text or "")
-  local iconSize = model.width or 18
-  icon:SetSize(iconSize, iconSize)
-  if model.unit then
-    SetPortraitTexture(icon, model.unit)
-    icon:Show()
-  elseif model.displayID then
-    SetPortraitTextureFromCreatureDisplayID(icon, model.displayID)
-    icon:Show()
-  elseif model.atlas then
-    icon:SetAtlas(model.atlas)
-    icon:Show()
-  elseif model.icon then
-    icon:SetTexture(model.icon)
-    icon:Show()
-  else
-    icon:Hide()
+---@param parent Frame
+---@return LDT_RunCompanion
+local function createCompanion(parent)
+  ---@type LDT_RunCompanion
+  local frame = CreateFrame("Frame", nil, parent)
+  local name = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  name:SetPoint("TOPLEFT", frame, "TOPLEFT", COMPANION_PAD, -COMPANION_PAD)
+  name:SetJustifyH("LEFT")
+  name:SetWordWrap(false)
+  frame.name = name
+  local level = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  level:SetPoint("TOP", frame, "TOP", 0, -COMPANION_PAD)
+  level:SetJustifyH("CENTER")
+  frame.level = level
+  local gain = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  gain:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -COMPANION_PAD, -COMPANION_PAD)
+  gain:SetJustifyH("RIGHT")
+  gain:SetTextColor(0.4, 0.8, 1)
+  frame.gain = gain
+  local empty = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  empty:SetPoint("TOPLEFT", frame, "TOPLEFT", COMPANION_PAD, -COMPANION_PAD)
+  empty:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -COMPANION_PAD, -COMPANION_PAD)
+  empty:SetJustifyH("LEFT")
+  empty:SetText("No companion")
+  frame.empty = empty
+  local row = CreateFrame("Frame", nil, frame)
+  row:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -6)
+  row:SetPoint("RIGHT", frame, "RIGHT", -COMPANION_PAD, 0)
+  row:SetHeight(BAR_HEIGHT)
+  frame.row = row
+  local icons = CreateFrame("Frame", nil, row)
+  icons:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
+  icons:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+  icons:SetWidth(1)
+  frame.icons = icons
+  local bar = CreateFrame("StatusBar", nil, row)
+  bar:SetStatusBarTexture("Interface/Buttons/WHITE8X8")
+  bar:SetStatusBarColor(0.25, 0.55, 0.9, 0.95)
+  bar:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+  bar:SetPoint("BOTTOMRIGHT", icons, "BOTTOMLEFT", -6, 0)
+  local track = bar:CreateTexture(nil, "BACKGROUND")
+  track:SetAllPoints()
+  track:SetColorTexture(1, 1, 1, 0.08)
+  frame.bar = bar
+  local barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  barText:SetPoint("LEFT", bar, "LEFT", 4, 0)
+  barText:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+  barText:SetJustifyH("LEFT")
+  barText:SetWordWrap(false)
+  frame.barText = barText
+  local role = iconButton(icons, icons, "RIGHT", 0)
+  ---@param button LDT_RunIconButton
+  local function showRole(button)
+    local tip = button.tip
+    if not tip or tip == "" then
+      return
+    end
+    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    GameTooltip:SetText(tip, 1, 1, 1)
+    GameTooltip:Show()
   end
-  text:ClearAllPoints()
-  bar:ClearAllPoints()
-  if model.barValue ~= nil then
-    bar:Show()
-    bar:SetMinMaxValues(model.barMin or 0, model.barMax or 1)
-    local maxValue = model.barMax or 1
-    local value = model.barValue
+  role:SetScript("OnEnter", showRole)
+  frame.role = role
+  ---@type LDT_RunIconButton[]
+  local spells = {}
+  local previous = role
+  for index = 1, 3 do
+    local button = iconButton(icons, previous, "LEFT", -2)
+    ---@param spellButton LDT_RunIconButton
+    local function showSpell(spellButton)
+      local spellID = spellButton.spellID
+      if not spellID then
+        return
+      end
+      GameTooltip:SetOwner(spellButton, "ANCHOR_RIGHT")
+      GameTooltip:SetSpellByID(spellID)
+      GameTooltip:Show()
+    end
+    button:SetScript("OnEnter", showSpell)
+    spells[index] = button
+    previous = button
+  end
+  frame.spells = spells
+  return frame
+end
+
+---@param frame LDT_RunCompanion
+---@param run LDT_Run|nil
+local function paintCompanion(frame, run)
+  local companion = run and run.companion
+  if not companion or not companion.name or companion.name == "" then
+    frame.name:Hide()
+    frame.level:Hide()
+    frame.gain:Hide()
+    frame.row:Hide()
+    frame.role:Hide()
+    for index = 1, #frame.spells do
+      frame.spells[index]:Hide()
+    end
+    if run then
+      frame.empty:Show()
+      frame:SetHeight((COMPANION_PAD * 2) + 14)
+    else
+      frame.empty:Hide()
+      frame:SetHeight(0)
+    end
+    return
+  end
+  frame.empty:Hide()
+  frame.name:Show()
+  frame.name:SetText(companion.name)
+  local level = ""
+  if companion.level then
+    level = format("Level %d", companion.level)
+  end
+  frame.level:SetText(level)
+  frame.level:Show()
+  local gain = ""
+  if companion.startStanding and companion.standing then
+    local gained = companion.standing - companion.startStanding
+    if gained > 0 then
+      gain = format("XP +%d", gained)
+    elseif gained < 0 then
+      gain = format("XP %d", gained)
+    else
+      gain = "XP +0"
+    end
+  end
+  frame.gain:SetText(gain)
+  frame.gain:Show()
+  frame.row:Show()
+  local minValue = companion.reactionThreshold
+  local maxValue = companion.nextThreshold
+  local standing = companion.standing
+  frame.bar:Show()
+  if minValue and maxValue and standing and maxValue > minValue then
+    frame.bar:SetMinMaxValues(minValue, maxValue)
+    local value = standing
     if value > maxValue then
       value = maxValue
     end
-    bar:SetValue(value)
-    if model.textOnBar == "above" then
-      bar:SetPoint("BOTTOMLEFT", column, "BOTTOMLEFT", 0, 0)
-      bar:SetPoint("BOTTOMRIGHT", column, "BOTTOMRIGHT", 0, 0)
-      bar:SetHeight(12)
-      text:SetPoint("TOPLEFT", column.textFrame, "TOPLEFT", 0, 0)
-      text:SetPoint("TOPRIGHT", column.textFrame, "TOPRIGHT", 0, 0)
-    else
-      bar:SetAllPoints()
-      local left = 4
-      if icon:IsShown() then
-        left = 20
-      end
-      text:SetPoint("LEFT", column.textFrame, "LEFT", left, 0)
-      text:SetPoint("RIGHT", column.textFrame, "RIGHT", -4, 0)
-    end
+    frame.bar:SetValue(value)
+    frame.barText:SetText(format("%d / %d", standing, maxValue))
+  elseif standing then
+    frame.bar:SetMinMaxValues(0, 1)
+    frame.bar:SetValue(0)
+    frame.barText:SetText(tostring(standing))
   else
-    bar:Hide()
-    if icon:IsShown() then
-      text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-    else
-      text:SetPoint("LEFT", column.textFrame, "LEFT", 0, 0)
-    end
-    text:SetPoint("RIGHT", column.textFrame, "RIGHT", 0, 0)
-    text:SetHeight(rowHeight)
+    frame.bar:SetMinMaxValues(0, 1)
+    frame.bar:SetValue(0)
+    frame.barText:SetText("")
   end
-  column:SetHeight(rowHeight)
+  local atlas = lfgRoleAtlas(companion)
+  if atlas and atlas ~= "" then
+    frame.role:Show()
+    frame.role.icon:SetAtlas(atlas)
+    frame.role.tip = companion.roleName
+  else
+    frame.role:Hide()
+  end
+  local socketSpells = {
+    companion.flavorSpellID,
+    companion.combatCurioSpellID,
+    companion.utilityCurioSpellID,
+  }
+  for index = 1, #frame.spells do
+    local button = frame.spells[index]
+    local spellID = socketSpells[index]
+    local texture
+    if spellID and not issecretvalue(spellID) then
+      texture = C_Spell.GetSpellTexture(spellID)
+    end
+    if texture and not issecretvalue(texture) then
+      button:Show()
+      button.icon:SetTexture(texture)
+      button.spellID = spellID
+    else
+      button:Hide()
+      button.spellID = nil
+    end
+  end
+  local iconCount = 0
+  if frame.role:IsShown() then
+    iconCount = iconCount + 1
+  end
+  for index = 1, #frame.spells do
+    if frame.spells[index]:IsShown() then
+      iconCount = iconCount + 1
+    end
+  end
+  frame.bar:ClearAllPoints()
+  frame.bar:SetPoint("TOPLEFT", frame.row, "TOPLEFT", 0, 0)
+  if iconCount > 0 then
+    frame.icons:Show()
+    frame.icons:SetWidth(iconCount * ICON_SIZE + (iconCount - 1) * 2)
+    frame.bar:SetPoint("BOTTOMRIGHT", frame.icons, "BOTTOMLEFT", -6, 0)
+  else
+    frame.icons:Hide()
+    frame.bar:SetPoint("BOTTOMRIGHT", frame.row, "BOTTOMRIGHT", 0, 0)
+  end
+  frame:SetHeight((COMPANION_PAD * 2) + 14 + 6 + BAR_HEIGHT)
 end
 
----@param panel LDT_WidgetPanel
-local function layoutPanel(panel)
-  local rows = panel.rows or {}
-  local y = -ROW_HEIGHT
-  for index = 1, #rows do
-    local model = rows[index]
-    local row = panel.rowFrames[index]
-    if not row then
-      ---@type LDT_WidgetRowFrame
-      local created = CreateFrame("Frame", nil, panel)
-      created.columns = {}
-      panel.rowFrames[index] = created
-      row = created
-    end
-    row:Show()
-    local rowHeight = model.height or ROW_HEIGHT
-    SetBackgroundColor(row, 1, 1, 1, index % 2 == 0 and 0.01 or 0)
-    if model.itemLink or model.currencyID or model.goldCopper then
-      row:EnableMouse(true)
-      row:SetScript("OnEnter", function()
-        SetHighlightColor(row, 1, 1, 1, 0.05)
-        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-        if model.itemLink then
-          GameTooltip:SetHyperlink(model.itemLink)
-        elseif model.currencyID then
-          GameTooltip:SetHyperlink(format("currency:%d", model.currencyID))
-        else
-          GameTooltip:SetText("Gold", 1, 0.82, 0)
-          GameTooltip:AddLine(Helpers.FormatMoney(model.goldCopper), 1, 1, 1)
-        end
-        GameTooltip:Show()
-      end)
-      row:SetScript("OnLeave", function()
-        SetHighlightColor(row, 1, 1, 1, 0)
-        GameTooltip:Hide()
-      end)
-    else
-      row:EnableMouse(false)
-      row:SetScript("OnEnter", nil)
-      row:SetScript("OnLeave", nil)
-      SetHighlightColor(row, 1, 1, 1, 0)
-    end
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, y)
-    row:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
-    row:SetHeight(rowHeight)
-    local columns = model.columns
-    local gap = COLUMN_GAP
-    local panelWidth = panel:GetWidth()
-    if panelWidth <= 0 then
-      panelWidth = PANEL_WIDTH
-    end
-    local inner = panelWidth - (PAD * 2) - (math.max(#columns - 1, 0) * gap)
-    local used = 0
-    local flex = 0
-    for columnIndex = 1, #columns do
-      local width = columns[columnIndex].width
-      if width then
-        used = used + width
-      else
-        flex = flex + 1
-      end
-    end
-    local flexWidth = 0
-    if flex > 0 then
-      flexWidth = (inner - used) / flex
-    end
-    local x = PAD
-    for columnIndex = 1, #columns do
-      local column = row.columns[columnIndex]
-      if not column then
-        column = createColumn(row)
-        row.columns[columnIndex] = column
-      end
-      column:Show()
-      local width = columns[columnIndex].width or flexWidth
-      column:ClearAllPoints()
-      column:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
-      column:SetWidth(math.max(width, 1))
-      paintColumn(column, columns[columnIndex], rowHeight)
-      local spellID = columns[columnIndex].spellID
-      local tip = columns[columnIndex].tip
-      local textFrame = column.textFrame
-      if spellID then
-        textFrame:EnableMouse(true)
-        textFrame:SetScript("OnEnter", function()
-          GameTooltip:SetOwner(textFrame, "ANCHOR_RIGHT")
-          GameTooltip:SetSpellByID(spellID)
-          GameTooltip:Show()
-        end)
-        textFrame:SetScript("OnLeave", GameTooltip_Hide)
-      elseif tip and tip ~= "" then
-        textFrame:EnableMouse(true)
-        textFrame:SetScript("OnEnter", function()
-          GameTooltip:SetOwner(textFrame, "ANCHOR_RIGHT")
-          GameTooltip:SetText(tip, 1, 1, 1)
-          GameTooltip:Show()
-        end)
-        textFrame:SetScript("OnLeave", GameTooltip_Hide)
-      else
-        textFrame:EnableMouse(false)
-        textFrame:SetScript("OnEnter", nil)
-        textFrame:SetScript("OnLeave", nil)
-      end
-      x = x + width + gap
-    end
-    for columnIndex = #columns + 1, #row.columns do
-      row.columns[columnIndex]:Hide()
-    end
-    y = y - rowHeight
+---@param parent Frame
+---@param text string
+---@return LDT_RunBlockHeader
+local function createBlockHeader(parent, text)
+  ---@type LDT_RunBlockHeader
+  local header = CreateFrame("Frame", nil, parent)
+  header:SetHeight(BLOCK_HEADER)
+  local background = header:CreateTexture(nil, "BACKGROUND")
+  background:SetAllPoints()
+  background:SetColorTexture(0, 0, 0, 0.35)
+  local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("LEFT", header, "LEFT", 8, 0)
+  title:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+  title:SetJustifyH("LEFT")
+  title:SetJustifyV("MIDDLE")
+  title:SetWordWrap(false)
+  title:SetText(text)
+  header.title = title
+  return header
+end
+
+---@param header LDT_RunBlockHeader
+---@param y number
+---@param shown boolean
+---@return number
+local function placeHeader(header, y, shown)
+  if not shown then
+    header:Hide()
+    return y
   end
-  for index = #rows + 1, #panel.rowFrames do
-    panel.rowFrames[index]:Hide()
-  end
-  if #rows == 0 then
-    panel:SetHeight(ROW_HEIGHT)
-    return
-  end
-  panel:SetHeight(-y)
+  header:Show()
+  header:ClearAllPoints()
+  header:SetPoint("TOPLEFT", header:GetParent(), "TOPLEFT", 0, y)
+  header:SetWidth(BODY_WIDTH)
+  return y - BLOCK_HEADER
+end
+
+---@param name string
+---@param columns LiqUI_TableOptionsColumn[]
+---@param showHeader boolean
+---@param headerAlpha number|nil
+---@return LiqUI_TableOptions
+local function tableOptions(name, columns, showHeader, headerAlpha)
+  ---@type LiqUI_TableOptions
+  local options = {
+    name = name,
+    header = {
+      enabled = showHeader,
+      sticky = false,
+      height = 22,
+      backgroundAlpha = headerAlpha or 0,
+    },
+    rowStyle = {
+      highlight = false,
+      striped = true,
+    },
+    cellStyle = {
+      highlight = false,
+    },
+    columns = columns,
+  }
+  return options
+end
+
+---@param frame LiqUI_TableInstance
+---@param data LiqUI_TableData
+---@param y number
+---@return number
+local function placeTable(frame, data, y)
+  frame:SetData(data)
+  local width, height = frame:GetSize()
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", frame:GetParent(), "TOPLEFT", 0, y)
+  frame:SetSize(width, height)
+  return y - height
 end
 
 function Module:Layout()
   local window = self.window
-  local panels = self.panels
-  if not window or not panels then
+  if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.gains then
     return
   end
-  local collapsed = Data.db.global.run.collapsed
-  local body = window.body
-  local y = 0
-  for index = 1, #Constants.sections do
-    local info = Constants.sections[index]
-    local panel = panels[info.id]
-    panel:Show()
-    panel.title:SetPoint("LEFT", panel.header, "LEFT", PAD, 0)
-    panel.title:SetPoint("RIGHT", panel.header, "RIGHT", -(PAD + 20), 0)
-    panel.chevron:SetPoint("RIGHT", panel.header, "RIGHT", -PAD, 0)
-    panel:ClearAllPoints()
-    panel:SetWidth(PANEL_WIDTH)
-    panel:SetPoint("TOPLEFT", body, "TOPLEFT", 0, y)
-    if collapsed[info.id] then
-      panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-expand")
-      panel.rows = {}
-      layoutPanel(panel)
-      panel:SetHeight(ROW_HEIGHT)
-    else
-      panel.chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-      layoutPanel(panel)
-    end
-    y = y - panel:GetHeight()
+  if not self.companionHeader or not self.boonsHeader or not self.gainsHeader then
+    return
   end
-  window:SetBodySize(PANEL_WIDTH, math.max(ROW_HEIGHT, -y))
-end
-
----@return LDT_Run, LDT_Run
-local function demoRun()
-  ---@type LDT_Run
-  local best = {
-    id = "demo-best",
-    result = Constants.runResult.Complete,
-    labyrinth = true,
-    startedAt = 0,
-    sessionStart = 0,
-    sessionOffset = 0,
-    finishedElapsed = 612,
-    endedElapsed = 640,
-    bossElapsed = 600,
-    sawDelveComplete = true,
-    deaths = 0,
-    lives = 3,
-    vault = { credits = 0, activities = {} },
-    gold = { start = 0, last = 0, gained = 0, gains = {} },
-    currencies = {},
-    renownStart = {},
-    renowns = {},
-    boons = {},
-    loot = {},
-    chambers = {
-      { name = "First chamber", enteredElapsed = 40, completedElapsed = 150 },
-      { name = "Second chamber", enteredElapsed = 150, completedElapsed = 310 },
-    },
-    encounters = {
-      { encounterID = 1, encounterName = "Chamber boss", difficultyID = 0, groupSize = 1, success = 1, elapsed = 600 },
-    },
-    log = {},
-    splits = {},
-    watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
-  }
-  ---@type LDT_Run
-  local run = {
-    id = "demo",
-    result = Constants.runResult.Complete,
-    labyrinth = true,
-    startedAt = 0,
-    sessionStart = 0,
-    sessionOffset = 0,
-    finishedElapsed = 754,
-    endedElapsed = 754,
-    bossName = "Chamber boss",
-    bossElapsed = 720,
-    sawDelveComplete = true,
-    deaths = 1,
-    lives = 2,
-    player = { level = 80, itemLevel = 645, specName = "Restoration" },
-    entrance = { tierInfo = { tier = 8, suggestedILvl = 0, overrideTooltipSpellID = 0, unlocked = true, tierDescription = "", rewards = {}, modifierUIWidgetSetID = 0, queueAsLFG = false } },
-    companion = {
-      name = "Brann Bronzebeard",
-      level = 42,
-      maxLevel = 80,
-      flavorName = "Explorer",
-      roleName = "Healer",
-      combatCurioName = "Relic of Sentinels",
-      utilityCurioName = "Idol of the Earthmother",
-      standing = 2400,
-      reactionThreshold = 2000,
-      nextThreshold = 3000,
-      startStanding = 2100,
-    },
-    instance = { name = "The Spiral Weave", difficultyName = "Delve" },
-    place = { zone = "Azj-Kahet", subzone = "The Spiral Weave" },
-    vault = { credits = 0, activities = {} },
-    gold = {
-      start = 0,
-      last = 0,
-      gained = 184250,
-      gains = {
-        { elapsed = 210, copper = 62500, afterComplete = false },
-        { elapsed = 480, copper = 81750, afterComplete = false },
-        { elapsed = 760, copper = 40000, afterComplete = true },
-      },
-    },
-    currencies = {
-      { currencyID = 3028, name = "Restored Coffer Key", change = 1, quantity = 4, elapsed = 300, afterComplete = false },
-      { currencyID = 2815, name = "Resonance Crystals", change = 25, quantity = 400, elapsed = 770, afterComplete = true },
-    },
-    renownStart = {},
-    renowns = {
-      { factionID = 2590, name = "The Assembly of the Deeps", startLevel = 12, startEarned = 0, level = 12, earned = 1800, threshold = 2500, maxLevel = 25 },
-    },
-    boons = {
-      { label = "Haste", amount = 8, percent = true },
-      { label = "Speed", amount = 5, percent = true },
-      { label = "Stamina", amount = 120, percent = false },
-      { label = "Leech", amount = 3, percent = true },
-      { label = "Versatility", amount = 10, percent = true },
-    },
-    loot = {
-      { elapsed = 330, itemLink = "Adventurer's Helm", quantity = 1, afterComplete = false },
-      { elapsed = 780, itemLink = "Delver's Bounty", quantity = 1, afterComplete = true },
-    },
-    chambers = {
-      { name = "First chamber", enteredElapsed = 45, completedElapsed = 188 },
-      { name = "Second chamber", enteredElapsed = 188, completedElapsed = 360 },
-    },
-    encounters = {
-      { encounterID = 1, encounterName = "Chamber boss", difficultyID = 0, groupSize = 1, success = 1, elapsed = 720 },
-    },
-    log = {
-      {
-        at = 0,
-        elapsed = 40,
-        kind = Constants.logKind.Objective,
-        text = "Objective: Clear the webs",
-        detail = { criteriaID = 1, description = "Clear the webs" },
-      },
-      {
-        at = 0,
-        elapsed = 180,
-        kind = Constants.logKind.ObjectiveDone,
-        text = "Objective done: Clear the webs",
-        detail = { criteriaID = 1, description = "Clear the webs" },
-      },
-      {
-        at = 0,
-        elapsed = 180,
-        kind = Constants.logKind.Objective,
-        text = "Objective: Defeat the chamber boss",
-        detail = { criteriaID = 2, description = "Defeat the chamber boss" },
-      },
-      {
-        at = 0,
-        elapsed = 720,
-        kind = Constants.logKind.ObjectiveDone,
-        text = "Objective done: Defeat the chamber boss",
-        detail = { criteriaID = 2, description = "Defeat the chamber boss" },
-      },
-    },
-    splits = {},
-    watch = { criteria = {}, delveComplete = true, scenarioComplete = true },
-  }
-  return run, best
+  local shown = self.showingRun == true
+  local y = 0
+  y = placeTable(self.summary, self.summaryData or {}, y)
+  y = placeTable(self.stages, self.stagesData or {}, y)
+  y = placeHeader(self.companionHeader, y, shown)
+  self.companion:ClearAllPoints()
+  self.companion:SetPoint("TOPLEFT", window.body, "TOPLEFT", 0, y)
+  self.companion:SetWidth(BODY_WIDTH)
+  y = y - self.companion:GetHeight()
+  y = placeHeader(self.boonsHeader, y, shown)
+  y = placeTable(self.boons, self.boonsData or {}, y)
+  y = placeHeader(self.gainsHeader, y, shown)
+  y = placeTable(self.gains, self.gainsData or {}, y)
+  window:SetBodySize(BODY_WIDTH, math.max(22, -y))
 end
 
 ---@param run LDT_Run|nil
 function Module:Fill(run)
-  local panels = self.panels
   local window = self.window
-  if not panels or not window then
+  if not window or not self.companion then
     return
   end
+  local options = Data.db.global.timer
+  local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
+  local behind = options.behindColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+  self.showingRun = run ~= nil
   if not run then
     window:SetTitle("Run")
-    panels[Constants.sectionId.Run].rows = {}
-    panels[Constants.sectionId.Timers].rows = {}
-    panels[Constants.sectionId.Companion].rows = {}
-    panels[Constants.sectionId.Boons].rows = {}
-    panels[Constants.sectionId.Gains].rows = {}
-    panels[Constants.sectionId.Renown].rows = {}
+    self.summaryData = {}
+    self.stagesData = {}
+    self.boonsData = {}
+    self.gainsData = {}
+    paintCompanion(self.companion, nil)
     return
   end
-  local best = Helpers.BestRun(run)
-  window:SetTitle(runTitle(run))
-  panels[Constants.sectionId.Run].rows = runRows(run)
-  panels[Constants.sectionId.Timers].rows = timerRows(run, best)
-  panels[Constants.sectionId.Companion].rows = companionRows(run)
-  panels[Constants.sectionId.Boons].rows = boonRows(run)
-  panels[Constants.sectionId.Gains].rows = gainsRows(run)
-  panels[Constants.sectionId.Renown].rows = renownRows(run)
+  Data:SnapshotBest(run)
+  window:SetTitle(windowTitle(run))
+  self.summaryData = summaryData(run, ahead, behind)
+  self.stagesData = stageData(run, ahead, behind)
+  self.boonsData = boonData(run)
+  self.gainsData = gainsData(run)
+  paintCompanion(self.companion, run)
 end
 
 function Module:Render()
@@ -1230,8 +1074,7 @@ function Module:Render()
       name = addon.name .. "Run",
       storage = windows.Run,
       title = "Run",
-      icon = Constants.media.Icon,
-      width = PANEL_WIDTH,
+      width = BODY_WIDTH,
       height = 200,
       onShow = function()
         Module:Render()
@@ -1242,51 +1085,42 @@ function Module:Render()
       hiddenFrame:SetScript("OnUpdate", nil)
     end)
     local body = self.window.body
-
-    ---@type table<LDT_SectionId, LDT_WidgetPanel>
-    local panels = {}
-    for index = 1, #Constants.sections do
-      local info = Constants.sections[index]
-      ---@type LDT_WidgetPanel
-      local panel = CreateFrame("Frame", nil, body)
-      panel.id = info.id
-      panel.rowFrames = {}
-      panel.rows = {}
-      local panelHeader = CreateFrame("Button", nil, panel)
-      panelHeader:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
-      panelHeader:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
-      panelHeader:SetHeight(ROW_HEIGHT)
-      SetBackgroundColor(panelHeader, 0, 0, 0, 0.3)
-      panelHeader:SetScript("OnEnter", function()
-        SetHighlightColor(panelHeader, 1, 1, 1, 0.05)
-      end)
-      panelHeader:SetScript("OnLeave", function()
-        SetHighlightColor(panelHeader, 1, 1, 1, 0)
-      end)
-      local chevron = panelHeader:CreateTexture(nil, "ARTWORK")
-      chevron:SetSize(16, 16)
-      chevron:SetPoint("RIGHT", panelHeader, "RIGHT", -8, 0)
-      chevron:SetAtlas("ui-questtrackerbutton-secondary-collapse")
-      local panelTitle = panelHeader:CreateFontString(nil, "OVERLAY", FONT_PANEL)
-      panelTitle:SetPoint("LEFT", panelHeader, "LEFT", 8, 0)
-      panelTitle:SetPoint("RIGHT", panelHeader, "RIGHT", -28, 0)
-      panelTitle:SetJustifyH("LEFT")
-      panelTitle:SetJustifyV("MIDDLE")
-      panelTitle:SetWordWrap(false)
-      panelTitle:SetText(info.label)
-      panelHeader:SetScript("OnClick", function()
-        local collapsed = Data.db.global.run.collapsed
-        collapsed[info.id] = not collapsed[info.id]
-        Module:Render()
-      end)
-      panel.header = panelHeader
-      panel.title = panelTitle
-      panel.chevron = chevron
-      panelTitle:SetTextColor(1, 0.82, 0)
-      panels[info.id] = panel
-    end
-
-    self.panels = panels
+    local summaryColumns = {
+      { id = "label", headerText = "", width = LABEL_WIDTH, align = "LEFT" },
+      { id = "value", headerText = "", width = VALUE_WIDTH, align = "RIGHT" },
+    }
+    local stageColumns = {
+      { id = "stage", headerText = "Stages", width = STAGE_WIDTH, align = "LEFT" },
+      { id = "delta", headerText = "Delta", width = NUMBER_WIDTH, align = "RIGHT" },
+      { id = "time", headerText = "Time", width = NUMBER_WIDTH, align = "RIGHT" },
+      { id = "best", headerText = "Best", width = NUMBER_WIDTH, align = "RIGHT" },
+    }
+    local boonColumns = {
+      { id = "stat", headerText = "", width = BOON_LABEL_WIDTH, align = "LEFT" },
+      { id = "value", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
+      { id = "statRight", headerText = "", width = BOON_LABEL_WIDTH, align = "LEFT" },
+      { id = "valueRight", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
+    }
+    local gainColumns = {
+      { id = "name", headerText = "", width = GAIN_NAME_WIDTH, align = "LEFT" },
+      { id = "amount", headerText = "", width = GAIN_AMOUNT_WIDTH, align = "RIGHT" },
+    }
+    local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, false))
+    summary:SetParent(body)
+    self.summary = summary
+    local stages = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunStages", stageColumns, true, 0.35))
+    stages:SetParent(body)
+    self.stages = stages
+    self.companionHeader = createBlockHeader(body, "Companion")
+    self.companion = createCompanion(body)
+    self.boonsHeader = createBlockHeader(body, "Boons")
+    local boons = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunBoons", boonColumns, false))
+    boons:SetParent(body)
+    self.boons = boons
+    self.gainsHeader = createBlockHeader(body, "Gains")
+    local gains = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunGains", gainColumns, false))
+    gains:SetParent(body)
+    self.gains = gains
   end
   if not self.window or not self.window:IsShown() then
     return
@@ -1294,7 +1128,8 @@ function Module:Render()
   local run = self.pinnedRun or Data:GetActiveRun()
   self:Fill(run)
   self:Layout()
-  if run and run.result == Constants.runResult.Active then
+  local active = Data:GetActiveRun()
+  if run and active and run == active then
     if self.window:GetScript("OnUpdate") ~= onPaintUpdate then
       paintRemaining = 0
       self.window:SetScript("OnUpdate", onPaintUpdate)

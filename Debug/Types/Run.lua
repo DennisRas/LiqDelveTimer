@@ -1,4 +1,4 @@
----@class LDT_Player
+---@class LDT_Character
 ---@field guid WOWGUID|nil
 ---@field name string|nil
 ---@field realm string|nil
@@ -29,6 +29,28 @@
 ---@field activeSpellIDs number[]|nil
 ---@field tierInfo TieredEntranceTierInfo|nil
 
+---@class LDT_DelveHeader
+---@field tier number|nil
+---@field lives number|nil
+---@field deaths number|nil
+---@field spellIDs number[]
+
+---@class LDT_BestStep
+---@field stepID number|nil
+---@field stage number|nil
+---@field completedElapsed number
+
+---@class LDT_BestChamber
+---@field name string
+---@field completedElapsed number
+
+---@class LDT_RunBest
+---@field id string|nil
+---@field startedAt number|nil
+---@field endedAt number|nil
+---@field steps LDT_BestStep[]
+---@field chambers LDT_BestChamber[]
+
 ---@class LDT_Companion
 ---@field companionID number|nil
 ---@field creatureDisplayInfoID number|nil
@@ -54,6 +76,7 @@
 ---@field standing number|nil
 ---@field reactionThreshold number|nil
 ---@field nextThreshold number|nil
+---@field startLevel number|nil
 ---@field startStanding number|nil
 
 ---@class LDT_Instance
@@ -100,52 +123,29 @@
 ---@field step ScenarioStepInfo|nil
 ---@field criteria LDT_CriteriaSnap[]
 
----@class LDT_VaultActivity
----@field threshold number
----@field progress number
----@field level number
----@field activityTierID number
----@field id number
----@field index number
-
----@class LDT_Vault
----@field startProgress number|nil
----@field progress number|nil
----@field credits number
----@field activities LDT_VaultActivity[]
-
----@class LDT_GoldGain
----@field elapsed number
----@field copper number
----@field afterComplete boolean
-
----@class LDT_Gold
----@field start number
----@field last number
----@field gained number
----@field gains LDT_GoldGain[]
-
----@class LDT_CurrencyChange
----@field currencyID number
----@field name string|nil
----@field change number
+---@class LDT_RunCriteria
+---@field criteriaID number
+---@field description string|nil
+---@field completed boolean
+---@field failed boolean
 ---@field quantity number|nil
----@field elapsed number
----@field afterComplete boolean
+---@field totalQuantity number|nil
+---@field quantityString string|nil
+---@field criteriaType number|nil
+---@field isWeightedProgress boolean|nil
 
----@class LDT_RenownBaseline
----@field level number
----@field earned number
+---@class LDT_RunStep
+---@field stepID number
+---@field stage number|nil
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field criteria LDT_RunCriteria[]
 
----@class LDT_RenownChange
----@field factionID number
----@field name string|nil
----@field startLevel number
----@field startEarned number
----@field level number
----@field earned number
----@field threshold number
----@field maxLevel number
+---@class LDT_Gain
+---@field type LDT_GainTypeId
+---@field id number|nil
+---@field amount number
+---@field itemLink string|nil
 
 ---@class LDT_BoonStat
 ---@field label string|nil
@@ -153,15 +153,9 @@
 ---@field percent boolean|nil
 ---@field text string|nil
 
----@class LDT_LootRow
----@field elapsed number
----@field itemLink string|nil
----@field itemID number|nil
----@field quantity number|nil
----@field afterComplete boolean
-
 ---@class LDT_Chamber
 ---@field name string
+---@field stepID number|nil
 ---@field enteredElapsed number
 ---@field completedElapsed number|nil
 
@@ -186,7 +180,6 @@
 ---@field stepID number|nil
 ---@field criteriaSignature string|nil
 ---@field scenarioComplete boolean
----@field delveComplete boolean
 ---@field routeStep string|nil
 ---@field criteria table<number, LDT_CriteriaWatch>
 
@@ -200,8 +193,6 @@
 ---@field description string|nil
 ---@field encounterID number|nil
 ---@field encounterName string|nil
----@field progress number|nil
----@field gain number|nil
 
 ---@class LDT_LogEntry
 ---@field at number
@@ -215,32 +206,22 @@
 ---@field result LDT_RunResultId
 ---@field labyrinth boolean
 ---@field startedAt number
----@field sessionStart number
----@field sessionOffset number
----@field finishedElapsed number|nil
----@field endedElapsed number|nil
----@field bossName string|nil
----@field bossElapsed number|nil
----@field sawDelveComplete boolean
+---@field endedAt number|nil
+---@field best LDT_RunBest|nil
 ---@field variant string|nil
----@field deaths number
+---@field scenarioID number|nil
+---@field deaths number|nil
 ---@field lives number|nil
----@field player LDT_Player|nil
+---@field character LDT_Character|nil
 ---@field entrance LDT_Entrance|nil
 ---@field companion LDT_Companion|nil
 ---@field instance LDT_Instance|nil
 ---@field place LDT_Place|nil
 ---@field scenario LDT_Scenario|nil
----@field vault LDT_Vault
----@field gold LDT_Gold
----@field currencies LDT_CurrencyChange[]
----@field renownStart table<string, LDT_RenownBaseline>
----@field renowns LDT_RenownChange[]
 ---@field boons LDT_BoonStat[]
----@field loot LDT_LootRow[]
+---@field gains LDT_Gain[]
 ---@field chambers LDT_Chamber[]
 ---@field encounters LDT_Encounter[]
----@field routeID string|nil
----@field splits table<string, number>
+---@field steps LDT_RunStep[]|nil
 ---@field log LDT_LogEntry[]
 ---@field watch LDT_Watch

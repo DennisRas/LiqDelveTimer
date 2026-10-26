@@ -1,48 +1,27 @@
----@class LDT_RowColumn
----@field text string
----@field font string|nil
----@field r number|nil
----@field g number|nil
----@field b number|nil
----@field align "LEFT"|"CENTER"|"RIGHT"|nil
----@field width number|nil
----@field icon number|string|nil
----@field unit string|nil
----@field atlas string|nil
----@field displayID number|nil
+---@class LDT_RunIconButton : Button
+---@field icon Texture
 ---@field spellID number|nil
 ---@field tip string|nil
----@field barMin number|nil
----@field barMax number|nil
----@field barValue number|nil
----@field textOnBar "center"|"left"|"right"|"above"|nil
 
----@class LDT_RowModel
----@field columns LDT_RowColumn[]
----@field height number|nil
----@field itemLink string|nil
----@field currencyID number|nil
----@field goldCopper number|nil
-
----@class LDT_WidgetColumnFrame : Frame
----@field text FontString
----@field icon Texture
+---@class LDT_RunCompanion : Frame
+---@field name FontString
+---@field level FontString
+---@field gain FontString
+---@field empty FontString
+---@field row Frame
+---@field icons Frame
 ---@field bar StatusBar
----@field textFrame Frame
+---@field barText FontString
+---@field role LDT_RunIconButton
+---@field spells LDT_RunIconButton[]
 
----@class LDT_WidgetRowFrame : Frame
----@field columns LDT_WidgetColumnFrame[]
-
----@class LDT_WidgetPanel : Frame
----@field id LDT_SectionId
----@field header Button
+---@class LDT_RunBlockHeader : Frame
 ---@field title FontString
----@field chevron Texture
----@field rowFrames LDT_WidgetRowFrame[]
----@field rows LDT_RowModel[]
 
 ---@class LDT_HistoryTableRow : LiqUI_TableDataRowExtended
+---@field character string
 ---@field startedAt number
 ---@field delve string
+---@field tier number
 ---@field result string
 ---@field duration number
