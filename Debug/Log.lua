@@ -620,11 +620,12 @@ local function addCapture(lines)
       header = valueText(run.entrance.header)
       title = valueText(run.entrance.title)
     end
-    if run.scenario and run.scenario.info then
-      scenarioID = valueText(run.scenario.info.scenarioID)
+    local scenario = run.scenarios[#run.scenarios]
+    if scenario then
+      scenarioID = valueText(scenario.scenarioID)
     end
-    if run.scenario and run.scenario.step then
-      stepID = valueText(run.scenario.step.stepID)
+    if run.watch and run.watch.stepID then
+      stepID = valueText(run.watch.stepID)
     end
   end
   lines[#lines + 1] = format(

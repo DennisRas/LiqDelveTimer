@@ -711,31 +711,6 @@ function Capture:ApplyDelveHeader(run)
 end
 
 ---@param run LDT_Run
----@param name string
----@param stepID number|nil
----@return LDT_Chamber
-function Capture:EnsureChamber(run, name, stepID)
-  local chambers = run.chambers
-  for index = 1, #chambers do
-    local chamber = chambers[index]
-    if stepID and chamber.stepID == stepID then
-      return chamber
-    end
-    if not stepID and chamber.name == name then
-      return chamber
-    end
-  end
-  ---@type LDT_Chamber
-  local chamber = {
-    name = name,
-    stepID = stepID,
-    enteredElapsed = self:Elapsed(run),
-  }
-  chambers[#chambers + 1] = chamber
-  return chamber
-end
-
----@param run LDT_Run
 function Capture:FillStart(run)
   run.character = self:ReadCharacter()
   run.entrance = self:ReadEntrance()
@@ -862,7 +837,6 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
   if run.endedAt then
     return
   end
-  run.scenario = scenario
   local entrance = run.entrance
   if entrance then
     local spells = C_ScenarioInfo.GetTieredEntranceActiveSpells()
@@ -906,22 +880,6 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
         }
         self:AppendLog(run, Constants.logKind.ObjectiveDone, format("Objective done: %s", description), detail)
       end)
-      local runSteps = run.steps
-      if runSteps then
-        for stepIndex = 1, #runSteps do
-          local runStep = runSteps[stepIndex]
-          if runStep.stepID == watch.stepID then
-            for criteriaIndex = 1, #runStep.criteria do
-              local row = runStep.criteria[criteriaIndex]
-              if not current[row.criteriaID] then
-                row.completed = true
-              end
-            end
-            break
-          end
-        end
-      end
-      Data:FinishStep(run, watch.stepID, self:Elapsed(run))
     end
     watch.stepID = stepID
     local stepTitle = step and step.title
@@ -939,14 +897,10 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
       if label and label ~= "" then
         self:AppendLog(run, Constants.logKind.Step, format("Step: %s", label), detail)
       end
-      if run.mode == Constants.runMode.Lab and stepTitle and stepTitle ~= "" then
-        self:EnsureChamber(run, stepTitle, stepID)
-        run.watch.routeStep = stepTitle
-      end
     end
   end
 
-  Data:NoteScenario(run, scenario, self:Elapsed(run))
+  Data:NoteScenario(run, scenario)
 
   local criteriaWatch = watch.criteria
   local criteriaFinished = false
@@ -1022,12 +976,8 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
     chamberCleared = stepComplete and (criteriaFinished or freshCriteria)
   end
   local stepTitle = step and step.title
-  if run.mode == Constants.runMode.Lab and chamberCleared and stepTitle and stepTitle ~= "" then
-    local chamber = self:EnsureChamber(run, stepTitle, step and step.stepID)
-    if not chamber.completedElapsed then
-      chamber.completedElapsed = self:Elapsed(run)
-      self:AppendLog(run, Constants.logKind.Chamber, format("Chamber complete: %s", stepTitle), { stepTitle = stepTitle })
-    end
+  if Helpers.RunMode(run) == Constants.runMode.Lab and chamberCleared and stepTitle and stepTitle ~= "" then
+    self:AppendLog(run, Constants.logKind.Chamber, format("Chamber complete: %s", stepTitle), { stepTitle = stepTitle })
   end
 
   local scenarioComplete = scenario.info and scenario.info.isComplete
@@ -1075,10 +1025,6 @@ function Capture:MarkRunFinished(run)
     return
   end
   local elapsed = self:Elapsed(run)
-  local stepID = run.watch.stepID
-  if stepID then
-    Data:FinishStep(run, stepID, elapsed)
-  end
   self:AppendLog(run, Constants.logKind.DelveComplete, "Delve complete", nil, elapsed)
   self:Stop(run, elapsed, false)
 end

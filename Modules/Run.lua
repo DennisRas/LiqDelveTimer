@@ -183,39 +183,12 @@ local function stageRow(name, elapsed, bestElapsed, ahead, behind)
 end
 
 ---@param run LDT_Run
----@param chamberName string
----@return number|nil
-local function bestChamberTime(run, chamberName)
-  local best = run.best
-  if not best then
-    return nil
-  end
-  for index = 1, #best.chambers do
-    local chamber = best.chambers[index]
-    if chamber.name == chamberName then
-      return chamber.completedElapsed
-    end
-  end
-  return nil
-end
-
----@param run LDT_Run
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return LiqUI_TableData
 local function stageData(run, ahead, behind)
   ---@type LiqUI_TableData
   local data = {}
-  if run.mode == Constants.runMode.Lab then
-    for index = 1, #run.chambers do
-      local chamber = run.chambers[index]
-      data[#data + 1] = stageRow(chamber.name, chamber.completedElapsed, bestChamberTime(run, chamber.name), ahead, behind)
-    end
-    if #data == 0 then
-      data[1] = noteRow("No steps yet", 4)
-    end
-    return data
-  end
   local rows = Data:StepRows(run)
   for index = 1, #rows do
     local row = rows[index]

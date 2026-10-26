@@ -6,7 +6,6 @@ local Timer = addon.Core:NewModule("Timer")
 addon.Module_Timer = Timer
 
 local Data = addon.Data
-local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
@@ -227,40 +226,6 @@ function Timer:SetFrameShown(shown, fromGame)
   frame:Hide()
 end
 
----@param run LDT_Run
----@return LDT_StepRow[]
-function Timer:StepRows(run)
-  ---@type LDT_StepRow[]
-  local rows = {}
-  if run.mode == Constants.runMode.Lab then
-    local currentName = run.watch and run.watch.routeStep
-    local chambers = run.chambers or {}
-    local bestChambers = run.best and run.best.chambers
-    for index = 1, #chambers do
-      local chamber = chambers[index]
-      local elapsed = chamber.completedElapsed
-      local best
-      if bestChambers then
-        for bestIndex = 1, #bestChambers do
-          local bestChamber = bestChambers[bestIndex]
-          if bestChamber.name == chamber.name then
-            best = bestChamber.completedElapsed
-            break
-          end
-        end
-      end
-      rows[#rows + 1] = {
-        name = chamber.name,
-        elapsed = elapsed,
-        best = best,
-        current = chamber.name == currentName and elapsed == nil,
-      }
-    end
-    return rows
-  end
-  return Data:StepRows(run)
-end
-
 local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
 local SAMPLE_CLOCK = 154000
 
@@ -356,14 +321,17 @@ end
 ---@param rows LDT_StepRow[]
 ---@param run LDT_Run
 local function fillObjectives(rows, run)
-  local steps = run.steps
+  local scenario = run.scenarios[#run.scenarios]
+  if not scenario then
+    return
+  end
   local stepID = run.watch and run.watch.stepID
-  if not steps or not stepID then
+  if not stepID then
     return
   end
   local criteria
-  for index = 1, #steps do
-    local step = steps[index]
+  for index = 1, #scenario.steps do
+    local step = scenario.steps[index]
     if step.stepID == stepID then
       criteria = step.criteria
       break
@@ -782,7 +750,7 @@ function Timer:Render()
 
   local stepRows = {}
   if activeRun then
-    stepRows = self:StepRows(activeRun)
+    stepRows = Data:StepRows(activeRun)
     if options.showObjectives ~= false then
       fillObjectives(stepRows, activeRun)
     end

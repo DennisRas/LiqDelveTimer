@@ -8,8 +8,6 @@ addon.Data = Data
 local LibAceDB = addon.libs.AceDB
 local LiqUI = addon.libs.LiqUI
 local TableForEach = LiqUI.Utils.TableForEach
-local TableFilter = LiqUI.Utils.TableFilter
-local TableFind = LiqUI.Utils.TableFind
 local TableGet = LiqUI.Utils.TableGet
 local Constants = addon.Constants
 local Helpers = addon.Helpers
@@ -132,12 +130,11 @@ function Data:CreateRun(startedAt)
     id = runID,
     result = Constants.runResult.Active,
     startedAt = startedAt,
+    scenarios = {},
     boons = {},
     gains = {},
-    chambers = {},
     encounters = {},
     log = {},
-    steps = {},
     watch = {
       criteria = {},
       scenarioComplete = false,
@@ -200,81 +197,9 @@ local function learnedCriteria(criteria)
   return rows
 end
 
----@param criteria LDT_CriteriaSnap[]
----@return LDT_RunCriteria[]
-local function runCriteria(criteria)
-  ---@type LDT_RunCriteria[]
-  local rows = {}
-  for index = 1, #criteria do
-    local info = criteria[index]
-    local criteriaID = plainNumber(info.criteriaID)
-    if criteriaID ~= nil then
-      local completed = plainBoolean(info.completed)
-      local failed = plainBoolean(info.failed)
-      ---@type LDT_RunCriteria
-      local row = {
-        criteriaID = criteriaID,
-        description = plainString(info.description),
-        completed = completed == true,
-        failed = failed == true,
-        quantity = plainNumber(info.quantity),
-        totalQuantity = plainNumber(info.totalQuantity),
-        quantityString = plainString(info.quantityString),
-        criteriaType = plainNumber(info.criteriaType),
-        isWeightedProgress = plainBoolean(info.isWeightedProgress),
-      }
-      rows[#rows + 1] = row
-    end
-  end
-  return rows
-end
-
----@param name string
----@param step LDT_RunStep|nil
----@return string
-local function withCriteriaCount(name, step)
-  local criteria = step and step.criteria
-  if not criteria or #criteria == 0 then
-    return name
-  end
-  local done = 0
-  for index = 1, #criteria do
-    if criteria[index].completed then
-      done = done + 1
-    end
-  end
-  return format("%s (%d/%d)", name, done, #criteria)
-end
-
----@return boolean
-local function showObjectiveCounts()
-  local timer = Data.db and Data.db.global.timer
-  return not timer or timer.showObjectiveCounts ~= false
-end
-
----@param name string
----@param step LDT_RunStep|nil
----@param storedStep LDT_ScenarioStep|nil
----@return string
-local function stageName(name, step, storedStep)
-  if not showObjectiveCounts() then
-    return name
-  end
-  if step and step.criteria and #step.criteria > 0 then
-    return withCriteriaCount(name, step)
-  end
-  local storedCriteria = storedStep and storedStep.criteria
-  local total = storedCriteria and #storedCriteria or 0
-  if total > 0 then
-    return format("%s (0/%d)", name, total)
-  end
-  return name
-end
-
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
----@param elapsed number
-function Data:NoteScenario(run, scenario, elapsed)
+function Data:NoteScenario(run, scenario)
   if not self.db then
     return
   end
@@ -288,7 +213,6 @@ function Data:NoteScenario(run, scenario, elapsed)
   if not scenarioID or not stepID then
     return
   end
-  run.scenarioID = scenarioID
   local stage = plainNumber(info.currentStage)
   local numStages = plainNumber(info.numStages)
   local knownScenario = TableGet(self.scenarios, "scenarioID", scenarioID)
@@ -348,46 +272,7 @@ function Data:NoteScenario(run, scenario, elapsed)
       storedStep.criteria = criteriaRows
     end
   end
-  if run.steps == nil then
-    run.steps = {}
-  end
-  local runStep
-  for index = 1, #run.steps do
-    if run.steps[index].stepID == stepID then
-      runStep = run.steps[index]
-      break
-    end
-  end
-  if not runStep then
-    ---@type LDT_RunStep
-    runStep = {
-      stepID = stepID,
-      stage = stage,
-      enteredElapsed = elapsed,
-      criteria = {},
-    }
-    run.steps[#run.steps + 1] = runStep
-  elseif stage and not runStep.stage then
-    runStep.stage = stage
-  end
-  runStep.criteria = runCriteria(scenario.criteria)
   self:SnapshotBest(run)
-end
-
----@param run LDT_Run
----@param stepID number
----@param elapsed number
-function Data:FinishStep(run, stepID, elapsed)
-  if run.steps == nil then
-    return
-  end
-  for index = 1, #run.steps do
-    local runStep = run.steps[index]
-    if runStep.stepID == stepID and runStep.completedElapsed == nil then
-      runStep.completedElapsed = elapsed
-      break
-    end
-  end
 end
 
 ---@param callback fun(run: LDT_Run)
@@ -402,85 +287,15 @@ end
 
 ---@param run LDT_Run
 function Data:SnapshotBest(run)
-  if run.best then
+  if run.best or not Helpers.RunTier(run) then
     return
   end
-  if not run.scenarioID or not Helpers.RunTier(run) then
-    return
-  end
-  local source = Helpers.BestRun(run)
-  ---@type LDT_BestStep[]
-  local steps = {}
-  ---@type LDT_BestChamber[]
-  local chambers = {}
-  ---@type LDT_RunBest
-  local best = {
-    steps = steps,
-    chambers = chambers,
-  }
-  if source and source.endedAt then
-    best.id = source.id
-    best.startedAt = source.startedAt
-    best.endedAt = source.endedAt
-    local sourceSteps = source.steps
-    if sourceSteps then
-      for index = 1, #sourceSteps do
-        local step = sourceSteps[index]
-        if step.completedElapsed then
-          ---@type LDT_BestStep
-          local row = {
-            stepID = step.stepID,
-            stage = step.stage,
-            completedElapsed = step.completedElapsed,
-          }
-          steps[#steps + 1] = row
-        end
-      end
-    end
-    local sourceChambers = source.chambers
-    if sourceChambers then
-      for index = 1, #sourceChambers do
-        local chamber = sourceChambers[index]
-        if chamber.name and chamber.name ~= "" and chamber.completedElapsed then
-          ---@type LDT_BestChamber
-          local row = {
-            name = chamber.name,
-            completedElapsed = chamber.completedElapsed,
-          }
-          chambers[#chambers + 1] = row
-        end
-      end
+  if Helpers.RunMode(run) ~= Constants.runMode.Lab then
+    local first = run.scenarios[1]
+    if not first then
+      return
     end
   end
-  run.best = best
-end
-
----@param run LDT_Run
----@param stepID number|nil
----@param stage number|nil
----@return number|nil
-local function storedBestTime(run, stepID, stage)
-  local best = run.best
-  if not best then
-    return nil
-  end
-  local steps = best.steps
-  for index = 1, #steps do
-    local step = steps[index]
-    if stepID and step.stepID == stepID then
-      return step.completedElapsed
-    end
-  end
-  if not stage then
-    return nil
-  end
-  for index = 1, #steps do
-    local step = steps[index]
-    if step.stage == stage then
-      return step.completedElapsed
-    end
-  end
-  return nil
 end
 
 ---@param run LDT_Run
@@ -488,115 +303,8 @@ end
 function Data:StepRows(run)
   ---@type LDT_StepRow[]
   local rows = {}
-  local steps = run.steps
-  if not run.scenarioID or not steps then
+  if #run.scenarios == 0 then
     return rows
-  end
-  ---@type table<number, LDT_RunStep>
-  local byStage = {}
-  local maxStage = 0
-  for index = 1, #steps do
-    local step = steps[index]
-    local stage = step.stage
-    if stage and stage > 0 then
-      local finished = Helpers.Duration(run)
-      local entered = step.enteredElapsed
-      local afterFinish = finished and entered and entered > finished and run.mode ~= Constants.runMode.Lab
-      if not afterFinish then
-        byStage[stage] = step
-        if stage > maxStage then
-          maxStage = stage
-        end
-      end
-    end
-  end
-  local info = run.scenario and run.scenario.info
-  local numStages = info and plainNumber(info.numStages)
-  if numStages and numStages > maxStage then
-    maxStage = numStages
-  end
-  local watchID = run.watch and run.watch.stepID
-  local scenarioID = run.scenarioID
-  local knownSteps = scenarioID and TableFilter(self.steps, function(knownStep)
-    return knownStep.scenarioID == scenarioID
-  end) or {}
-  ---@type table<number, string>
-  local titleByStep = {}
-  ---@type table<string, boolean>
-  local seenTitle = {}
-  local distinct = 0
-  TableForEach(knownSteps, function(knownStep)
-    local title = knownStep.title
-    if title and title ~= "" then
-      titleByStep[knownStep.stepID] = title
-      if not seenTitle[title] then
-        seenTitle[title] = true
-        distinct = distinct + 1
-      end
-    end
-  end)
-  if self.db and scenarioID then
-    TableForEach(self.db.global.steps, function(storedStep)
-      if storedStep.scenarioID ~= scenarioID then
-        return
-      end
-      local title = storedStep.title
-      if title and title ~= "" and titleByStep[storedStep.stepID] == nil then
-        titleByStep[storedStep.stepID] = title
-        if not seenTitle[title] then
-          seenTitle[title] = true
-          distinct = distinct + 1
-        end
-      end
-    end)
-  end
-  local useTitles = distinct >= 2
-  for stage = 1, maxStage do
-    local step = byStage[stage]
-    local name = format("Stage %d", stage)
-    if useTitles then
-      local title
-      if step then
-        title = titleByStep[step.stepID]
-      else
-        local knownStep = TableFind(knownSteps, function(row)
-          return row.order ~= nil and row.order + 1 == stage
-        end)
-        title = knownStep and knownStep.title
-      end
-      if title and title ~= "" then
-        name = title
-      end
-    end
-    local stepID = step and step.stepID
-    local storedStep = stepID and self.db and self.db.global.steps[stepID] or nil
-    if not storedStep and self.db and scenarioID then
-      storedStep = TableFind(self.db.global.steps, function(row)
-        return row.scenarioID == scenarioID and row.stage == stage
-      end)
-    end
-    if not stepID and storedStep then
-      stepID = storedStep.stepID
-    end
-    local best = storedBestTime(run, stepID, stage)
-    local countedName = stageName(name, step, storedStep)
-    if step then
-      local elapsed = step.completedElapsed
-      local current = step.stepID == watchID and elapsed == nil and not run.endedAt
-      rows[#rows + 1] = {
-        name = countedName,
-        elapsed = elapsed,
-        best = best,
-        current = current,
-      }
-    else
-      rows[#rows + 1] = {
-        name = countedName,
-        elapsed = nil,
-        best = best,
-        current = false,
-      }
-    end
   end
   return rows
 end

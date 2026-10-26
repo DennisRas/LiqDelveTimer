@@ -134,6 +134,17 @@
 ---@field criteriaType number|nil
 ---@field isWeightedProgress boolean|nil
 
+---@class LDT_RunScenario
+---@field index number
+---@field scenarioID number
+---@field role LDT_ScenarioRoleId|nil
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field subzone string|nil
+---@field mapID number|nil
+---@field taxiNodeID number|nil
+---@field steps LDT_RunStep[]
+
 ---@class LDT_RunStep
 ---@field stepID number
 ---@field stage number|nil
@@ -152,12 +163,6 @@
 ---@field amount number|nil
 ---@field percent boolean|nil
 ---@field text string|nil
-
----@class LDT_Chamber
----@field name string
----@field stepID number|nil
----@field enteredElapsed number
----@field completedElapsed number|nil
 
 ---@class LDT_DelvesDifficultyPickerFrame : Frame
 ---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
@@ -180,7 +185,6 @@
 ---@field stepID number|nil
 ---@field criteriaSignature string|nil
 ---@field scenarioComplete boolean
----@field routeStep string|nil
 ---@field criteria table<number, LDT_CriteriaWatch>
 
 ---@class LDT_LogDetail
@@ -205,11 +209,11 @@
 ---@field id string
 ---@field result LDT_RunResultId
 ---@field mode LDT_RunModeId|nil
+---@field scenarios LDT_RunScenario[]
 ---@field startedAt number
 ---@field endedAt number|nil
 ---@field best LDT_RunBest|nil
 ---@field variant string|nil
----@field scenarioID number|nil
 ---@field deaths number|nil
 ---@field lives number|nil
 ---@field character LDT_Character|nil
@@ -217,11 +221,8 @@
 ---@field companion LDT_Companion|nil
 ---@field instance LDT_Instance|nil
 ---@field place LDT_Place|nil
----@field scenario LDT_Scenario|nil
 ---@field boons LDT_BoonStat[]
 ---@field gains LDT_Gain[]
----@field chambers LDT_Chamber[]
 ---@field encounters LDT_Encounter[]
----@field steps LDT_RunStep[]|nil
 ---@field log LDT_LogEntry[]
 ---@field watch LDT_Watch

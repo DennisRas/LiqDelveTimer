@@ -37,16 +37,8 @@ function Debug:OnChatCommand(input)
     addon.Core:Print("No delve run yet.")
     return true
   end
-  addon.Core:Print(format("Run %s (%s)", run.id, run.result))
-  local chambers = run.chambers
-  for index = 1, #chambers do
-    local chamber = chambers[index]
-    local completed = "open"
-    if chamber.completedElapsed then
-      completed = Helpers.FormatElapsed(chamber.completedElapsed)
-    end
-    addon.Core:Print(format("Chamber %s entered %s complete %s", chamber.name, Helpers.FormatElapsed(chamber.enteredElapsed), completed))
-  end
+  local mode = Helpers.RunMode(run) or "none"
+  addon.Core:Print(format("Run %s (%s) mode %s scenarios %d", run.id, run.result, mode, #run.scenarios))
   local log = run.log
   local first = #log - 29
   if first < 1 then

@@ -181,41 +181,39 @@ function Helpers.FormatDate(milliseconds)
 end
 
 ---@param run LDT_Run
+---@return LDT_RunModeId|nil
+function Helpers.RunMode(run)
+  return run.mode
+end
+
+---@param run LDT_Run
 ---@return LDT_Run|nil
 function Helpers.BestRun(run)
-  local instance = run.instance
-  if not instance then
-    return nil
-  end
-  local scenarioID = run.scenarioID
   local tier = Helpers.RunTier(run)
   if not tier then
     return nil
   end
-  local mapID = instance.mapID
-  local name = instance.name
+  local mode = Helpers.RunMode(run)
+  local scenarioID
+  if mode ~= addon.Constants.runMode.Lab then
+    local first = run.scenarios[1]
+    scenarioID = first and first.scenarioID
+    if not scenarioID then
+      return nil
+    end
+  end
   local best
   local bestTime
   addon.Data:ForEachRun(function(saved)
     if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.RunTier(saved) ~= tier then
+    if Helpers.RunTier(saved) ~= tier or Helpers.RunMode(saved) ~= mode then
       return
     end
     if scenarioID then
-      if saved.scenarioID ~= scenarioID then
-        return
-      end
-    else
-      local savedInstance = saved.instance
-      local samePlace = false
-      if mapID and savedInstance and savedInstance.mapID == mapID then
-        samePlace = true
-      elseif name and name ~= "" and savedInstance and savedInstance.name == name then
-        samePlace = true
-      end
-      if not samePlace then
+      local savedFirst = saved.scenarios[1]
+      if not savedFirst or savedFirst.scenarioID ~= scenarioID then
         return
       end
     end
