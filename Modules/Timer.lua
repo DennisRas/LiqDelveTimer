@@ -6,6 +6,7 @@ local Timer = addon.Core:NewModule("Timer")
 addon.Module_Timer = Timer
 
 local Data = addon.Data
+local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
@@ -231,7 +232,7 @@ end
 function Timer:StepRows(run)
   ---@type LDT_StepRow[]
   local rows = {}
-  if run.labyrinth then
+  if run.mode == Constants.runMode.Lab then
     local currentName = run.watch and run.watch.routeStep
     local chambers = run.chambers or {}
     local bestChambers = run.best and run.best.chambers

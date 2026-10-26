@@ -1,7 +1,7 @@
 ---@class LDT_AceDB : AceDBObject-3.0
 ---@field global LDT_Global
 
----@class LDT_CatalogCriteria
+---@class LDT_Criteria
 ---@field criteriaID number
 ---@field description string|nil
 ---@field totalQuantity number|nil
@@ -10,24 +10,36 @@
 ---@field assetID number|nil
 ---@field isWeightedProgress boolean|nil
 
----@class LDT_CatalogStep
----@field stepID number
----@field stage number|nil
----@field title string|nil
----@field criteria LDT_CatalogCriteria[]
-
----@class LDT_CatalogScenario
----@field scenarioID number
----@field name string|nil
----@field numStages number|nil
----@field mapID number|nil
----@field instanceID number|nil
----@field difficultyID number|nil
----@field steps LDT_CatalogStep[]
+---@class LDT_Delve
+---@field delveID number
+---@field name string
+---@field mode LDT_RunModeId
+---@field bossEncounterID number|nil
+---@field kinduruCriteriaID number|nil
 
 ---@class LDT_ObjectiveLine
 ---@field text string
 ---@field completed boolean
+
+---@class LDT_ScenarioRow
+---@field scenarioID number
+---@field delveID number|nil
+---@field name string|nil
+---@field numStages number|nil
+---@field flags number|nil
+---@field role LDT_ScenarioRoleId|nil
+---@field mapID number|nil
+---@field instanceID number|nil
+---@field difficultyID number|nil
+
+---@class LDT_ScenarioStep
+---@field stepID number
+---@field scenarioID number
+---@field order number|nil
+---@field stage number|nil
+---@field title string|nil
+---@field description string|nil
+---@field criteria LDT_Criteria[]|nil
 
 ---@class LDT_StepRow
 ---@field name string
@@ -49,13 +61,18 @@
 ---@field backgroundColor ColorRGBAData
 ---@field borderColor ColorRGBAData
 
+---@class LDT_UiMap
+---@field uiMapID number
+---@field delveID number
+
 ---@class LDT_Global
 ---@field dbVersion number
 ---@field minimap { minimapPos: number, hide: boolean, lock: boolean }
 ---@field liqui LiqUI_DB
 ---@field logs LiqUI_LoggerDB
 ---@field timer LDT_TimerOptions
----@field scenarios table<number, LDT_CatalogScenario>
+---@field scenarios table<number, LDT_ScenarioRow>
+---@field steps table<number, LDT_ScenarioStep>
 ---@field runs LDT_Run[]
 ---@field activeRunID string|nil
 ---@field nextRunID number
@@ -64,6 +81,9 @@
 ---@field dbVersion number
 ---@field defaultDB table
 ---@field db LDT_AceDB
----@field labyrinthMapID number
+---@field delves LDT_Delve[]
+---@field uiMaps LDT_UiMap[]
+---@field scenarios LDT_ScenarioRow[]
+---@field steps LDT_ScenarioStep[]
 ---@field boonSpellID number
 ---@field hiddenItemIDs table<number, boolean>

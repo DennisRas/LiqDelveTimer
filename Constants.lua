@@ -7,12 +7,27 @@ addon.Constants = Constants
 
 Constants.prefix = format("<%s> ", addon.name)
 
+---@enum LDT_RunModeId
+Constants.runMode = {
+  Delve = "delve",
+  Lab = "lab",
+}
+
 ---@enum LDT_RunResultId
 Constants.runResult = {
   Active = "active",
   PersonalBest = "personalBest",
   Completed = "completed",
   Abandoned = "abandoned",
+}
+
+---@enum LDT_ScenarioRoleId
+Constants.scenarioRole = {
+  Stages = "stages",
+  Reward = "reward",
+  Hub = "hub",
+  Chamber = "chamber",
+  Boss = "boss",
 }
 
 ---@enum LDT_LogKindId

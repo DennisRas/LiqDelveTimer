@@ -8,6 +8,9 @@ addon.Data = Data
 local LibAceDB = addon.libs.AceDB
 local LiqUI = addon.libs.LiqUI
 local TableForEach = LiqUI.Utils.TableForEach
+local TableFilter = LiqUI.Utils.TableFilter
+local TableFind = LiqUI.Utils.TableFind
+local TableGet = LiqUI.Utils.TableGet
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 
@@ -51,6 +54,7 @@ Data.defaultDB = {
       borderColor = { r = 1, g = 1, b = 1, a = 0 },
     },
     scenarios = {},
+    steps = {},
     runs = {},
     activeRunID = nil,
     nextRunID = 1,
@@ -79,6 +83,28 @@ function Data:GetActiveRun()
   return nil
 end
 
+---@param instance LDT_Instance|nil
+---@return LDT_Delve|nil
+function Data:DelveForInstance(instance)
+  if not instance then
+    return nil
+  end
+  if instance.instanceID then
+    local delve = TableGet(self.delves, "delveID", instance.instanceID)
+    if delve then
+      return delve
+    end
+  end
+  if not instance.mapID then
+    return nil
+  end
+  local uiMap = TableGet(self.uiMaps, "uiMapID", instance.mapID)
+  if not uiMap then
+    return nil
+  end
+  return TableGet(self.delves, "delveID", uiMap.delveID)
+end
+
 ---@return LDT_Run|nil
 function Data:GetLatestRun()
   if not self.db then
@@ -105,7 +131,6 @@ function Data:CreateRun(startedAt)
   local run = {
     id = runID,
     result = Constants.runResult.Active,
-    labyrinth = false,
     startedAt = startedAt,
     boons = {},
     gains = {},
@@ -151,15 +176,15 @@ local function plainBoolean(value)
 end
 
 ---@param criteria LDT_CriteriaSnap[]
----@return LDT_CatalogCriteria[]
-local function catalogCriteria(criteria)
-  ---@type LDT_CatalogCriteria[]
+---@return LDT_Criteria[]
+local function learnedCriteria(criteria)
+  ---@type LDT_Criteria[]
   local rows = {}
   for index = 1, #criteria do
     local info = criteria[index]
     local criteriaID = plainNumber(info.criteriaID)
     if criteriaID ~= nil then
-      ---@type LDT_CatalogCriteria
+      ---@type LDT_Criteria
       local row = {
         criteriaID = criteriaID,
         description = plainString(info.description),
@@ -229,16 +254,16 @@ end
 
 ---@param name string
 ---@param step LDT_RunStep|nil
----@param catalogStep LDT_CatalogStep|nil
+---@param storedStep LDT_ScenarioStep|nil
 ---@return string
-local function stageName(name, step, catalogStep)
+local function stageName(name, step, storedStep)
   if not showObjectiveCounts() then
     return name
   end
   if step and step.criteria and #step.criteria > 0 then
     return withCriteriaCount(name, step)
   end
-  local storedCriteria = catalogStep and catalogStep.criteria
+  local storedCriteria = storedStep and storedStep.criteria
   local total = storedCriteria and #storedCriteria or 0
   if total > 0 then
     return format("%s (0/%d)", name, total)
@@ -266,58 +291,63 @@ function Data:NoteScenario(run, scenario, elapsed)
   run.scenarioID = scenarioID
   local stage = plainNumber(info.currentStage)
   local numStages = plainNumber(info.numStages)
-  local scenarios = self.db.global.scenarios
-  local record = scenarios[scenarioID]
-  if not record then
-    ---@type LDT_CatalogScenario
-    record = {
-      scenarioID = scenarioID,
-      steps = {},
-    }
-    scenarios[scenarioID] = record
-  end
-  local scenarioName = plainString(info.name)
-  if scenarioName then
-    record.name = scenarioName
-  end
-  if numStages then
-    record.numStages = numStages
-  end
-  local instance = run.instance
-  if instance then
-    if instance.mapID then
-      record.mapID = instance.mapID
+  local knownScenario = TableGet(self.scenarios, "scenarioID", scenarioID)
+  local knownStep = TableGet(self.steps, "stepID", stepID)
+  if not knownScenario then
+    local scenarios = self.db.global.scenarios
+    local record = scenarios[scenarioID]
+    if not record then
+      ---@type LDT_ScenarioRow
+      record = {
+        scenarioID = scenarioID,
+      }
+      scenarios[scenarioID] = record
     end
-    if instance.instanceID then
-      record.instanceID = instance.instanceID
+    local scenarioName = plainString(info.name)
+    if scenarioName and (record.name == nil or record.name == "") then
+      record.name = scenarioName
     end
-    if instance.difficultyID then
-      record.difficultyID = instance.difficultyID
+    if numStages and record.numStages == nil then
+      record.numStages = numStages
     end
-  end
-  local catalogStep
-  for index = 1, #record.steps do
-    if record.steps[index].stepID == stepID then
-      catalogStep = record.steps[index]
-      break
+    local instance = run.instance
+    if instance then
+      if instance.mapID and record.mapID == nil then
+        record.mapID = instance.mapID
+      end
+      if instance.instanceID and record.instanceID == nil then
+        record.instanceID = instance.instanceID
+      end
+      if instance.difficultyID and record.difficultyID == nil then
+        record.difficultyID = instance.difficultyID
+      end
     end
   end
-  if not catalogStep then
-    ---@type LDT_CatalogStep
-    catalogStep = {
-      stepID = stepID,
-      criteria = {},
-    }
-    record.steps[#record.steps + 1] = catalogStep
+  local criteriaRows = learnedCriteria(scenario.criteria)
+  if not knownStep or #criteriaRows > 0 then
+    local storedSteps = self.db.global.steps
+    local storedStep = storedSteps[stepID]
+    if not storedStep then
+      ---@type LDT_ScenarioStep
+      storedStep = {
+        stepID = stepID,
+        scenarioID = scenarioID,
+      }
+      storedSteps[stepID] = storedStep
+    end
+    if not knownStep then
+      if stage then
+        storedStep.stage = stage
+      end
+      local title = plainString(step.title)
+      if title and (storedStep.title == nil or storedStep.title == "") then
+        storedStep.title = title
+      end
+    end
+    if #criteriaRows > 0 then
+      storedStep.criteria = criteriaRows
+    end
   end
-  if stage then
-    catalogStep.stage = stage
-  end
-  local title = plainString(step.title)
-  if title then
-    catalogStep.title = title
-  end
-  catalogStep.criteria = catalogCriteria(scenario.criteria)
   if run.steps == nil then
     run.steps = {}
   end
@@ -471,7 +501,7 @@ function Data:StepRows(run)
     if stage and stage > 0 then
       local finished = Helpers.Duration(run)
       local entered = step.enteredElapsed
-      local afterFinish = finished and entered and entered > finished and not run.labyrinth
+      local afterFinish = finished and entered and entered > finished and run.mode ~= Constants.runMode.Lab
       if not afterFinish then
         byStage[stage] = step
         if stage > maxStage then
@@ -486,30 +516,41 @@ function Data:StepRows(run)
     maxStage = numStages
   end
   local watchID = run.watch and run.watch.stepID
-  local catalog
-  if run.scenarioID and self.db then
-    catalog = self.db.global.scenarios[run.scenarioID]
-  end
+  local scenarioID = run.scenarioID
+  local knownSteps = scenarioID and TableFilter(self.steps, function(knownStep)
+    return knownStep.scenarioID == scenarioID
+  end) or {}
   ---@type table<number, string>
   local titleByStep = {}
-  local useTitles = false
-  if catalog then
-    ---@type table<string, boolean>
-    local seenTitle = {}
-    local distinct = 0
-    for index = 1, #catalog.steps do
-      local catalogStep = catalog.steps[index]
-      local title = catalogStep.title
-      if title and title ~= "" then
-        titleByStep[catalogStep.stepID] = title
+  ---@type table<string, boolean>
+  local seenTitle = {}
+  local distinct = 0
+  TableForEach(knownSteps, function(knownStep)
+    local title = knownStep.title
+    if title and title ~= "" then
+      titleByStep[knownStep.stepID] = title
+      if not seenTitle[title] then
+        seenTitle[title] = true
+        distinct = distinct + 1
+      end
+    end
+  end)
+  if self.db and scenarioID then
+    TableForEach(self.db.global.steps, function(storedStep)
+      if storedStep.scenarioID ~= scenarioID then
+        return
+      end
+      local title = storedStep.title
+      if title and title ~= "" and titleByStep[storedStep.stepID] == nil then
+        titleByStep[storedStep.stepID] = title
         if not seenTitle[title] then
           seenTitle[title] = true
           distinct = distinct + 1
         end
       end
-    end
-    useTitles = distinct >= 2
+    end)
   end
+  local useTitles = distinct >= 2
   for stage = 1, maxStage do
     local step = byStage[stage]
     local name = format("Stage %d", stage)
@@ -517,38 +558,28 @@ function Data:StepRows(run)
       local title
       if step then
         title = titleByStep[step.stepID]
-      elseif catalog then
-        for index = 1, #catalog.steps do
-          local catalogStep = catalog.steps[index]
-          if catalogStep.stage == stage then
-            title = catalogStep.title
-            break
-          end
-        end
+      else
+        local knownStep = TableFind(knownSteps, function(row)
+          return row.order ~= nil and row.order + 1 == stage
+        end)
+        title = knownStep and knownStep.title
       end
       if title and title ~= "" then
         name = title
       end
     end
     local stepID = step and step.stepID
-    local catalogStep
-    if catalog then
-      for index = 1, #catalog.steps do
-        local catalogRow = catalog.steps[index]
-        local sameStep = stepID and catalogRow.stepID == stepID
-        if sameStep or (not catalogStep and catalogRow.stage == stage) then
-          catalogStep = catalogRow
-          if not stepID then
-            stepID = catalogRow.stepID
-          end
-          if sameStep then
-            break
-          end
-        end
-      end
+    local storedStep = stepID and self.db and self.db.global.steps[stepID] or nil
+    if not storedStep and self.db and scenarioID then
+      storedStep = TableFind(self.db.global.steps, function(row)
+        return row.scenarioID == scenarioID and row.stage == stage
+      end)
+    end
+    if not stepID and storedStep then
+      stepID = storedStep.stepID
     end
     local best = storedBestTime(run, stepID, stage)
-    local countedName = stageName(name, step, catalogStep)
+    local countedName = stageName(name, step, storedStep)
     if step then
       local elapsed = step.completedElapsed
       local current = step.stepID == watchID and elapsed == nil and not run.endedAt

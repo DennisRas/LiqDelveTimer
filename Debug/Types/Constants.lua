@@ -6,7 +6,9 @@
 
 ---@class LDT_Constants
 ---@field prefix string
+---@field runMode table<string, LDT_RunModeId>
 ---@field runResult table<string, LDT_RunResultId>
+---@field scenarioRole table<string, LDT_ScenarioRoleId>
 ---@field logKind table<string, LDT_LogKindId>
 ---@field gainType table<string, LDT_GainTypeId>
 ---@field boonStatColors LDT_BoonStatColor[]

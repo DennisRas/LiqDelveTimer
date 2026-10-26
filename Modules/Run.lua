@@ -206,7 +206,7 @@ end
 local function stageData(run, ahead, behind)
   ---@type LiqUI_TableData
   local data = {}
-  if run.labyrinth then
+  if run.mode == Constants.runMode.Lab then
     for index = 1, #run.chambers do
       local chamber = run.chambers[index]
       data[#data + 1] = stageRow(chamber.name, chamber.completedElapsed, bestChamberTime(run, chamber.name), ahead, behind)

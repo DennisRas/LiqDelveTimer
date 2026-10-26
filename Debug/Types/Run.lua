@@ -204,7 +204,7 @@
 ---@class LDT_Run
 ---@field id string
 ---@field result LDT_RunResultId
----@field labyrinth boolean
+---@field mode LDT_RunModeId|nil
 ---@field startedAt number
 ---@field endedAt number|nil
 ---@field best LDT_RunBest|nil

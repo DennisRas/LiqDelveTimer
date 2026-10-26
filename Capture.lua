@@ -114,10 +114,13 @@ local function spellList(spellIDs)
   return table.concat(labels, ", ")
 end
 
+---@param run LDT_Run
 ---@param instance LDT_Instance
----@return boolean
-local function detectLabyrinth(instance)
-  return instance.mapID == Data.labyrinthMapID
+local function applyDelve(run, instance)
+  local delve = Data:DelveForInstance(instance)
+  if delve then
+    run.mode = delve.mode
+  end
 end
 
 ---@param scenario LDT_Scenario
@@ -744,7 +747,7 @@ function Capture:FillStart(run)
     mapID = run.instance.mapID,
     mapName = run.instance.mapName,
   }
-  run.labyrinth = detectLabyrinth(run.instance)
+  applyDelve(run, run.instance)
   local money = GetMoney()
   if not issecretvalue(money) then
     goldLast = money
@@ -817,7 +820,7 @@ function Capture:RefreshSnapshots(run)
   local instance = run.instance
   if instance and (not instance.name or instance.name == "") then
     run.instance = self:ReadInstance()
-    run.labyrinth = detectLabyrinth(run.instance)
+    applyDelve(run, run.instance)
   end
 end
 
@@ -837,9 +840,7 @@ function Capture:ObservePlace(run, instance)
     mapID = instance.mapID,
     mapName = instance.mapName,
   }
-  if detectLabyrinth(instance) then
-    run.labyrinth = true
-  end
+  applyDelve(run, instance)
   local subzone = instance.subzone
   if not subzone or subzone == "" then
     return true
@@ -938,7 +939,7 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
       if label and label ~= "" then
         self:AppendLog(run, Constants.logKind.Step, format("Step: %s", label), detail)
       end
-      if run.labyrinth and stepTitle and stepTitle ~= "" then
+      if run.mode == Constants.runMode.Lab and stepTitle and stepTitle ~= "" then
         self:EnsureChamber(run, stepTitle, stepID)
         run.watch.routeStep = stepTitle
       end
@@ -1021,7 +1022,7 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
     chamberCleared = stepComplete and (criteriaFinished or freshCriteria)
   end
   local stepTitle = step and step.title
-  if run.labyrinth and chamberCleared and stepTitle and stepTitle ~= "" then
+  if run.mode == Constants.runMode.Lab and chamberCleared and stepTitle and stepTitle ~= "" then
     local chamber = self:EnsureChamber(run, stepTitle, step and step.stepID)
     if not chamber.completedElapsed then
       chamber.completedElapsed = self:Elapsed(run)
