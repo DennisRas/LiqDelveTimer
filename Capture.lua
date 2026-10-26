@@ -966,10 +966,16 @@ local function recordScenario(run, scenario, elapsed)
     }
     scenarios[#scenarios + 1] = row
     current = row
+    if row.role == Constants.scenarioRole.Reward and not run.endedAt then
+      Capture:MarkRunFinished(run)
+    end
   end
   local complete = plainBoolean(info.isComplete)
   if complete and not current.completedElapsed then
     current.completedElapsed = elapsed
+  end
+  if complete and not run.endedAt and (current.role == Constants.scenarioRole.Stages or current.role == Constants.scenarioRole.Boss) then
+    Capture:MarkRunFinished(run)
   end
   local step = scenario.step
   local stepID = step and plainNumber(step.stepID)
@@ -1235,28 +1241,18 @@ function Capture:MarkRunFinished(run)
   self:Stop(run, elapsed, false)
 end
 
----@param run LDT_Run
-function Capture:ObserveDelveComplete(run)
-  if C_PartyInfo.IsDelveComplete() then
-    self:MarkRunFinished(run)
-  end
-end
-
 function Capture:OnScenarioCompleted()
   local run = Data:GetActiveRun()
   if not run or self:Ended(run) then
     return
   end
   self:EnsureClock(run, false)
-  if Helpers.RunMode(run) == Constants.runMode.Lab then
-    return
-  end
   local info = C_ScenarioInfo.GetScenarioInfo()
   local scenarioID = info and plainNumber(info.scenarioID)
-  if scenarioRole(scenarioID) == Constants.scenarioRole.Reward then
-    return
+  local role = scenarioRole(scenarioID)
+  if role == Constants.scenarioRole.Stages or role == Constants.scenarioRole.Boss then
+    self:MarkRunFinished(run)
   end
-  self:MarkRunFinished(run)
 end
 
 ---@param run LDT_Run
@@ -1559,9 +1555,6 @@ function Capture:Observe(run)
   end
   local instance = self:ReadInstance()
   local placeChanged = self:ObservePlace(run, instance)
-  if not self:Ended(run) then
-    self:ObserveDelveComplete(run)
-  end
   self:ObserveScenario(run, self:ReadScenario(), placeChanged)
   if not self:Ended(run) then
     self:ObserveBoons(run)
@@ -1623,30 +1616,15 @@ end
 ---@param success number
 function Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
   local run = Data:GetActiveRun()
-  if not run or self:Ended(run) then
+  if not run then
     return
   end
   self:EnsureClock(run, true)
-  local elapsed = self:Elapsed(run)
-  ---@type LDT_Encounter
-  local encounter = {
-    encounterID = encounterID,
-    encounterName = encounterName,
-    difficultyID = difficultyID,
-    groupSize = groupSize,
-    success = success,
-    elapsed = elapsed,
-  }
-  run.encounters[#run.encounters + 1] = encounter
   if success == 1 then
     self:AppendLog(run, Constants.logKind.Boss, format("Defeated %s", encounterName), {
       encounterID = encounterID,
       encounterName = encounterName,
     })
-    local delve = Data:DelveForInstance(run.instance)
-    if delve and delve.bossEncounterID == encounterID and Helpers.RunMode(run) == Constants.runMode.Lab then
-      self:MarkRunFinished(run)
-    end
     return
   end
   self:AppendLog(run, Constants.logKind.Encounter, format("Encounter failed: %s", encounterName), {

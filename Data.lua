@@ -133,7 +133,6 @@ function Data:CreateRun(startedAt)
     scenarios = {},
     boons = {},
     gains = {},
-    encounters = {},
     log = {},
     watch = {
       criteria = {},
@@ -322,6 +321,47 @@ function Data:ForEachRun(callback)
   end)
 end
 
+---@param source LDT_Run|nil
+---@return LDT_RunBest
+local function copyBest(source)
+  ---@type LDT_RunBest
+  local copy = {
+    scenarios = {},
+  }
+  if not source then
+    return copy
+  end
+  copy.id = source.id
+  copy.startedAt = source.startedAt
+  copy.endedAt = source.endedAt
+  for index = 1, #source.scenarios do
+    local scenario = source.scenarios[index]
+    ---@type LDT_BestStep[]
+    local steps = {}
+    for stepIndex = 1, #scenario.steps do
+      local step = scenario.steps[stepIndex]
+      ---@type LDT_BestStep
+      local bestStep = {
+        stepID = step.stepID,
+        stage = step.stage,
+        enteredElapsed = step.enteredElapsed,
+        completedElapsed = step.completedElapsed,
+      }
+      steps[#steps + 1] = bestStep
+    end
+    ---@type LDT_BestScenario
+    local bestScenario = {
+      index = scenario.index,
+      scenarioID = scenario.scenarioID,
+      enteredElapsed = scenario.enteredElapsed,
+      completedElapsed = scenario.completedElapsed,
+      steps = steps,
+    }
+    copy.scenarios[#copy.scenarios + 1] = bestScenario
+  end
+  return copy
+end
+
 ---@param run LDT_Run
 function Data:SnapshotBest(run)
   if run.best or not Helpers.RunTier(run) then
@@ -333,6 +373,7 @@ function Data:SnapshotBest(run)
       return
     end
   end
+  run.best = copyBest(Helpers.BestRun(run))
 end
 
 ---@param run LDT_Run

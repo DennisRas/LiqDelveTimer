@@ -14,7 +14,6 @@
 ---@field delveID number
 ---@field name string
 ---@field mode LDT_RunModeId
----@field bossEncounterID number|nil
 ---@field kinduruCriteriaID number|nil
 
 ---@class LDT_ObjectiveLine

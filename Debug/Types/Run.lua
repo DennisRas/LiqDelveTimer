@@ -36,20 +36,23 @@
 ---@field spellIDs number[]
 
 ---@class LDT_BestStep
----@field stepID number|nil
+---@field stepID number
 ---@field stage number|nil
----@field completedElapsed number
+---@field enteredElapsed number
+---@field completedElapsed number|nil
 
----@class LDT_BestChamber
----@field name string
----@field completedElapsed number
+---@class LDT_BestScenario
+---@field index number
+---@field scenarioID number
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field steps LDT_BestStep[]
 
 ---@class LDT_RunBest
 ---@field id string|nil
 ---@field startedAt number|nil
 ---@field endedAt number|nil
----@field steps LDT_BestStep[]
----@field chambers LDT_BestChamber[]
+---@field scenarios LDT_BestScenario[]
 
 ---@class LDT_Companion
 ---@field companionID number|nil
@@ -162,14 +165,6 @@
 ---@class LDT_DelvesDifficultyPickerFrame : Frame
 ---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
 
----@class LDT_Encounter
----@field encounterID number
----@field encounterName string
----@field difficultyID number
----@field groupSize number
----@field success number
----@field elapsed number
-
 ---@class LDT_CriteriaWatch
 ---@field completed boolean
 ---@field failed boolean
@@ -218,6 +213,5 @@
 ---@field place LDT_Place|nil
 ---@field boons LDT_BoonStat[]
 ---@field gains LDT_Gain[]
----@field encounters LDT_Encounter[]
 ---@field log LDT_LogEntry[]
 ---@field watch LDT_Watch
