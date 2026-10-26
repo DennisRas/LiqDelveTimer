@@ -133,7 +133,6 @@ function Data:CreateRun(startedAt)
     scenarios = {},
     boons = {},
     gains = {},
-    log = {},
     watch = {
       criteria = {},
       scenarioComplete = false,

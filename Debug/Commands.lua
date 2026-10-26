@@ -39,14 +39,5 @@ function Debug:OnChatCommand(input)
   end
   local mode = Helpers.RunMode(run) or "none"
   addon.Core:Print(format("Run %s (%s) mode %s scenarios %d", run.id, run.result, mode, #run.scenarios))
-  local log = run.log
-  local first = #log - 29
-  if first < 1 then
-    first = 1
-  end
-  for index = first, #log do
-    local entry = log[index]
-    addon.Core:Print(format("%s %s", Helpers.FormatElapsed(entry.elapsed), entry.text))
-  end
   return true
 end

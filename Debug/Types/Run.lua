@@ -188,13 +188,6 @@
 ---@field encounterID number|nil
 ---@field encounterName string|nil
 
----@class LDT_LogEntry
----@field at number
----@field elapsed number
----@field kind LDT_LogKindId
----@field text string
----@field detail LDT_LogDetail|nil
-
 ---@class LDT_Run
 ---@field id string
 ---@field result LDT_RunResultId
@@ -213,5 +206,4 @@
 ---@field place LDT_Place|nil
 ---@field boons LDT_BoonStat[]
 ---@field gains LDT_Gain[]
----@field log LDT_LogEntry[]
 ---@field watch LDT_Watch

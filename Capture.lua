@@ -194,22 +194,13 @@ end
 ---@param detail LDT_LogDetail|nil
 ---@param elapsed number|nil
 function Capture:AppendLog(run, kind, text, detail, elapsed)
+  if not addon.Log then
+    return
+  end
   if elapsed == nil then
     elapsed = self:Elapsed(run)
   end
-  ---@type LDT_LogEntry
-  local entry = {
-    at = run.startedAt + elapsed,
-    elapsed = elapsed,
-    kind = kind,
-    text = text,
-    detail = detail,
-  }
-  local log = run.log
-  log[#log + 1] = entry
-  if addon.Log then
-    addon.Log:Log("run", format("%s %s", Helpers.FormatElapsed(elapsed), text))
-  end
+  addon.Log:Log("run", format("%s %s", Helpers.FormatElapsed(elapsed), text))
 end
 
 ---@return boolean
@@ -1007,6 +998,62 @@ local function recordScenario(run, scenario, elapsed)
   end
 end
 
+---@param stepID number
+---@param criteriaID number
+---@return string|nil
+local function criterionDescription(stepID, criteriaID)
+  ---@param step LDT_ScenarioStep|nil
+  ---@return string|nil
+  local function fromStep(step)
+    if not step or not step.criteria then
+      return nil
+    end
+    for index = 1, #step.criteria do
+      local row = step.criteria[index]
+      if row.criteriaID == criteriaID and row.description and row.description ~= "" then
+        return row.description
+      end
+    end
+    return nil
+  end
+  local known = fromStep(TableGet(Data.steps, "stepID", stepID))
+  if known then
+    return known
+  end
+  if not Data.db then
+    return nil
+  end
+  return fromStep(Data.db.global.steps[stepID])
+end
+
+---@param run LDT_Run
+---@return number|nil
+local function latestElapsed(run)
+  local latest = 0
+  for index = 1, #run.scenarios do
+    local scenario = run.scenarios[index]
+    if scenario.enteredElapsed > latest then
+      latest = scenario.enteredElapsed
+    end
+    if scenario.completedElapsed and scenario.completedElapsed > latest then
+      latest = scenario.completedElapsed
+    end
+    for stepIndex = 1, #scenario.steps do
+      local step = scenario.steps[stepIndex]
+      if step.enteredElapsed > latest then
+        latest = step.enteredElapsed
+      end
+      if step.completedElapsed and step.completedElapsed > latest then
+        latest = step.completedElapsed
+      end
+    end
+  end
+  if latest > 0 then
+    return latest
+  end
+  return nil
+end
+
 ---@param scenarioID number|nil
 ---@return LDT_ScenarioRoleId|nil
 local function scenarioRole(scenarioID)
@@ -1061,6 +1108,7 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
   local stepID = step and step.stepID
   if stepID ~= watch.stepID then
     if watch.stepID then
+      local previousStepID = watch.stepID
       local current = {}
       for index = 1, #scenario.criteria do
         local criteriaID = scenario.criteria[index].criteriaID
@@ -1073,15 +1121,7 @@ function Capture:ObserveScenario(run, scenario, placeChanged)
           return
         end
         state.completed = true
-        local description
-        for logIndex = #run.log, 1, -1 do
-          local entry = run.log[logIndex]
-          local detail = entry.detail
-          if detail and detail.criteriaID == criteriaID and detail.description and detail.description ~= "" then
-            description = detail.description
-            break
-          end
-        end
+        local description = criterionDescription(previousStepID, criteriaID)
         if not description then
           description = tostring(criteriaID)
         end
@@ -1593,9 +1633,9 @@ function Capture:Finish()
   self:EnsureClock(run, false)
   local ended = self:Elapsed(run)
   if resumed then
-    local last = run.log[#run.log]
+    local last = latestElapsed(run)
     if last then
-      ended = last.elapsed
+      ended = last
     end
   end
   if not run.endedAt then
