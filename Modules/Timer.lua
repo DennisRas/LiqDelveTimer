@@ -9,6 +9,7 @@ local Data = addon.Data
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 local LiqUI = addon.libs.LiqUI
+local TableGet = LiqUI.Utils.TableGet
 
 local HEADER_HEIGHT = 40
 local HEADER_PAD = 10
@@ -290,21 +291,85 @@ local function sampleRows(showCounts)
   return rows
 end
 
+---@param list LDT_Criteria[]
+---@param criteriaID number
+---@param slot number
+---@return LDT_Criteria|nil
+local function criterionMatch(list, criteriaID, slot)
+  if criteriaID ~= 0 then
+    for index = 1, #list do
+      local row = list[index]
+      if row.criteriaID == criteriaID then
+        return row
+      end
+    end
+    return nil
+  end
+  local row = list[slot]
+  if row and row.criteriaID == 0 then
+    return row
+  end
+  return nil
+end
+
+---@param description string|nil
+---@param totalQuantity number|nil
+---@param weighted boolean
+---@param match LDT_Criteria|nil
+---@return string|nil, number|nil, boolean
+local function applyCriterion(description, totalQuantity, weighted, match)
+  if not match then
+    return description, totalQuantity, weighted
+  end
+  if not description then
+    description = match.description
+  end
+  if totalQuantity == nil then
+    totalQuantity = match.totalQuantity
+  end
+  if match.isWeightedProgress ~= nil then
+    weighted = match.isWeightedProgress
+  end
+  return description, totalQuantity, weighted
+end
+
+---@param stepID number
+---@param criteriaID number
+---@param slot number
+---@return string|nil, number|nil, boolean
+local function criterionFacts(stepID, criteriaID, slot)
+  local description
+  local totalQuantity
+  local weighted = false
+  local known = TableGet(Data.steps, "stepID", stepID)
+  local knownCriteria = known and known.criteria
+  if knownCriteria then
+    description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(knownCriteria, criteriaID, slot))
+  end
+  if Data.db then
+    local learned = Data.db.global.steps[stepID]
+    local learnedCriteria = learned and learned.criteria
+    if learnedCriteria then
+      description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(learnedCriteria, criteriaID, slot))
+    end
+  end
+  return description, totalQuantity, weighted
+end
+
+---@param stepID number
 ---@param criteria LDT_RunCriteria
+---@param slot number
 ---@return string|nil
-local function objectiveLabel(criteria)
-  local description = criteria.description or ""
+local function objectiveLabel(stepID, criteria, slot)
+  local description, totalQuantity, weighted = criterionFacts(stepID, criteria.criteriaID, slot)
+  description = description or ""
   local progress
-  if criteria.isWeightedProgress then
+  if weighted then
     if criteria.quantity ~= nil then
       progress = format("%d%%", criteria.quantity)
-    elseif criteria.quantityString and criteria.quantityString ~= "" then
-      progress = criteria.quantityString
     end
-  elseif criteria.quantity ~= nil and criteria.totalQuantity ~= nil and criteria.totalQuantity > 0 then
-    progress = format("%d/%d", criteria.quantity, criteria.totalQuantity)
-  elseif criteria.quantityString and criteria.quantityString ~= "" then
-    progress = criteria.quantityString
+  elseif criteria.quantity ~= nil and totalQuantity ~= nil and totalQuantity > 0 then
+    progress = format("%d/%d", criteria.quantity, totalQuantity)
   end
   if progress and progress ~= "" then
     if description ~= "" then
@@ -344,7 +409,7 @@ local function fillObjectives(rows, run)
   local lines = {}
   for index = 1, #criteria do
     local criteriaRow = criteria[index]
-    local label = objectiveLabel(criteriaRow)
+    local label = objectiveLabel(stepID, criteriaRow, index)
     if label then
       ---@type LDT_ObjectiveLine
       local line = { text = label, completed = criteriaRow.completed == true }

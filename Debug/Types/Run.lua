@@ -125,14 +125,9 @@
 
 ---@class LDT_RunCriteria
 ---@field criteriaID number
----@field description string|nil
+---@field quantity number|nil
 ---@field completed boolean
 ---@field failed boolean
----@field quantity number|nil
----@field totalQuantity number|nil
----@field quantityString string|nil
----@field criteriaType number|nil
----@field isWeightedProgress boolean|nil
 
 ---@class LDT_RunScenario
 ---@field index number

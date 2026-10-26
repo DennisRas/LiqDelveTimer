@@ -12,6 +12,7 @@ local LiqUI = addon.libs.LiqUI
 local Events = LiqUI.Events
 local TableCopy = LiqUI.Utils.TableCopy
 local TableForEach = LiqUI.Utils.TableForEach
+local TableGet = LiqUI.Utils.TableGet
 
 local pickerHooked
 local trackerHooked
@@ -830,10 +831,215 @@ function Capture:ObservePlace(run, instance)
   return true
 end
 
+---@param value number|nil
+---@return number|nil
+local function plainNumber(value)
+  if type(value) ~= "number" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param value boolean|nil
+---@return boolean|nil
+local function plainBoolean(value)
+  if type(value) ~= "boolean" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param mapID number|nil
+---@param subzone string|nil
+---@return number|nil
+local function taxiNodeID(mapID, subzone)
+  if not mapID or mapID <= 0 or not subzone or subzone == "" then
+    return nil
+  end
+  local ok, nodes = pcall(C_TaxiMap.GetTaxiNodesForMap, mapID)
+  if not ok or type(nodes) ~= "table" or issecretvalue(nodes) then
+    return nil
+  end
+  for index = 1, #nodes do
+    local node = nodes[index]
+    if type(node) == "table" then
+      local name = node.name
+      local nodeID = node.nodeID
+      if type(name) == "string" and not issecretvalue(name) and name == subzone and type(nodeID) == "number" and not issecretvalue(nodeID) then
+        return nodeID
+      end
+    end
+  end
+  return nil
+end
+
+---@param stored LDT_RunCriteria[]
+---@param incoming LDT_CriteriaSnap[]
+local function writeCriteria(stored, incoming)
+  for index = 1, #incoming do
+    local info = incoming[index]
+    local criteriaID = plainNumber(info.criteriaID)
+    if criteriaID ~= nil then
+      local match
+      if criteriaID ~= 0 then
+        for storedIndex = 1, #stored do
+          if stored[storedIndex].criteriaID == criteriaID then
+            match = stored[storedIndex]
+            break
+          end
+        end
+      elseif stored[index] and stored[index].criteriaID == 0 then
+        match = stored[index]
+      end
+      local quantity = plainNumber(info.quantity)
+      local completed = plainBoolean(info.completed)
+      local failed = plainBoolean(info.failed)
+      if not match then
+        ---@type LDT_RunCriteria
+        local row = {
+          criteriaID = criteriaID,
+          quantity = quantity,
+          completed = completed == true,
+          failed = failed == true,
+        }
+        stored[#stored + 1] = row
+      elseif not match.completed then
+        if quantity ~= nil then
+          match.quantity = quantity
+        end
+        if completed ~= nil then
+          match.completed = completed
+        end
+        if failed ~= nil then
+          match.failed = failed
+        end
+      end
+    end
+  end
+end
+
+---@param run LDT_Run
+---@param scenario LDT_Scenario
+---@param elapsed number
+local function recordScenario(run, scenario, elapsed)
+  local info = scenario.info
+  if not info then
+    return
+  end
+  local scenarioID = plainNumber(info.scenarioID)
+  if not scenarioID or scenarioID <= 0 then
+    return
+  end
+  local scenarios = run.scenarios
+  local current = scenarios[#scenarios]
+  if current and current.scenarioID ~= scenarioID then
+    if not current.completedElapsed then
+      current.completedElapsed = elapsed
+    end
+    local previousStep = current.steps[#current.steps]
+    if previousStep and not previousStep.completedElapsed then
+      previousStep.completedElapsed = elapsed
+    end
+    current = nil
+  end
+  if not current then
+    local place = run.place
+    local subzone = place and place.subzone
+    if subzone == "" then
+      subzone = nil
+    end
+    local mapID = place and place.mapID
+    if not mapID or mapID <= 0 then
+      mapID = nil
+    end
+    local known = TableGet(Data.scenarios, "scenarioID", scenarioID)
+    ---@type LDT_RunScenario
+    local row = {
+      index = #scenarios + 1,
+      scenarioID = scenarioID,
+      role = known and known.role,
+      enteredElapsed = elapsed,
+      subzone = subzone,
+      mapID = mapID,
+      taxiNodeID = taxiNodeID(mapID, subzone),
+      steps = {},
+    }
+    scenarios[#scenarios + 1] = row
+    current = row
+  end
+  local complete = plainBoolean(info.isComplete)
+  if complete and not current.completedElapsed then
+    current.completedElapsed = elapsed
+  end
+  local step = scenario.step
+  local stepID = step and plainNumber(step.stepID)
+  if not stepID or stepID <= 0 then
+    return
+  end
+  local steps = current.steps
+  local runStep = steps[#steps]
+  if not runStep or runStep.stepID ~= stepID then
+    if runStep and not runStep.completedElapsed then
+      runStep.completedElapsed = elapsed
+    end
+    local stage = plainNumber(info.currentStage)
+    ---@type LDT_RunStep
+    local created = {
+      stepID = stepID,
+      enteredElapsed = elapsed,
+      criteria = {},
+    }
+    if stage and stage > 0 then
+      created.stage = stage
+    end
+    steps[#steps + 1] = created
+    runStep = created
+  end
+  writeCriteria(runStep.criteria, scenario.criteria)
+  if complete and not runStep.completedElapsed then
+    runStep.completedElapsed = elapsed
+  end
+end
+
+---@param scenarioID number|nil
+---@return LDT_ScenarioRoleId|nil
+local function scenarioRole(scenarioID)
+  if not scenarioID then
+    return nil
+  end
+  local known = TableGet(Data.scenarios, "scenarioID", scenarioID)
+  return known and known.role
+end
+
+---@param run LDT_Run
+---@param scenario LDT_Scenario
+local function finishKinduru(run, scenario)
+  if run.endedAt or Helpers.RunMode(run) ~= Constants.runMode.Lab then
+    return
+  end
+  local delve = Data:DelveForInstance(run.instance)
+  local kinduruCriteriaID = delve and delve.kinduruCriteriaID
+  if not kinduruCriteriaID then
+    return
+  end
+  for index = 1, #scenario.criteria do
+    local info = scenario.criteria[index]
+    local criteriaID = plainNumber(info.criteriaID)
+    local completed = plainBoolean(info.completed)
+    if criteriaID == kinduruCriteriaID and completed then
+      Capture:MarkRunFinished(run)
+      return
+    end
+  end
+end
+
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
 ---@param placeChanged boolean
 function Capture:ObserveScenario(run, scenario, placeChanged)
+  recordScenario(run, scenario, self:Elapsed(run))
+  Data:NoteScenario(run, scenario)
+  finishKinduru(run, scenario)
   if run.endedAt then
     return
   end
@@ -1038,10 +1244,18 @@ end
 
 function Capture:OnScenarioCompleted()
   local run = Data:GetActiveRun()
-  if not run then
+  if not run or self:Ended(run) then
     return
   end
   self:EnsureClock(run, false)
+  if Helpers.RunMode(run) == Constants.runMode.Lab then
+    return
+  end
+  local info = C_ScenarioInfo.GetScenarioInfo()
+  local scenarioID = info and plainNumber(info.scenarioID)
+  if scenarioRole(scenarioID) == Constants.scenarioRole.Reward then
+    return
+  end
   self:MarkRunFinished(run)
 end
 
@@ -1342,13 +1556,15 @@ function Capture:Observe(run)
   if not self:Ended(run) then
     self:RefreshSnapshots(run)
     self:UpdateCompanion(run)
-    local instance = self:ReadInstance()
-    local placeChanged = self:ObservePlace(run, instance)
+  end
+  local instance = self:ReadInstance()
+  local placeChanged = self:ObservePlace(run, instance)
+  if not self:Ended(run) then
     self:ObserveDelveComplete(run)
-    if not self:Ended(run) then
-      self:ObserveScenario(run, self:ReadScenario(), placeChanged)
-      self:ObserveBoons(run)
-    end
+  end
+  self:ObserveScenario(run, self:ReadScenario(), placeChanged)
+  if not self:Ended(run) then
+    self:ObserveBoons(run)
   end
   self:OnMoney()
   self:NoteCharacter()
@@ -1427,6 +1643,10 @@ function Capture:OnEncounterEnd(encounterID, encounterName, difficultyID, groupS
       encounterID = encounterID,
       encounterName = encounterName,
     })
+    local delve = Data:DelveForInstance(run.instance)
+    if delve and delve.bossEncounterID == encounterID and Helpers.RunMode(run) == Constants.runMode.Lab then
+      self:MarkRunFinished(run)
+    end
     return
   end
   self:AppendLog(run, Constants.logKind.Encounter, format("Encounter failed: %s", encounterName), {
