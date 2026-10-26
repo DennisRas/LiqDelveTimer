@@ -197,6 +197,43 @@ local function learnedCriteria(criteria)
   return rows
 end
 
+---@param stored LDT_Criteria[]|nil
+---@param incoming LDT_Criteria[]
+---@return LDT_Criteria[]
+local function mergeCriteria(stored, incoming)
+  if not stored then
+    return incoming
+  end
+  for index = 1, #incoming do
+    local row = incoming[index]
+    local match
+    if row.criteriaID ~= 0 then
+      for storedIndex = 1, #stored do
+        local storedRow = stored[storedIndex]
+        if storedRow.criteriaID == row.criteriaID then
+          match = storedRow
+          break
+        end
+      end
+    elseif stored[index] and stored[index].criteriaID == 0 then
+      match = stored[index]
+    end
+    if not match then
+      stored[#stored + 1] = row
+    else
+      match.description = match.description or row.description
+      match.totalQuantity = match.totalQuantity or row.totalQuantity
+      match.criteriaType = match.criteriaType or row.criteriaType
+      match.flags = match.flags or row.flags
+      match.assetID = match.assetID or row.assetID
+      if match.isWeightedProgress == nil then
+        match.isWeightedProgress = row.isWeightedProgress
+      end
+    end
+  end
+  return stored
+end
+
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
 function Data:NoteScenario(run, scenario)
@@ -220,35 +257,35 @@ function Data:NoteScenario(run, scenario)
   if not knownScenario then
     local scenarios = self.db.global.scenarios
     local record = scenarios[scenarioID]
-    if not record then
-      ---@type LDT_ScenarioRow
-      record = {
-        scenarioID = scenarioID,
-      }
-      scenarios[scenarioID] = record
-    end
     local scenarioName = plainString(info.name)
-    if scenarioName and (record.name == nil or record.name == "") then
-      record.name = scenarioName
-    end
-    if numStages and record.numStages == nil then
-      record.numStages = numStages
-    end
+    local flags = plainNumber(info.flags)
     local instance = run.instance
-    if instance then
-      if instance.mapID and record.mapID == nil then
-        record.mapID = instance.mapID
+    local mapID = instance and instance.mapID
+    local instanceID = instance and instance.instanceID
+    local difficultyID = instance and instance.difficultyID
+    if scenarioName or numStages or flags or mapID or instanceID or difficultyID then
+      if not record then
+        ---@type LDT_ScenarioRow
+        record = {
+          scenarioID = scenarioID,
+        }
+        scenarios[scenarioID] = record
       end
-      if instance.instanceID and record.instanceID == nil then
-        record.instanceID = instance.instanceID
-      end
-      if instance.difficultyID and record.difficultyID == nil then
-        record.difficultyID = instance.difficultyID
-      end
+      record.name = record.name or scenarioName
+      record.numStages = record.numStages or numStages
+      record.flags = record.flags or flags
+      record.mapID = record.mapID or mapID
+      record.instanceID = record.instanceID or instanceID
+      record.difficultyID = record.difficultyID or difficultyID
     end
   end
   local criteriaRows = learnedCriteria(scenario.criteria)
-  if not knownStep or #criteriaRows > 0 then
+  local title = plainString(step.title)
+  local description = plainString(step.description)
+  local learnTitle = title and not knownStep
+  local learnDescription = description and (not knownStep or not knownStep.description or knownStep.description == "")
+  local learnStage = stage and not knownStep
+  if learnTitle or learnDescription or learnStage or #criteriaRows > 0 then
     local storedSteps = self.db.global.steps
     local storedStep = storedSteps[stepID]
     if not storedStep then
@@ -259,17 +296,17 @@ function Data:NoteScenario(run, scenario)
       }
       storedSteps[stepID] = storedStep
     end
-    if not knownStep then
-      if stage then
-        storedStep.stage = stage
-      end
-      local title = plainString(step.title)
-      if title and (storedStep.title == nil or storedStep.title == "") then
-        storedStep.title = title
-      end
+    if learnTitle then
+      storedStep.title = storedStep.title or title
+    end
+    if learnDescription then
+      storedStep.description = storedStep.description or description
+    end
+    if learnStage then
+      storedStep.stage = storedStep.stage or stage
     end
     if #criteriaRows > 0 then
-      storedStep.criteria = criteriaRows
+      storedStep.criteria = mergeCriteria(storedStep.criteria, criteriaRows)
     end
   end
   self:SnapshotBest(run)
