@@ -65,6 +65,7 @@
 ---@field companionHeader LDT_RunBlockHeader|nil
 ---@field boonsHeader LDT_RunBlockHeader|nil
 ---@field rewardsHeader LDT_RunBlockHeader|nil
+---@field bodyScroll LiqUI_ScrollArea|nil
 ---@field summaryData LiqUI_TableData|nil
 ---@field stagesData LiqUI_TableData|nil
 ---@field boonsData LiqUI_TableData|nil

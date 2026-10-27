@@ -9,6 +9,8 @@ local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
+local BindScrollBoxMouseWheel = LiqUI.Utils.BindScrollBoxMouseWheel
+local CreateScrollArea = LiqUI.Utils.CreateScrollArea
 
 local STAGE_WIDTH = 120
 local NUMBER_WIDTH = 70
@@ -25,6 +27,7 @@ local COMPANION_PAD = 8
 local ICON_SIZE = 16
 local BAR_HEIGHT = 16
 local BLOCK_HEADER = 22
+local SCREEN_MARGIN = 100
 
 local measureText = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 measureText:Hide()
@@ -636,6 +639,8 @@ local function rewardsData(run)
     local label = item.name
     if label == "" then
       label = "Item"
+    else
+      label = format("[%s]", label)
     end
     if item.qualityKnown then
       local colorR, colorG, colorB = C_Item.GetItemQualityColor(item.quality)
@@ -991,6 +996,16 @@ local function placeTable(frame, data, y)
   return y - height
 end
 
+---@param frame Frame
+---@param scrollBox WowScrollBox
+local function bindBodyWheel(frame, scrollBox)
+  BindScrollBoxMouseWheel(frame, scrollBox)
+  local children = { frame:GetChildren() }
+  for index = 1, #children do
+    bindBodyWheel(children[index], scrollBox)
+  end
+end
+
 function Module:Layout()
   local window = self.window
   if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.rewards then
@@ -1005,14 +1020,40 @@ function Module:Layout()
   y = placeTable(self.stages, self.stagesData or {}, y)
   y = placeHeader(self.companionHeader, y, shown)
   self.companion:ClearAllPoints()
-  self.companion:SetPoint("TOPLEFT", window.body, "TOPLEFT", 0, y)
+  self.companion:SetPoint("TOPLEFT", self.companion:GetParent(), "TOPLEFT", 0, y)
   self.companion:SetWidth(BODY_WIDTH)
   y = y - self.companion:GetHeight()
   y = placeHeader(self.boonsHeader, y, shown)
   y = placeTable(self.boons, self.boonsData or {}, y)
   y = placeHeader(self.rewardsHeader, y, shown)
   y = placeTable(self.rewards, self.rewardsData or {}, y)
-  window:SetBodySize(BODY_WIDTH, math.max(22, -y))
+  local contentHeight = math.max(22, -y)
+  local scale = window:GetWindowScale() / 100
+  if scale <= 0 then
+    scale = 1
+  end
+  local maxBody = (UIParent:GetHeight() - SCREEN_MARGIN) / scale - LiqUI.Constants.layout.sizes.titlebar.height
+  if maxBody < 22 then
+    maxBody = 22
+  end
+  local bodyHeight = contentHeight
+  if bodyHeight > maxBody then
+    bodyHeight = maxBody
+  end
+  local width = BODY_WIDTH
+  if contentHeight > bodyHeight then
+    width = BODY_WIDTH + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  end
+  window:SetBodySize(width, bodyHeight)
+  local scrollArea = self.bodyScroll
+  if not scrollArea then
+    return
+  end
+  scrollArea:UpdateLayout(BODY_WIDTH, contentHeight)
+  local scrollBox = scrollArea:GetWheelScrollBox()
+  if scrollBox then
+    bindBodyWheel(scrollArea.content, scrollBox)
+  end
 end
 
 ---@param run LDT_Run|nil
@@ -1062,6 +1103,15 @@ function Module:Render()
       hiddenFrame:SetScript("OnUpdate", nil)
     end)
     local body = self.window.body
+    local scrollArea = CreateScrollArea(body, {
+      name = addon.name .. "RunBodyScroll",
+      vertical = true,
+      horizontal = false,
+      wheelPanExtent = LiqUI.Constants.layout.sizes.row,
+    })
+    scrollArea:SetAllPoints(body)
+    self.bodyScroll = scrollArea
+    local content = scrollArea.content
     local summaryColumns = {
       { id = "label", headerText = "", width = LABEL_WIDTH, align = "LEFT" },
       { id = "value", headerText = "", width = VALUE_WIDTH, align = "RIGHT" },
@@ -1083,20 +1133,20 @@ function Module:Render()
       { id = "amount", headerText = "", width = REWARD_AMOUNT_WIDTH, align = "RIGHT" },
     }
     local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, false))
-    summary:SetParent(body)
+    summary:SetParent(content)
     self.summary = summary
     local stages = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunStages", stageColumns, true, 0.35))
-    stages:SetParent(body)
+    stages:SetParent(content)
     self.stages = stages
-    self.companionHeader = createBlockHeader(body, "Companion")
-    self.companion = createCompanion(body)
-    self.boonsHeader = createBlockHeader(body, "Boons")
+    self.companionHeader = createBlockHeader(content, "Companion")
+    self.companion = createCompanion(content)
+    self.boonsHeader = createBlockHeader(content, "Boons")
     local boons = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunBoons", boonColumns, false))
-    boons:SetParent(body)
+    boons:SetParent(content)
     self.boons = boons
-    self.rewardsHeader = createBlockHeader(body, "Rewards")
+    self.rewardsHeader = createBlockHeader(content, "Rewards")
     local rewards = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunRewards", rewardColumns, false))
-    rewards:SetParent(body)
+    rewards:SetParent(content)
     self.rewards = rewards
   end
   if not self.window or not self.window:IsShown() then
