@@ -275,10 +275,10 @@ local function summaryData(run, ahead, behind)
     end
   end
   data[#data + 1] = valueRow("Character", characterText)
-  data[#data + 1] = valueRow("Started", Helpers.FormatDate(run.startedAt))
+  data[#data + 1] = valueRow("Started", Helpers.FormatDate(run.startedAt, Constants.dateLength.Full))
   local endedText = "-"
   if run.endedAt then
-    endedText = Helpers.FormatDate(run.endedAt)
+    endedText = Helpers.FormatDate(run.endedAt, Constants.dateLength.Full)
   end
   data[#data + 1] = valueRow("Ended", endedText)
   local red, green, blue = Helpers.ResultColor(run.result)

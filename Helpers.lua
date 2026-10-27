@@ -171,9 +171,14 @@ function Helpers.Duration(run)
 end
 
 ---@param milliseconds number
+---@param length LDT_DateLengthId
 ---@return string
-function Helpers.FormatDate(milliseconds)
-  local text = date("%Y-%m-%d %H:%M", math.floor(milliseconds / 1000))
+function Helpers.FormatDate(milliseconds, length)
+  local pattern = "%Y-%m-%d %H:%M"
+  if length == addon.Constants.dateLength.Full then
+    pattern = "%Y-%m-%d %H:%M:%S"
+  end
+  local text = date(pattern, math.floor(milliseconds / 1000))
   if type(text) ~= "string" then
     return ""
   end

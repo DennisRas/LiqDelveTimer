@@ -182,7 +182,7 @@ function Module:Render()
     end
     local inProgress = run.endedAt == nil
     local duration = Helpers.Duration(run) or 0
-    local whenText = Helpers.FormatDate(run.startedAt)
+    local whenText = Helpers.FormatDate(run.startedAt, Constants.dateLength.Medium)
     local characterName = ""
     local characterText = ""
     local character = run.character

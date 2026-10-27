@@ -30,6 +30,12 @@ Constants.scenarioRole = {
   Boss = "boss",
 }
 
+---@enum LDT_DateLengthId
+Constants.dateLength = {
+  Full = "full",
+  Medium = "medium",
+}
+
 ---@enum LDT_RewardTypeId
 Constants.rewardType = {
   Gold = "gold",
