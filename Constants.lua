@@ -30,33 +30,6 @@ Constants.scenarioRole = {
   Boss = "boss",
 }
 
----@enum LDT_LogKindId
-Constants.logKind = {
-  Start = "start",
-  Reload = "reload",
-  Zone = "zone",
-  Step = "step",
-  Objective = "objective",
-  ObjectiveDone = "objectiveDone",
-  ObjectiveFailed = "objectiveFailed",
-  Chamber = "chamber",
-  Scenario = "scenario",
-  Encounter = "encounter",
-  Boss = "boss",
-  DelveComplete = "delveComplete",
-  End = "end",
-  Gold = "gold",
-  Currency = "currency",
-  Renown = "renown",
-  Loot = "loot",
-  Level = "level",
-  Experience = "xp",
-  CompanionLevel = "companionLevel",
-  CompanionExperience = "companionXp",
-  Death = "death",
-  Boon = "boon",
-}
-
 ---@enum LDT_GainTypeId
 Constants.gainType = {
   Gold = "gold",

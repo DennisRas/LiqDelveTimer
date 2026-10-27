@@ -24,7 +24,7 @@ function Core:OnInitialize()
   Data:Initialize()
   addon.logger = LiqUI:NewLogger({
     name = addon.name,
-    title = "Delve Log",
+    title = addon.title,
     storage = Data.db.global.logs,
     maxLines = 10000,
   })
@@ -76,9 +76,10 @@ function Core:OnEnable()
     return
   end
   Capture:Register()
+  if addon.Log then
+    addon.Log:Enable()
+  end
   if addon.logger and addon.Log then
-    addon.Log:Log("log", "ready")
-    addon.Log:LogState()
     addon.logger:Show()
   end
 end
@@ -107,7 +108,7 @@ function Core:OnChatCommand(input)
   if addon.Debug and addon.Debug:OnChatCommand(input) then
     return
   end
-  self:Print(format("Usage: /%s [history|log|probe stepID]", addon.name:lower()))
+  self:Print(format("Usage: /%s [history|log]", addon.name:lower()))
 end
 
 function Core:ToggleWindow()

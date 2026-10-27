@@ -99,12 +99,6 @@
 ---@field zone string|nil
 ---@field subzone string|nil
 
----@class LDT_Place
----@field zone string|nil
----@field subzone string|nil
----@field mapID number|nil
----@field mapName string|nil
-
 ---@class LDT_CriteriaSnap
 ---@field description string
 ---@field criteriaType number
@@ -138,9 +132,6 @@
 ---@field role LDT_ScenarioRoleId|nil
 ---@field enteredElapsed number
 ---@field completedElapsed number|nil
----@field subzone string|nil
----@field mapID number|nil
----@field taxiNodeID number|nil
 ---@field steps LDT_RunStep[]
 
 ---@class LDT_RunStep
@@ -165,29 +156,6 @@
 ---@class LDT_DelvesDifficultyPickerFrame : Frame
 ---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
 
----@class LDT_CriteriaWatch
----@field completed boolean
----@field failed boolean
-
----@class LDT_Watch
----@field zone string|nil
----@field subzone string|nil
----@field stepID number|nil
----@field criteriaSignature string|nil
----@field scenarioComplete boolean
----@field criteria table<number, LDT_CriteriaWatch>
-
----@class LDT_LogDetail
----@field zone string|nil
----@field subzone string|nil
----@field mapID number|nil
----@field stepID number|nil
----@field stepTitle string|nil
----@field criteriaID number|nil
----@field description string|nil
----@field encounterID number|nil
----@field encounterName string|nil
-
 ---@class LDT_Run
 ---@field id string
 ---@field result LDT_RunResultId
@@ -203,7 +171,5 @@
 ---@field entrance LDT_Entrance|nil
 ---@field companion LDT_Companion|nil
 ---@field instance LDT_Instance|nil
----@field place LDT_Place|nil
 ---@field boons LDT_BoonStat[]
 ---@field gains LDT_Gain[]
----@field watch LDT_Watch

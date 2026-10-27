@@ -623,9 +623,10 @@ local function addCapture(lines)
     local scenario = run.scenarios[#run.scenarios]
     if scenario then
       scenarioID = valueText(scenario.scenarioID)
-    end
-    if run.watch and run.watch.stepID then
-      stepID = valueText(run.watch.stepID)
+      local step = scenario.steps[#scenario.steps]
+      if step then
+        stepID = valueText(step.stepID)
+      end
     end
   end
   lines[#lines + 1] = format(
@@ -638,6 +639,44 @@ local function addCapture(lines)
     scenarioID,
     stepID
   )
+  if not run then
+    return
+  end
+  lines[#lines + 1] = format(
+    "run mode=%s deaths=%s lives=%s endedAt=%s",
+    valueText(run.mode),
+    valueText(run.deaths),
+    valueText(run.lives),
+    valueText(run.endedAt)
+  )
+  lines[#lines + 1] = format(
+    "player GetMoney=%s UnitLevel=%s UnitXP=%s UnitXPMax=%s",
+    valueText(GetMoney()),
+    valueText(UnitLevel("player")),
+    valueText(UnitXP("player")),
+    valueText(UnitXPMax("player"))
+  )
+  for index = 1, #run.gains do
+    local gain = run.gains[index]
+    lines[#lines + 1] = format(
+      "run.gain[%d] type=%s id=%s amount=%s itemLink=%s",
+      index,
+      valueText(gain.type),
+      valueText(gain.id),
+      valueText(gain.amount),
+      valueText(gain.itemLink)
+    )
+  end
+  for index = 1, #run.boons do
+    local boon = run.boons[index]
+    lines[#lines + 1] = format(
+      "run.boon[%d] label=%s amount=%s percent=%s",
+      index,
+      valueText(boon.label),
+      valueText(boon.amount),
+      valueText(boon.percent)
+    )
+  end
 end
 
 ---@param prefix string
@@ -768,4 +807,78 @@ function Log:ReadStep(stepID)
       addon.Core:Print(line)
     end
   end
+end
+
+local pickerHooked = false
+
+local function hookPicker()
+  local picker = _G.DelvesDifficultyPickerFrame
+  if pickerHooked or not picker then
+    return
+  end
+  pickerHooked = true
+  picker:HookScript("OnShow", function()
+    Log:LogState()
+  end)
+  picker:HookScript("OnHide", function()
+    Log:LogState()
+  end)
+  if picker.Dropdown and picker.Dropdown.RegisterCallback and DropdownButtonMixin then
+    picker.Dropdown:RegisterCallback(DropdownButtonMixin.Event.OnMenuClose, function()
+      Log:LogState()
+    end)
+  end
+end
+
+function Log:Enable()
+  local LiqUI = addon.libs.LiqUI
+  if not LiqUI or not addon.logger then
+    return
+  end
+  local Events = LiqUI.Events
+  if Events then
+    Events:RegisterEvent({
+      "PLAYER_ENTERING_WORLD",
+      "ACTIVE_DELVE_DATA_UPDATE",
+      "WALK_IN_DATA_UPDATE",
+      "SCENARIO_UPDATE",
+      "SCENARIO_CRITERIA_UPDATE",
+      "SCENARIO_CRITERIA_SHOW_STATE_UPDATE",
+      "SCENARIO_COMPLETED",
+      "SCENARIO_BONUS_OBJECTIVE_COMPLETE",
+      "SCENARIO_BONUS_VISIBILITY_UPDATE",
+      "SCENARIO_SPELL_UPDATE",
+      "SCENARIO_POI_UPDATE",
+      "ENCOUNTER_START",
+      "ENCOUNTER_END",
+      "ZONE_CHANGED",
+      "ZONE_CHANGED_INDOORS",
+      "ZONE_CHANGED_NEW_AREA",
+      "WEEKLY_REWARDS_UPDATE",
+      "DELVE_ASSIST_ACTION",
+      "DELVES_ACCOUNT_DATA_ELEMENT_CHANGED",
+      "PARTY_ELIGIBILITY_FOR_DELVE_TIERS_CHANGED",
+      "SHOW_DELVES_COMPANION_CONFIGURATION_UI",
+      "PLAYER_MONEY",
+      "PLAYER_XP_UPDATE",
+      "PLAYER_LEVEL_CHANGED",
+      "CURRENCY_DISPLAY_UPDATE",
+      "CHAT_MSG_LOOT",
+      "PLAYER_DEAD",
+    }, function(_, event, ...)
+      Log:OnEvent(event, ...)
+    end, true)
+    ---@param _frame Frame
+    ---@param _event string
+    ---@param name string
+    local function onAddonLoaded(_frame, _event, name)
+      if name == "Blizzard_DelvesDifficultyPicker" then
+        hookPicker()
+      end
+    end
+    Events:RegisterEvent("ADDON_LOADED", onAddonLoaded, true)
+  end
+  hookPicker()
+  self:Log("log", "ready")
+  self:LogState()
 end

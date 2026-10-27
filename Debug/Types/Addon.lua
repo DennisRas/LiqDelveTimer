@@ -17,17 +17,26 @@
 ---@field Helpers LDT_Helpers
 ---@field Capture LDT_Capture
 ---@field Log LDT_Log
----@field logger LiqUI_LoggerHandle
+---@field logger LiqUI_LoggerHandle|nil
 ---@field Module_Timer LDT_Module_Timer
 ---@field Module_Run LDT_Module_Run
 ---@field Module_History LDT_Module_History
 ---@field Debug LDT_Debug|nil
 
+---@class LDT_CaptureState
+---@field gold number|nil
+---@field level number|nil
+---@field experience number|nil
+---@field experienceMax number|nil
+---@field zone string|nil
+---@field subzone string|nil
+---@field loot table<string, number>
+
+---@class LDT_Core : AceAddon, AceConsole-3.0
+
 ---@class LDT_Log
 ---@field lastPacked string|nil
 ---@field lastLines string[]|nil
-
----@class LDT_Core : AceAddon, AceConsole-3.0
 
 ---@class LDT_Module_Timer : AceModule
 ---@field frame LDT_TimerFrame|nil
@@ -69,7 +78,6 @@
 ---@field ready boolean
 ---@field clockReady boolean
 ---@field clockOrigin number
----@field reloadNoted boolean
 ---@field zoneKnown boolean
 ---@field entranceNoted boolean
 ---@field timerFromGame boolean|nil

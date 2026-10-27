@@ -390,18 +390,11 @@ local function fillObjectives(rows, run)
   if not scenario then
     return
   end
-  local stepID = run.watch and run.watch.stepID
-  if not stepID then
+  local step = scenario.steps[#scenario.steps]
+  if not step then
     return
   end
-  local criteria
-  for index = 1, #scenario.steps do
-    local step = scenario.steps[index]
-    if step.stepID == stepID then
-      criteria = step.criteria
-      break
-    end
-  end
+  local criteria = step.criteria
   if not criteria or #criteria == 0 then
     return
   end
@@ -409,7 +402,7 @@ local function fillObjectives(rows, run)
   local lines = {}
   for index = 1, #criteria do
     local criteriaRow = criteria[index]
-    local label = objectiveLabel(stepID, criteriaRow, index)
+    local label = objectiveLabel(step.stepID, criteriaRow, index)
     if label then
       ---@type LDT_ObjectiveLine
       local line = { text = label, completed = criteriaRow.completed == true }
@@ -512,9 +505,10 @@ end
 ---@param tier number|nil
 ---@return string
 local function runTitle(run, tier)
-  local name = run.instance and run.instance.name
+  local instance = run.instance
+  local name = instance and instance.name
   if not name or name == "" then
-    local placeName = run.place and (run.place.subzone or run.place.zone)
+    local placeName = instance and (instance.subzone or instance.zone)
     if placeName and placeName ~= "" then
       name = placeName
     else

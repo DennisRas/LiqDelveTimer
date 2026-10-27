@@ -16,7 +16,7 @@ The clock starts when you enter the delve. Good luck!
 
 - **/liqdelvetimer** - show or hide the tracker
 - **/liqdelvetimer history** - open History
-- **/liqdelvetimer log** - open the debug log
+- **/liqdelvetimer log** - open the log
 
 ## Bugs and feedback
 
