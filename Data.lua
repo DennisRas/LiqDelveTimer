@@ -1074,10 +1074,18 @@ function Data:TimelineRows(run)
   ---@type LDT_TimelineRow[]
   local rows = {}
   local scenarios = run.scenarios
+  local stageScenario
+  if Helpers.RunMode(run) ~= Constants.runMode.Lab then
+    local splits = splitScenarios(run)
+    if #splits == 1 then
+      stageScenario = splits[1]
+    end
+  end
   local chamberNumber = 0
   for index = 1, #scenarios do
     local scenario = scenarios[index]
     local role = resolvedRole(scenario.scenarioID, scenario.role)
+    local flatten = scenario == stageScenario
     local blockNumber = chamberNumber
     if role == Constants.scenarioRole.Chamber then
       chamberNumber = chamberNumber + 1
@@ -1086,31 +1094,36 @@ function Data:TimelineRows(run)
     local steps = scenario.steps
     local blockName = timelineBlockName(scenario, role, blockNumber)
     local sharedTitle
-    if run.mode == Constants.runMode.Lab then
-      local first = steps[1]
-      if first then
-        sharedTitle = stepTitle(first.stepID)
-      end
-      if sharedTitle then
-        for stepIndex = 2, #steps do
-          local other = stepTitle(steps[stepIndex].stepID)
-          if other ~= sharedTitle then
-            sharedTitle = nil
-            break
-          end
+    local first = steps[1]
+    if first then
+      sharedTitle = stepTitle(first.stepID)
+    end
+    if sharedTitle then
+      for stepIndex = 2, #steps do
+        local other = stepTitle(steps[stepIndex].stepID)
+        if other ~= sharedTitle then
+          sharedTitle = nil
+          break
         end
       end
-      if sharedTitle and blockName ~= sharedTitle then
-        blockName = format("%s: %s", blockName, sharedTitle)
-      end
     end
-    ---@type LDT_TimelineRow
-    local block = {
-      name = blockName,
-      elapsed = shownElapsed(scenario.enteredElapsed, scenario.completedElapsed),
-      depth = 0,
-    }
-    rows[#rows + 1] = block
+    if run.mode == Constants.runMode.Lab and sharedTitle and not flatten and blockName ~= sharedTitle then
+      blockName = format("%s: %s", blockName, sharedTitle)
+    end
+    local stepDepth = 1
+    local objectiveDepth = 2
+    if flatten then
+      stepDepth = 0
+      objectiveDepth = 1
+    else
+      ---@type LDT_TimelineRow
+      local block = {
+        name = blockName,
+        elapsed = shownElapsed(scenario.enteredElapsed, scenario.completedElapsed),
+        depth = 0,
+      }
+      rows[#rows + 1] = block
+    end
     for stepIndex = 1, #steps do
       local step = steps[stepIndex]
       local stage = step.stage or stepIndex
@@ -1123,7 +1136,7 @@ function Data:TimelineRows(run)
       local stepRow = {
         name = stepName,
         elapsed = shownElapsed(step.enteredElapsed, step.completedElapsed),
-        depth = 1,
+        depth = stepDepth,
       }
       rows[#rows + 1] = stepRow
       local criteria = step.criteria
@@ -1135,7 +1148,7 @@ function Data:TimelineRows(run)
           local objective = {
             name = label,
             elapsed = shownElapsed(criterion.enteredElapsed, criterion.completedElapsed),
-            depth = 2,
+            depth = objectiveDepth,
             done = criterion.completed,
           }
           rows[#rows + 1] = objective

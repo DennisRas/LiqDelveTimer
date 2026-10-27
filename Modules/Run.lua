@@ -1033,13 +1033,13 @@ local function timelineColor(line)
   if line.depth == 0 then
     return BLOCK_COLOR
   end
-  if line.depth == 1 then
-    return STEP_COLOR
+  if line.done ~= nil then
+    if line.done then
+      return OBJECTIVE_DONE_COLOR
+    end
+    return OBJECTIVE_COLOR
   end
-  if line.done then
-    return OBJECTIVE_DONE_COLOR
-  end
-  return OBJECTIVE_COLOR
+  return STEP_COLOR
 end
 
 ---@param text string
