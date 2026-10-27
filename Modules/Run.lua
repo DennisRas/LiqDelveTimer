@@ -45,6 +45,8 @@ local STEP_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
 local OBJECTIVE_COLOR = { r = 0.75, g = 0.85, b = 1, a = 1 }
 ---@type ColorRGBAData
 local OBJECTIVE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
+---@type ColorRGBAData
+local NESTED_TIME_COLOR = { r = 0.5, g = 0.5, b = 0.5, a = 1 }
 
 local measureText = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 measureText:Hide()
@@ -1078,14 +1080,18 @@ local function timelineTableData(run)
   local lines = Data:TimelineRows(run)
   for lineIndex = 1, #lines do
     local line = lines[lineIndex]
-    local color = timelineColor(line)
+    local labelColor = timelineColor(line)
+    local timeColor = NESTED_TIME_COLOR
+    if line.depth == 0 then
+      timeColor = BLOCK_COLOR
+    end
     local timeText = ""
     if line.elapsed ~= nil then
-      timeText = colorText(Helpers.FormatElapsed(line.elapsed), color)
+      timeText = colorText(Helpers.FormatElapsed(line.elapsed), timeColor)
     end
     ---@type LiqUI_TableDataRowExtended
     local row = {
-      data = { colorText(line.name, color), timeText },
+      data = { colorText(line.name, labelColor), timeText },
       indent = line.depth * INDENT_STEP,
       onEnter = showTimelineLine,
       onLeave = GameTooltip_Hide,

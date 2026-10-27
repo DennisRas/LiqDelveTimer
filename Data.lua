@@ -1083,20 +1083,41 @@ function Data:TimelineRows(run)
       chamberNumber = chamberNumber + 1
       blockNumber = chamberNumber
     end
+    local steps = scenario.steps
+    local blockName = timelineBlockName(scenario, role, blockNumber)
+    local sharedTitle
+    if run.mode == Constants.runMode.Lab then
+      local first = steps[1]
+      if first then
+        sharedTitle = stepTitle(first.stepID)
+      end
+      if sharedTitle then
+        for stepIndex = 2, #steps do
+          local other = stepTitle(steps[stepIndex].stepID)
+          if other ~= sharedTitle then
+            sharedTitle = nil
+            break
+          end
+        end
+      end
+      if sharedTitle and blockName ~= sharedTitle then
+        blockName = format("%s: %s", blockName, sharedTitle)
+      end
+    end
     ---@type LDT_TimelineRow
     local block = {
-      name = timelineBlockName(scenario, role, blockNumber),
+      name = blockName,
       elapsed = shownElapsed(scenario.enteredElapsed, scenario.completedElapsed),
       depth = 0,
     }
     rows[#rows + 1] = block
-    local steps = scenario.steps
     for stepIndex = 1, #steps do
       local step = steps[stepIndex]
-      local stepName = stepTitle(step.stepID)
-      if not stepName then
-        local stage = step.stage or stepIndex
-        stepName = format("Stage %d", stage)
+      local stage = step.stage or stepIndex
+      local title = stepTitle(step.stepID)
+      local stepName = format("Stage %d", stage)
+      if not sharedTitle and title then
+        stepName = format("Stage %d: %s", stage, title)
       end
       ---@type LDT_TimelineRow
       local stepRow = {
