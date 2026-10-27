@@ -88,7 +88,7 @@ end
 ---@param label string
 ---@param value string
 ---@return LiqUI_TableDataRowExtended
-local function valueRow(label, value)
+local function buildValueRow(label, value)
   ---@type LiqUI_TableDataRowExtended
   local row = {
     data = { label, value },
@@ -99,7 +99,7 @@ end
 ---@param text string
 ---@param columns number
 ---@return LiqUI_TableDataRowExtended
-local function noteRow(text, columns)
+local function buildNoteRow(text, columns)
   ---@type LiqUI_TableDataCellValue[]
   local cells = {}
   cells[1] = text
@@ -116,7 +116,7 @@ end
 
 ---@param run LDT_Run
 ---@return string
-local function windowTitle(run)
+local function formatWindowTitle(run)
   local instance = run.instance
   local rawName = instance and instance.name
   local name = "Delve"
@@ -128,7 +128,7 @@ local function windowTitle(run)
   if type(variant) == "string" and variant ~= "" and variant ~= name then
     title = format("%s - %s", name, variant) or name
   end
-  local tier = Helpers.RunTier(run)
+  local tier = Helpers.FindTier(run)
   if tier then
     title = format("%s (Tier %d)", title, tier) or title
   end
@@ -140,13 +140,13 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return string
-local function deltaText(elapsed, bestElapsed, ahead, behind)
+local function formatDeltaText(elapsed, bestElapsed, ahead, behind)
   if not elapsed then
     return ""
   end
   local delta = 0
   if bestElapsed then
-    delta = Helpers.ShownDelta(elapsed, bestElapsed)
+    delta = Helpers.RoundShownDelta(elapsed, bestElapsed)
   end
   local color = ahead
   if delta > 0 then
@@ -157,7 +157,7 @@ end
 
 ---@param name string
 ---@return LiqUI_TableDataCellValue
-local function stageCell(name)
+local function buildStageCell(name)
   local shown, trimmed = fitText(name, STAGE_TEXT_WIDTH)
   if not trimmed then
     return shown
@@ -183,7 +183,7 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return LiqUI_TableDataRowExtended
-local function stageRow(name, elapsed, bestElapsed, ahead, behind)
+local function buildStageRow(name, elapsed, bestElapsed, ahead, behind)
   local timeText = ""
   if elapsed then
     timeText = Helpers.FormatElapsed(elapsed) or ""
@@ -195,8 +195,8 @@ local function stageRow(name, elapsed, bestElapsed, ahead, behind)
   ---@type LiqUI_TableDataRowExtended
   local row = {
     data = {
-      stageCell(name),
-      deltaText(elapsed, bestElapsed, ahead, behind),
+      buildStageCell(name),
+      formatDeltaText(elapsed, bestElapsed, ahead, behind),
       timeText,
       bestText,
     },
@@ -208,16 +208,16 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return LiqUI_TableData
-local function stageData(run, ahead, behind)
+local function buildStageData(run, ahead, behind)
   ---@type LiqUI_TableData
   local data = {}
-  local rows = Data:StepRows(run)
+  local rows = Data:BuildSplits(run)
   for index = 1, #rows do
     local row = rows[index]
-    data[#data + 1] = stageRow(row.name, row.elapsed, row.best, ahead, behind)
+    data[#data + 1] = buildStageRow(row.name, row.elapsed, row.best, ahead, behind)
   end
   if #data == 0 then
-    data[1] = noteRow("No splits yet", 4)
+    data[1] = buildNoteRow("No splits yet", 4)
   end
   return data
 end
@@ -251,13 +251,13 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return string
-local function comparedTime(elapsed, bestElapsed, ahead, behind)
+local function formatComparedTime(elapsed, bestElapsed, ahead, behind)
   local text = Helpers.FormatElapsed(elapsed) or "-"
   if not bestElapsed then
     return text
   end
   local color = ahead
-  if Helpers.ShownDelta(elapsed, bestElapsed) > 0 then
+  if Helpers.RoundShownDelta(elapsed, bestElapsed) > 0 then
     color = behind
   end
   return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(text)
@@ -266,7 +266,7 @@ end
 ---@param atlas string
 ---@param value string
 ---@return string
-local function withAtlas(atlas, value)
+local function formatWithAtlas(atlas, value)
   local icon = CreateAtlasMarkup(atlas, 14, 14) or ""
   return format("%s %s", icon, value)
 end
@@ -275,7 +275,7 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return LiqUI_TableData, number[]
-local function summaryData(run, ahead, behind)
+local function buildSummary(run, ahead, behind)
   ---@type LiqUI_TableData
   local data = {}
   local character = run.character
@@ -300,7 +300,7 @@ local function summaryData(run, ahead, behind)
   if specMarkup ~= "" then
     characterText = format("%s %s", characterText, specMarkup)
   end
-  local characterRow = valueRow("Character", characterText)
+  local characterRow = buildValueRow("Character", characterText)
   if character then
     ---@param cellFrame LiqUI_TableCellFrame
     local function showCharacter(cellFrame)
@@ -356,36 +356,36 @@ local function summaryData(run, ahead, behind)
     characterRow.onLeave = GameTooltip_Hide
   end
   data[#data + 1] = characterRow
-  data[#data + 1] = valueRow("Started", Helpers.FormatDate(run.startedAt, Constants.dateLength.Full))
+  data[#data + 1] = buildValueRow("Started", Helpers.FormatDate(run.startedAt, Constants.dateLength.Full))
   local endedText = "-"
   if run.endedAt then
     endedText = Helpers.FormatDate(run.endedAt, Constants.dateLength.Full)
   end
-  data[#data + 1] = valueRow("Ended", endedText)
-  local red, green, blue = Helpers.ResultColor(run.result)
-  data[#data + 1] = valueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(Helpers.ResultLabel(run.result)))
-  local bestTime = Helpers.BestDuration(run)
+  data[#data + 1] = buildValueRow("Ended", endedText)
+  local red, green, blue = Helpers.FindResultColor(run.result)
+  data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(Helpers.FormatResult(run.result)))
+  local bestTime = Helpers.FindBestDuration(run)
   local timeText = "-"
   if run.endedAt then
-    local duration = Helpers.Duration(run)
+    local duration = Helpers.FindDuration(run)
     if duration then
-      timeText = comparedTime(duration, bestTime, ahead, behind)
+      timeText = formatComparedTime(duration, bestTime, ahead, behind)
     end
   end
-  data[#data + 1] = valueRow("Time", timeText)
+  data[#data + 1] = buildValueRow("Time", timeText)
   local bestText = "-"
   if bestTime then
     bestText = Helpers.FormatElapsed(bestTime) or "-"
   end
-  data[#data + 1] = valueRow("Best", bestText)
-  local deathsMarkup = withAtlas("DungeonSkull", tostring(run.deaths or 0))
+  data[#data + 1] = buildValueRow("Best", bestText)
+  local deathsMarkup = formatWithAtlas("DungeonSkull", tostring(run.deaths or 0))
   local countLabel = "Deaths"
   local countValue = deathsMarkup
   if run.lives ~= nil then
     countLabel = "Deaths / Lives"
-    countValue = format("%s / %s", deathsMarkup, withAtlas("delves-scenario-heart-icon", tostring(run.lives)))
+    countValue = format("%s / %s", deathsMarkup, formatWithAtlas("delves-scenario-heart-icon", tostring(run.lives)))
   end
-  data[#data + 1] = valueRow(countLabel, countValue)
+  data[#data + 1] = buildValueRow(countLabel, countValue)
   ---@type number[]
   local affixSpells = {}
   local entrance = run.entrance
@@ -406,7 +406,7 @@ local function summaryData(run, ahead, behind)
         showAffixes(affixSpells, cellFrame)
       end
       ---@type LiqUI_TableDataRowExtended
-      local affixRow = valueRow("Affixes", "")
+      local affixRow = buildValueRow("Affixes", "")
       affixRow.onEnter = showAffixRow
       affixRow.onLeave = GameTooltip_Hide
       data[#data + 1] = affixRow
@@ -419,7 +419,7 @@ local boonColorNeedles
 
 ---@param label string
 ---@return number|nil, number|nil, number|nil
-local function boonStatColor(label)
+local function findBoonColor(label)
   if not boonColorNeedles then
     boonColorNeedles = {}
     local colors = Constants.boonStatColors
@@ -456,7 +456,7 @@ local function appendBoonStats(text, stats)
   for line in text:gmatch("[^\r\n]+") do
     local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
     if label and label ~= "" and value and value ~= "" then
-      local amount = Helpers.BoonAmount(value)
+      local amount = Helpers.ParseBoonAmount(value)
       if amount then
         value = Helpers.FormatBoonAmount(amount)
       else
@@ -469,8 +469,8 @@ end
 
 ---@param label string
 ---@return string
-local function boonLabel(label)
-  local red, green, blue = boonStatColor(label)
+local function formatBoonLabel(label)
+  local red, green, blue = findBoonColor(label)
   if red and green and blue then
     return CreateColor(red, green, blue):WrapTextInColorCode(label)
   end
@@ -479,7 +479,7 @@ end
 
 ---@param run LDT_Run
 ---@return LiqUI_TableData
-local function boonData(run)
+local function buildBoons(run)
   ---@type LiqUI_TableData
   local data = {}
   local boons = run.boons or {}
@@ -494,7 +494,7 @@ local function boonData(run)
     end
   end
   if #stats == 0 then
-    data[1] = noteRow("No boons", 4)
+    data[1] = buildNoteRow("No boons", 4)
     return data
   end
   for index = 1, #stats, 2 do
@@ -503,9 +503,9 @@ local function boonData(run)
     ---@type LiqUI_TableDataRowExtended
     local row = {
       data = {
-        boonLabel(left.label),
+        formatBoonLabel(left.label),
         left.value,
-        right and boonLabel(right.label) or "",
+        right and formatBoonLabel(right.label) or "",
         right and right.value or "",
       },
     }
@@ -516,7 +516,7 @@ end
 
 ---@param amount number
 ---@return string
-local function signedCount(amount)
+local function formatSignedCount(amount)
   if amount > 0 then
     return format("+%d", amount)
   end
@@ -550,7 +550,7 @@ end
 
 ---@param factionID number
 ---@return string
-local function factionLabel(factionID)
+local function formatFaction(factionID)
   local data = C_MajorFactions.GetMajorFactionData(factionID)
   if data and data.name and data.name ~= "" then
     return data.name
@@ -573,7 +573,7 @@ local function appendAmount(data, name, amount)
   local row = {
     data = {
       name,
-      CreateColor(0.5, 0.85, 1):WrapTextInColorCode(signedCount(amount)),
+      CreateColor(0.5, 0.85, 1):WrapTextInColorCode(formatSignedCount(amount)),
     },
   }
   data[#data + 1] = row
@@ -582,7 +582,7 @@ end
 ---@param rewards LDT_Reward[]
 ---@param rewardType LDT_RewardTypeId
 ---@return number
-local function amountOfType(rewards, rewardType)
+local function findAmount(rewards, rewardType)
   for index = 1, #rewards do
     local reward = rewards[index]
     if reward.type == rewardType then
@@ -594,23 +594,23 @@ end
 
 ---@param run LDT_Run
 ---@return LiqUI_TableData
-local function rewardsData(run)
+local function buildRewards(run)
   ---@type LiqUI_TableData
   local data = {}
   local rewards = run.rewards
   if not rewards then
-    data[1] = noteRow("No rewards yet", 2)
+    data[1] = buildNoteRow("No rewards yet", 2)
     return data
   end
   local companionName = "Companion"
   if run.companion and run.companion.name and run.companion.name ~= "" then
     companionName = run.companion.name
   end
-  appendAmount(data, "Level", amountOfType(rewards, Constants.rewardType.Level))
-  appendAmount(data, "Experience", amountOfType(rewards, Constants.rewardType.Experience))
-  appendAmount(data, companionName .. " level", amountOfType(rewards, Constants.rewardType.CompanionLevel))
-  appendAmount(data, companionName .. " XP", amountOfType(rewards, Constants.rewardType.CompanionExperience))
-  local gold = amountOfType(rewards, Constants.rewardType.Gold)
+  appendAmount(data, "Level", findAmount(rewards, Constants.rewardType.Level))
+  appendAmount(data, "Experience", findAmount(rewards, Constants.rewardType.Experience))
+  appendAmount(data, companionName .. " level", findAmount(rewards, Constants.rewardType.CompanionLevel))
+  appendAmount(data, companionName .. " XP", findAmount(rewards, Constants.rewardType.CompanionExperience))
+  local gold = findAmount(rewards, Constants.rewardType.Gold)
   if gold > 0 then
     local copper = gold
     ---@param cellFrame LiqUI_TableCellFrame
@@ -632,7 +632,7 @@ local function rewardsData(run)
     local change = rewards[index]
     local currencyID = change.id
     local total = change.amount
-    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and Helpers.CurrencyListed(currencyID) then
+    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and Helpers.IsCurrencyListed(currencyID) then
       local name = tostring(currencyID)
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.name and info.name ~= "" then
@@ -649,7 +649,7 @@ local function rewardsData(run)
       local row = {
         data = {
           name,
-          CreateColor(0.5, 0.85, 1):WrapTextInColorCode(signedCount(total)),
+          CreateColor(0.5, 0.85, 1):WrapTextInColorCode(formatSignedCount(total)),
         },
         onEnter = showCurrencyRow,
         onLeave = GameTooltip_Hide,
@@ -660,14 +660,14 @@ local function rewardsData(run)
   for index = 1, #rewards do
     local change = rewards[index]
     if change.type == Constants.rewardType.Renown and change.id and change.amount ~= 0 then
-      appendAmount(data, factionLabel(change.id), change.amount)
+      appendAmount(data, formatFaction(change.id), change.amount)
     end
   end
   ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, quality: number, qualityKnown: boolean, name: string }[]
   local items = {}
   for index = 1, #rewards do
     local item = rewards[index]
-    if item.type == Constants.rewardType.Loot and not Helpers.ItemHidden(item.id) then
+    if item.type == Constants.rewardType.Loot and not Helpers.IsItemHidden(item.id) then
       items[#items + 1] = {
         itemID = item.id,
         itemLink = item.itemLink,
@@ -750,14 +750,14 @@ local function rewardsData(run)
     data[#data + 1] = row
   end
   if #data == 0 then
-    data[1] = noteRow("No rewards yet", 2)
+    data[1] = buildNoteRow("No rewards yet", 2)
   end
   return data
 end
 
 ---@param companion LDT_Companion
 ---@return string|nil
-local function lfgRoleAtlas(companion)
+local function findRoleAtlas(companion)
   local name = ""
   if companion.roleName then
     name = companion.roleName:lower()
@@ -803,7 +803,7 @@ end
 ---@param x number
 ---@param round boolean|nil
 ---@return LDT_RunIconButton
-local function iconButton(parent, anchor, relativePoint, x, round)
+local function createIconButton(parent, anchor, relativePoint, x, round)
   ---@type LDT_RunIconButton
   local button = CreateFrame("Button", nil, parent)
   button:SetSize(ICON_SIZE, ICON_SIZE)
@@ -868,7 +868,7 @@ local function createCompanion(parent)
   barText:SetJustifyH("LEFT")
   barText:SetWordWrap(false)
   frame.barText = barText
-  local role = iconButton(icons, icons, "RIGHT", 0)
+  local role = createIconButton(icons, icons, "RIGHT", 0)
   ---@param button LDT_RunIconButton
   local function showRole(button)
     local tip = button.tip
@@ -885,7 +885,7 @@ local function createCompanion(parent)
   local spells = {}
   local previous = role
   for index = 1, 3 do
-    local button = iconButton(icons, previous, "LEFT", -2, true)
+    local button = createIconButton(icons, previous, "LEFT", -2, true)
     ---@param spellButton LDT_RunIconButton
     local function showSpell(spellButton)
       local spellID = spellButton.spellID
@@ -970,7 +970,7 @@ local function paintCompanion(frame, run)
     frame.bar:SetValue(0)
     frame.barText:SetText("")
   end
-  local atlas = lfgRoleAtlas(companion)
+  local atlas = findRoleAtlas(companion)
   if atlas and atlas ~= "" then
     frame.role:Show()
     frame.role.icon:SetAtlas(atlas)
@@ -1065,7 +1065,7 @@ end
 ---@param sticky boolean|nil
 ---@param highlight boolean|nil
 ---@return LiqUI_TableOptions
-local function tableOptions(name, columns, showHeader, headerAlpha, sticky, highlight)
+local function buildTableOptions(name, columns, showHeader, headerAlpha, sticky, highlight)
   ---@type LiqUI_TableOptions
   local options = {
     name = name,
@@ -1183,7 +1183,7 @@ end
 
 ---@param line LDT_TimelineRow
 ---@return ColorRGBAData
-local function timelineColor(line)
+local function findTimelineColor(line)
   if line.depth == 0 then
     return BLOCK_COLOR
   end
@@ -1225,16 +1225,16 @@ end
 
 ---@param run LDT_Run|nil
 ---@return LiqUI_TableData
-local function timelineTableData(run)
+local function buildTimelineData(run)
   ---@type LiqUI_TableData
   local data = {}
   if not run then
     return data
   end
-  local lines = Data:TimelineRows(run)
+  local lines = Data:BuildTimeline(run)
   for lineIndex = 1, #lines do
     local line = lines[lineIndex]
-    local labelColor = timelineColor(line)
+    local labelColor = findTimelineColor(line)
     local timeColor = NESTED_TIME_COLOR
     if line.depth == 0 then
       timeColor = BLOCK_COLOR
@@ -1405,15 +1405,15 @@ function Module:Fill(run)
     paintCompanion(self.companion, nil)
     return
   end
-  Data:SnapshotBest(run)
-  window:SetTitle(windowTitle(run))
-  local summaryRows, affixSpells = summaryData(run, ahead, behind)
+  Data:SetBest(run)
+  window:SetTitle(formatWindowTitle(run))
+  local summaryRows, affixSpells = buildSummary(run, ahead, behind)
   self.summaryData = summaryRows
   self.affixSpells = affixSpells
-  self.stagesData = stageData(run, ahead, behind)
-  self.boonsData = boonData(run)
-  self.rewardsData = rewardsData(run)
-  self.timelineData = timelineTableData(run)
+  self.stagesData = buildStageData(run, ahead, behind)
+  self.boonsData = buildBoons(run)
+  self.rewardsData = buildRewards(run)
+  self.timelineData = buildTimelineData(run)
   paintCompanion(self.companion, run)
 end
 
@@ -1496,36 +1496,36 @@ function Module:Render()
       { id = "name", headerText = "Rewards", width = REWARD_NAME_WIDTH, align = "LEFT" },
       { id = "amount", headerText = "", width = REWARD_AMOUNT_WIDTH, align = "RIGHT" },
     }
-    local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, true, 0.35, false))
+    local summary = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunSummary", summaryColumns, true, 0.35, false))
     summary:SetParent(content)
     self.summary = summary
-    local stages = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunStages", stageColumns, true, 0.35))
+    local stages = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunStages", stageColumns, true, 0.35))
     stages:SetParent(content)
     self.stages = stages
     self.companionHeader = createBlockHeader(content, "Companion")
     self.companion = createCompanion(content)
     self.boonsHeader = createBlockHeader(content, "Boons")
-    local boons = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunBoons", boonColumns, false))
+    local boons = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunBoons", boonColumns, false))
     boons:SetParent(content)
     self.boons = boons
-    local rewards = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunRewards", rewardColumns, true, 0.35, true, true))
+    local rewards = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunRewards", rewardColumns, true, 0.35, true, true))
     rewards:SetParent(rewardsColumn)
     self.rewards = rewards
     local timelineColumns = {
       { id = "name", headerText = "Timeline", width = TIMELINE_NAME_WIDTH, align = "LEFT" },
       { id = "time", headerText = "Time", width = TIMELINE_TIME_WIDTH, align = "RIGHT" },
     }
-    local timeline = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunTimeline", timelineColumns, true, 0.35, true, true))
+    local timeline = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunTimeline", timelineColumns, true, 0.35, true, true))
     timeline:SetParent(timelineColumn)
     self.timeline = timeline
   end
   if not self.window or not self.window:IsShown() then
     return
   end
-  local run = self.pinnedRun or Data:GetActiveRun()
+  local run = self.pinnedRun or Data:FindActiveRun()
   self:Fill(run)
   self:Layout()
-  local active = Data:GetActiveRun()
+  local active = Data:FindActiveRun()
   if run and active and run == active then
     if self.window:GetScript("OnUpdate") ~= onPaintUpdate then
       paintRemaining = 0
@@ -1569,7 +1569,7 @@ function Module:ToggleWindow()
     self.window:Hide()
     return
   end
-  self:ShowRun(Data:GetActiveRun())
+  self:ShowRun(Data:FindActiveRun())
 end
 
 function Module:OnEnable()

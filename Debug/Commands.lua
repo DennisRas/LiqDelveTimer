@@ -6,7 +6,6 @@ local Debug = {}
 addon.Debug = Debug
 
 local Data = addon.Data
-local Helpers = addon.Helpers
 
 ---@param input string|nil
 ---@return boolean
@@ -32,12 +31,12 @@ function Debug:OnChatCommand(input)
   if token ~= "dump" then
     return false
   end
-  local run = Data:GetActiveRun() or Data:GetLatestRun()
+  local run = Data:FindActiveRun() or Data:FindLatestRun()
   if not run then
     addon.Core:Print("No delve run yet.")
     return true
   end
-  local mode = Helpers.RunMode(run) or "none"
+  local mode = run.mode or "none"
   addon.Core:Print(format("Run %s (%s) mode %s scenarios %d", run.id, run.result, mode, #run.scenarios))
   return true
 end

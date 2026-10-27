@@ -113,7 +113,7 @@ local tierFields = {
 ---@param index number
 ---@param ... any
 ---@return string
-local function textAt(index, ...)
+local function formatArg(index, ...)
   if select(index, ...) == nil then
     return "nil"
   end
@@ -134,7 +134,7 @@ local function textAt(index, ...)
   if #value > 0 then
     local parts = {}
     for itemIndex = 1, #value do
-      parts[itemIndex] = textAt(1, value[itemIndex])
+      parts[itemIndex] = formatArg(1, value[itemIndex])
     end
     return table.concat(parts, ",")
   end
@@ -170,7 +170,7 @@ local function textAt(index, ...)
   for namedIndex = 1, #named do
     local key = named[namedIndex]
     if value[key] ~= nil then
-      parts[#parts + 1] = format("%s=%s", key, textAt(1, value[key]))
+      parts[#parts + 1] = format("%s=%s", key, formatArg(1, value[key]))
     end
   end
   if #parts == 0 then
@@ -181,8 +181,8 @@ end
 
 ---@param value string|number|boolean|table|nil
 ---@return string
-local function valueText(value)
-  return textAt(1, value)
+local function formatValue(value)
+  return formatArg(1, value)
 end
 
 ---@param stepID number
@@ -206,7 +206,7 @@ local function addStruct(lines, key, info, fields)
   local parts = {}
   for index = 1, #fields do
     local fieldName = fields[index]
-    parts[index] = format("%s=%s", fieldName, textAt(1, info[fieldName]))
+    parts[index] = format("%s=%s", fieldName, formatArg(1, info[fieldName]))
   end
   lines[#lines + 1] = format("%s %s", key, table.concat(parts, " "))
 end
@@ -214,7 +214,7 @@ end
 ---@param labels string[]|nil
 ---@param ... any
 ---@return string
-local function positionalText(labels, ...)
+local function formatArgs(labels, ...)
   local count = select("#", ...)
   if count == 0 then
     return "nil"
@@ -225,7 +225,7 @@ local function positionalText(labels, ...)
     if label == "" then
       label = tostring(index)
     end
-    parts[index] = format("%s=%s", label, textAt(index, ...))
+    parts[index] = format("%s=%s", label, formatArg(index, ...))
   end
   return table.concat(parts, " ")
 end
@@ -236,9 +236,9 @@ end
 ---@return string
 local function describeCall(labels, fn, ...)
   if labels then
-    return positionalText(labels, fn(...))
+    return formatArgs(labels, fn(...))
   end
-  return textAt(1, fn(...))
+  return formatArg(1, fn(...))
 end
 
 ---@param lines string[]
@@ -273,17 +273,17 @@ local function addCriteria(lines, key, numCriteria, stepID)
   end
   if count == 0 then
     if stepID then
-      lines[#lines + 1] = format("GetCriteriaInfoByStep(%s) none", valueText(stepID))
+      lines[#lines + 1] = format("GetCriteriaInfoByStep(%s) none", formatValue(stepID))
     else
       lines[#lines + 1] = "GetCriteriaInfo none"
     end
     return
   end
   for index = 1, count do
-    local lineKey = format("%s(%d)", key, index)
+    local rowLabel = format("%s(%d)", key, index)
     local ok, info
     if stepID then
-      lineKey = format("GetCriteriaInfoByStep(%s,%d)", valueText(stepID), index)
+      rowLabel = format("GetCriteriaInfoByStep(%s,%d)", formatValue(stepID), index)
       ok, info = pcall(C_ScenarioInfo.GetCriteriaInfoByStep, stepID, index)
     else
       ok, info = pcall(C_ScenarioInfo.GetCriteriaInfo, index)
@@ -293,11 +293,11 @@ local function addCriteria(lines, key, numCriteria, stepID)
       if type(info) == "string" then
         err = format("error=%s", info)
       end
-      lines[#lines + 1] = format("%s %s", lineKey, err)
+      lines[#lines + 1] = format("%s %s", rowLabel, err)
     elseif type(info) == "table" then
-      addStruct(lines, lineKey, info, criteriaFields)
+      addStruct(lines, rowLabel, info, criteriaFields)
     else
-      lines[#lines + 1] = format("%s nil", lineKey)
+      lines[#lines + 1] = format("%s nil", rowLabel)
     end
   end
 end
@@ -305,7 +305,7 @@ end
 ---@param lines string[]
 ---@param stepID number
 local function addStepByID(lines, stepID)
-  local key = format("GetScenarioStepInfo(%s)", valueText(stepID))
+  local key = format("GetScenarioStepInfo(%s)", formatValue(stepID))
   local ok, info = pcall(C_ScenarioInfo.GetScenarioStepInfo, stepID)
   if not ok then
     local err = "error"
@@ -428,7 +428,7 @@ end
 ---@param tierInfo TieredEntranceTierInfo
 local function addTier(lines, key, tierInfo)
   addStruct(lines, key, tierInfo, tierFields)
-  local enabledKey = format("IsDelveEntranceTierEnabled(%s)", valueText(tierInfo.tier))
+  local enabledKey = format("IsDelveEntranceTierEnabled(%s)", formatValue(tierInfo.tier))
   addCall(lines, enabledKey, { "enabled", "failureReason" }, C_DelvesUI.IsDelveEntranceTierEnabled, tierInfo.tier)
   local rewards = tierInfo.rewards
   if not rewards or #rewards == 0 then
@@ -441,14 +441,14 @@ local function addTier(lines, key, tierInfo)
     lines[#lines + 1] = format(
       "%s id=%s quantity=%s rewardType=%s context=%s",
       rewardKey,
-      valueText(reward.id),
-      valueText(reward.quantity),
-      valueText(reward.rewardType),
-      valueText(reward.context)
+      formatValue(reward.id),
+      formatValue(reward.quantity),
+      formatValue(reward.rewardType),
+      formatValue(reward.context)
     )
-    local linkKey = format("GetDelvePreviewItemLink(%s,%s)", valueText(reward.id), valueText(reward.context))
+    local linkKey = format("GetDelvePreviewItemLink(%s,%s)", formatValue(reward.id), formatValue(reward.context))
     addCall(lines, linkKey, nil, C_Item.GetDelvePreviewItemLink, reward.id, reward.context)
-    local qualityKey = format("GetDelvePreviewItemQuality(%s,%s)", valueText(reward.id), valueText(reward.context))
+    local qualityKey = format("GetDelvePreviewItemQuality(%s,%s)", formatValue(reward.id), formatValue(reward.context))
     addCall(lines, qualityKey, nil, C_Item.GetDelvePreviewItemQuality, reward.id, reward.context)
   end
 end
@@ -475,7 +475,7 @@ local function addDelve(lines)
   if C_DelvesUI.HasActiveDelve() then
     local tierOK, tierInfo = pcall(C_DelvesUI.GetActiveDelveTier)
     if not tierOK then
-      lines[#lines + 1] = format("GetActiveDelveTier error=%s", valueText(tierInfo))
+      lines[#lines + 1] = format("GetActiveDelveTier error=%s", formatValue(tierInfo))
     elseif tierInfo then
       addTier(lines, "GetActiveDelveTier", tierInfo)
     else
@@ -486,7 +486,7 @@ local function addDelve(lines)
   end
   local tiersOK, tiers = pcall(C_DelvesUI.GetDelveEntranceTiers)
   if not tiersOK then
-    lines[#lines + 1] = format("GetDelveEntranceTiers error=%s", valueText(tiers))
+    lines[#lines + 1] = format("GetDelveEntranceTiers error=%s", formatValue(tiers))
   elseif not tiers or #tiers == 0 then
     lines[#lines + 1] = "GetDelveEntranceTiers none"
   else
@@ -522,7 +522,7 @@ local function addInstance(lines, scenarioID)
   }, GetInstanceInfo)
   local mapOK, mapID = pcall(C_Map.GetBestMapForUnit, "player")
   if not mapOK then
-    lines[#lines + 1] = format("GetBestMapForUnit error=%s", valueText(mapID))
+    lines[#lines + 1] = format("GetBestMapForUnit error=%s", formatValue(mapID))
   else
     local mapName
     if mapID then
@@ -531,10 +531,10 @@ local function addInstance(lines, scenarioID)
         mapName = mapInfo.name
       end
     end
-    lines[#lines + 1] = format("GetBestMapForUnit mapID=%s name=%s zone=%s subzone=%s", valueText(mapID), valueText(mapName), valueText(GetZoneText()), valueText(GetSubZoneText()))
+    lines[#lines + 1] = format("GetBestMapForUnit mapID=%s name=%s zone=%s subzone=%s", formatValue(mapID), formatValue(mapName), formatValue(GetZoneText()), formatValue(GetSubZoneText()))
   end
   if scenarioID and C_LFGList and C_LFGList.CanCreateScenarioGroup then
-    local key = format("CanCreateScenarioGroup(%s)", valueText(scenarioID))
+    local key = format("CanCreateScenarioGroup(%s)", formatValue(scenarioID))
     addCall(lines, key, nil, C_LFGList.CanCreateScenarioGroup, scenarioID)
   end
 end
@@ -542,7 +542,7 @@ end
 ---@param lines string[]
 ---@param companionID number|nil
 local function addCompanionReads(lines, companionID)
-  local key = format("companion(%s)", valueText(companionID))
+  local key = format("companion(%s)", formatValue(companionID))
   local displayID = C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID)
   local factionID = C_DelvesUI.GetFactionForCompanion(companionID)
   local flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(companionID)
@@ -573,24 +573,24 @@ local function addCompanionReads(lines, companionID)
   lines[#lines + 1] = format(
     "%s creatureDisplayInfoID=%s modelSceneID=%s playerCompanionPDEID=%s factionID=%s factionName=%s currentStanding=%s currentReactionThreshold=%s nextReactionThreshold=%s flavorNodeName=%s flavorNodeID=%s roleNodeID=%s traitTreeID=%s combatCurioNodeID=%s utilityCurioNodeID=%s lockedText=%s dpsSubtreeID=%s healSubtreeID=%s tankSubtreeID=%s",
     key,
-    valueText(displayID),
-    valueText(modelSceneID),
-    valueText(companionPDEID),
-    valueText(factionID),
-    valueText(factionName),
-    valueText(currentStanding),
-    valueText(currentReactionThreshold),
-    valueText(nextReactionThreshold),
-    valueText(flavorName),
-    valueText(flavorNodeID),
-    valueText(roleNodeID),
-    valueText(traitTreeID),
-    valueText(combatNodeID),
-    valueText(utilityNodeID),
-    valueText(lockedText),
-    valueText(dpsSubtreeID),
-    valueText(healSubtreeID),
-    valueText(tankSubtreeID)
+    formatValue(displayID),
+    formatValue(modelSceneID),
+    formatValue(companionPDEID),
+    formatValue(factionID),
+    formatValue(factionName),
+    formatValue(currentStanding),
+    formatValue(currentReactionThreshold),
+    formatValue(nextReactionThreshold),
+    formatValue(flavorName),
+    formatValue(flavorNodeID),
+    formatValue(roleNodeID),
+    formatValue(traitTreeID),
+    formatValue(combatNodeID),
+    formatValue(utilityNodeID),
+    formatValue(lockedText),
+    formatValue(dpsSubtreeID),
+    formatValue(healSubtreeID),
+    formatValue(tankSubtreeID)
   )
 end
 
@@ -606,7 +606,7 @@ end
 
 ---@param lines string[]
 local function addCapture(lines)
-  local run = Data:GetActiveRun()
+  local run = Data:FindActiveRun()
   local runID = "nil"
   local result = "nil"
   local header = "nil"
@@ -617,21 +617,21 @@ local function addCapture(lines)
     runID = run.id
     result = run.result
     if run.entrance then
-      header = valueText(run.entrance.header)
-      title = valueText(run.entrance.title)
+      header = formatValue(run.entrance.header)
+      title = formatValue(run.entrance.title)
     end
     local scenario = run.scenarios[#run.scenarios]
     if scenario then
-      scenarioID = valueText(scenario.scenarioID)
+      scenarioID = formatValue(scenario.scenarioID)
       local step = scenario.steps[#scenario.steps]
       if step then
-        stepID = valueText(step.stepID)
+        stepID = formatValue(step.stepID)
       end
     end
   end
   lines[#lines + 1] = format(
     "capture inside=%s run=%s result=%s entranceTitle=%s entranceHeader=%s scenarioID=%s stepID=%s",
-    valueText(Capture:IsInside()),
+    formatValue(Capture:IsInside()),
     runID,
     result,
     title,
@@ -644,17 +644,17 @@ local function addCapture(lines)
   end
   lines[#lines + 1] = format(
     "run mode=%s deaths=%s lives=%s endedAt=%s",
-    valueText(run.mode),
-    valueText(run.deaths),
-    valueText(run.lives),
-    valueText(run.endedAt)
+    formatValue(run.mode),
+    formatValue(run.deaths),
+    formatValue(run.lives),
+    formatValue(run.endedAt)
   )
   lines[#lines + 1] = format(
     "player GetMoney=%s UnitLevel=%s UnitXP=%s UnitXPMax=%s",
-    valueText(GetMoney()),
-    valueText(UnitLevel("player")),
-    valueText(UnitXP("player")),
-    valueText(UnitXPMax("player"))
+    formatValue(GetMoney()),
+    formatValue(UnitLevel("player")),
+    formatValue(UnitXP("player")),
+    formatValue(UnitXPMax("player"))
   )
   local rewards = run.rewards
   if rewards then
@@ -663,10 +663,10 @@ local function addCapture(lines)
       lines[#lines + 1] = format(
         "run.reward[%d] type=%s id=%s amount=%s itemLink=%s",
         index,
-        valueText(reward.type),
-        valueText(reward.id),
-        valueText(reward.amount),
-        valueText(reward.itemLink)
+        formatValue(reward.type),
+        formatValue(reward.id),
+        formatValue(reward.amount),
+        formatValue(reward.itemLink)
       )
     end
   end
@@ -675,9 +675,9 @@ local function addCapture(lines)
     lines[#lines + 1] = format(
       "run.boon[%d] label=%s amount=%s percent=%s",
       index,
-      valueText(boon.label),
-      valueText(boon.amount),
-      valueText(boon.percent)
+      formatValue(boon.label),
+      formatValue(boon.amount),
+      formatValue(boon.percent)
     )
   end
 end
@@ -698,7 +698,7 @@ end
 local function catch(lines, label, fn)
   local ok, err = pcall(fn, lines)
   if not ok then
-    lines[#lines + 1] = format("%s error=%s", label, valueText(err))
+    lines[#lines + 1] = format("%s error=%s", label, formatValue(err))
   end
 end
 
@@ -726,7 +726,7 @@ end
 
 ---@param line string
 ---@return string
-local function lineKey(line)
+local function findLineKey(line)
   return line:match("^(%S+)") or line
 end
 
@@ -744,11 +744,11 @@ function Log:EmitState(lines, packed)
   end
   for index = 1, #lines do
     local line = lines[index]
-    local key = lineKey(line)
+    local key = findLineKey(line)
     local same = false
     for previousIndex = 1, #previous do
       local previousLine = previous[previousIndex]
-      if lineKey(previousLine) == key then
+      if findLineKey(previousLine) == key then
         same = previousLine == line
         break
       end
@@ -758,10 +758,10 @@ function Log:EmitState(lines, packed)
     end
   end
   for previousIndex = 1, #previous do
-    local key = lineKey(previous[previousIndex])
+    local key = findLineKey(previous[previousIndex])
     local found = false
     for index = 1, #lines do
-      if lineKey(lines[index]) == key then
+      if findLineKey(lines[index]) == key then
         found = true
         break
       end
@@ -790,7 +790,7 @@ function Log:OnEvent(event, ...)
   else
     local parts = {}
     for index = 1, count do
-      parts[index] = textAt(index, ...)
+      parts[index] = formatArg(index, ...)
     end
     self:Log("event", format("%s %s", event, table.concat(parts, " ")))
   end

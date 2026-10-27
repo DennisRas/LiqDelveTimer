@@ -67,7 +67,7 @@ function Data:Initialize()
 end
 
 ---@return LDT_Run|nil
-function Data:GetActiveRun()
+function Data:FindActiveRun()
   if not self.db or not self.db.global.activeRunID then
     return nil
   end
@@ -84,7 +84,7 @@ end
 
 ---@param instance LDT_Instance|nil
 ---@return LDT_Delve|nil
-function Data:DelveForInstance(instance)
+function Data:FindDelve(instance)
   if not instance then
     return nil
   end
@@ -105,7 +105,7 @@ function Data:DelveForInstance(instance)
 end
 
 ---@return LDT_Run|nil
-function Data:GetLatestRun()
+function Data:FindLatestRun()
   if not self.db then
     return nil
   end
@@ -142,7 +142,7 @@ end
 
 ---@param value string|nil
 ---@return string|nil
-local function plainString(value)
+local function readString(value)
   if type(value) ~= "string" or issecretvalue(value) or value == "" then
     return nil
   end
@@ -151,7 +151,7 @@ end
 
 ---@param value number|nil
 ---@return number|nil
-local function plainNumber(value)
+local function readNumber(value)
   if type(value) ~= "number" or issecretvalue(value) then
     return nil
   end
@@ -160,7 +160,7 @@ end
 
 ---@param value boolean|nil
 ---@return boolean|nil
-local function plainBoolean(value)
+local function readBoolean(value)
   if type(value) ~= "boolean" or issecretvalue(value) then
     return nil
   end
@@ -169,22 +169,22 @@ end
 
 ---@param criteria LDT_CriteriaSnap[]
 ---@return LDT_Criteria[]
-local function learnedCriteria(criteria)
+local function readCriteria(criteria)
   ---@type LDT_Criteria[]
   local rows = {}
   for index = 1, #criteria do
     local info = criteria[index]
-    local criteriaID = plainNumber(info.criteriaID)
+    local criteriaID = readNumber(info.criteriaID)
     if criteriaID ~= nil then
       ---@type LDT_Criteria
       local row = {
         criteriaID = criteriaID,
-        description = plainString(info.description),
-        totalQuantity = plainNumber(info.totalQuantity),
-        criteriaType = plainNumber(info.criteriaType),
-        flags = plainNumber(info.flags),
-        assetID = plainNumber(info.assetID),
-        isWeightedProgress = plainBoolean(info.isWeightedProgress),
+        description = readString(info.description),
+        totalQuantity = readNumber(info.totalQuantity),
+        criteriaType = readNumber(info.criteriaType),
+        flags = readNumber(info.flags),
+        assetID = readNumber(info.assetID),
+        isWeightedProgress = readBoolean(info.isWeightedProgress),
       }
       rows[#rows + 1] = row
     end
@@ -231,7 +231,7 @@ end
 
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
-function Data:NoteScenario(run, scenario)
+function Data:StoreScenario(run, scenario)
   if not self.db then
     return
   end
@@ -240,25 +240,25 @@ function Data:NoteScenario(run, scenario)
   if not info or not step then
     return
   end
-  local scenarioID = plainNumber(info.scenarioID)
-  local stepID = plainNumber(step.stepID)
+  local scenarioID = readNumber(info.scenarioID)
+  local stepID = readNumber(step.stepID)
   if not scenarioID or not stepID then
     return
   end
-  local stage = plainNumber(info.currentStage)
-  local numStages = plainNumber(info.numStages)
+  local stage = readNumber(info.currentStage)
+  local numStages = readNumber(info.numStages)
   local knownScenario = TableGet(self.scenarios, "scenarioID", scenarioID)
   local knownStep = TableGet(self.steps, "stepID", stepID)
   if not knownScenario then
     local scenarios = self.db.global.scenarios
     local record = scenarios[scenarioID]
-    local scenarioName = plainString(info.name)
-    local flags = plainNumber(info.flags)
+    local scenarioTitle = readString(info.name)
+    local flags = readNumber(info.flags)
     local instance = run.instance
     local mapID = instance and instance.mapID
     local instanceID = instance and instance.instanceID
     local difficultyID = instance and instance.difficultyID
-    if scenarioName or numStages or flags or mapID or instanceID or difficultyID then
+    if scenarioTitle or numStages or flags or mapID or instanceID or difficultyID then
       if not record then
         ---@type LDT_ScenarioRow
         record = {
@@ -266,7 +266,7 @@ function Data:NoteScenario(run, scenario)
         }
         scenarios[scenarioID] = record
       end
-      record.name = record.name or scenarioName
+      record.name = record.name or scenarioTitle
       record.numStages = record.numStages or numStages
       record.flags = record.flags or flags
       record.mapID = record.mapID or mapID
@@ -274,9 +274,9 @@ function Data:NoteScenario(run, scenario)
       record.difficultyID = record.difficultyID or difficultyID
     end
   end
-  local criteriaRows = learnedCriteria(scenario.criteria)
-  local title = plainString(step.title)
-  local description = plainString(step.description)
+  local criteriaRows = readCriteria(scenario.criteria)
+  local title = readString(step.title)
+  local description = readString(step.description)
   local learnTitle = title and not knownStep
   local learnDescription = description and (not knownStep or not knownStep.description or knownStep.description == "")
   local learnStage = stage and not knownStep
@@ -304,7 +304,7 @@ function Data:NoteScenario(run, scenario)
       storedStep.criteria = mergeCriteria(storedStep.criteria, criteriaRows)
     end
   end
-  self:SnapshotBest(run)
+  self:SetBest(run)
 end
 
 ---@param callback fun(run: LDT_Run)
@@ -359,17 +359,17 @@ local function copyBest(source)
 end
 
 ---@param run LDT_Run
-function Data:SnapshotBest(run)
-  if run.best or not Helpers.RunTier(run) then
+function Data:SetBest(run)
+  if run.best or not Helpers.FindTier(run) then
     return
   end
-  if Helpers.RunMode(run) ~= Constants.runMode.Lab then
+  if run.mode ~= Constants.runMode.Lab then
     local first = run.scenarios[1]
     if not first then
       return
     end
   end
-  run.best = copyBest(Helpers.BestRun(run))
+  run.best = copyBest(Helpers.FindBestRun(run))
 end
 
 local CHAMBER_SPLIT_LIMIT = 9
@@ -395,7 +395,7 @@ end
 ---@param scenarioID number
 ---@param storedRole LDT_ScenarioRoleId|nil
 ---@return LDT_ScenarioRoleId|nil
-local function resolvedRole(scenarioID, storedRole)
+local function resolveRole(scenarioID, storedRole)
   local known = TableGet(Data.scenarios, "scenarioID", scenarioID)
   local catalogRole = known and known.role
   if catalogRole == Constants.scenarioRole.Boss then
@@ -410,7 +410,7 @@ end
 ---@param scenario LDT_RunScenario
 ---@param pathCriteriaID number
 ---@return boolean
-local function pathCriteriaOpen(scenario, pathCriteriaID)
+local function isPathOpen(scenario, pathCriteriaID)
   local steps = scenario.steps
   for stepIndex = 1, #steps do
     local criteria = steps[stepIndex].criteria
@@ -428,11 +428,11 @@ end
 
 ---@param run LDT_Run
 ---@return string|nil
-function Data:ClockPrompt(run)
-  if Helpers.RunMode(run) ~= Constants.runMode.Lab then
+function Data:FormatClockPrompt(run)
+  if run.mode ~= Constants.runMode.Lab then
     return nil
   end
-  local delve = Data:DelveForInstance(run.instance)
+  local delve = Data:FindDelve(run.instance)
   local pathCriteriaID = delve and delve.pathCriteriaID
   if not pathCriteriaID then
     return nil
@@ -448,10 +448,10 @@ function Data:ClockPrompt(run)
   if not openScenario then
     return nil
   end
-  if resolvedRole(openScenario.scenarioID, openScenario.role) ~= Constants.scenarioRole.Hub then
+  if resolveRole(openScenario.scenarioID, openScenario.role) ~= Constants.scenarioRole.Hub then
     return nil
   end
-  if not pathCriteriaOpen(openScenario, pathCriteriaID) then
+  if not isPathOpen(openScenario, pathCriteriaID) then
     return nil
   end
   return "Pick the next chamber"
@@ -459,7 +459,7 @@ end
 
 ---@param scenarioID number
 ---@return string|nil
-local function scenarioName(scenarioID)
+local function findScenarioName(scenarioID)
   local known = TableGet(Data.scenarios, "scenarioID", scenarioID)
   if known and known.name and known.name ~= "" then
     return known.name
@@ -472,7 +472,7 @@ end
 
 ---@param stepID number
 ---@return string|nil
-local function stepTitle(stepID)
+local function findStepTitle(stepID)
   local known = TableGet(Data.steps, "stepID", stepID)
   if known and known.title and known.title ~= "" then
     return known.title
@@ -487,7 +487,7 @@ end
 ---@param criteriaID number
 ---@param slot number
 ---@return LDT_Criteria|nil
-local function criterionMatch(list, criteriaID, slot)
+local function findCriterion(list, criteriaID, slot)
   if criteriaID ~= 0 then
     for index = 1, #list do
       local row = list[index]
@@ -509,7 +509,7 @@ end
 ---@param weighted boolean
 ---@param match LDT_Criteria|nil
 ---@return string|nil, number|nil, boolean
-local function applyCriterion(description, totalQuantity, weighted, match)
+local function fillCriterion(description, totalQuantity, weighted, match)
   if not match then
     return description, totalQuantity, weighted
   end
@@ -529,20 +529,20 @@ end
 ---@param criteriaID number
 ---@param slot number
 ---@return string|nil, number|nil, boolean
-local function criterionFacts(stepID, criteriaID, slot)
+local function findCriterionFacts(stepID, criteriaID, slot)
   local description
   local totalQuantity
   local weighted = false
   local known = TableGet(Data.steps, "stepID", stepID)
   local knownCriteria = known and known.criteria
   if knownCriteria then
-    description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(knownCriteria, criteriaID, slot))
+    description, totalQuantity, weighted = fillCriterion(description, totalQuantity, weighted, findCriterion(knownCriteria, criteriaID, slot))
   end
   if Data.db then
     local learned = Data.db.global.steps[stepID]
     local storedCriteria = learned and learned.criteria
     if storedCriteria then
-      description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(storedCriteria, criteriaID, slot))
+      description, totalQuantity, weighted = fillCriterion(description, totalQuantity, weighted, findCriterion(storedCriteria, criteriaID, slot))
     end
   end
   return description, totalQuantity, weighted
@@ -552,8 +552,8 @@ end
 ---@param criteria LDT_RunCriteria
 ---@param slot number
 ---@return string|nil
-local function objectiveLabel(stepID, criteria, slot)
-  local description, totalQuantity, weighted = criterionFacts(stepID, criteria.criteriaID, slot)
+local function formatObjective(stepID, criteria, slot)
+  local description, totalQuantity, weighted = findCriterionFacts(stepID, criteria.criteriaID, slot)
   description = description or ""
   local progress
   if weighted then
@@ -578,7 +578,7 @@ end
 ---@generic T
 ---@param list T[]|nil
 ---@return number|nil
-local function listCount(list)
+local function countList(list)
   if not list or #list < 1 then
     return nil
   end
@@ -588,7 +588,7 @@ end
 ---@param criteria LDT_RunCriteria[]|nil
 ---@return number
 ---@return number|nil
-local function criteriaProgress(criteria)
+local function countCriteria(criteria)
   if not criteria or #criteria < 1 then
     return 0, nil
   end
@@ -603,7 +603,7 @@ end
 
 ---@param step LDT_RunStep
 ---@return LDT_TimerLine[]|nil
-local function objectiveLines(step)
+local function buildObjectives(step)
   local criteria = step.criteria
   if not criteria or #criteria == 0 then
     return nil
@@ -612,7 +612,7 @@ local function objectiveLines(step)
   local lines = {}
   for index = 1, #criteria do
     local criteriaRow = criteria[index]
-    local label = objectiveLabel(step.stepID, criteriaRow, index)
+    local label = formatObjective(step.stepID, criteriaRow, index)
     if label then
       ---@type LDT_TimerLine
       local line = { text = label, completed = criteriaRow.completed == true }
@@ -627,7 +627,7 @@ end
 
 ---@param scenarioID number
 ---@return LDT_ScenarioStep[]
-local function catalogSteps(scenarioID)
+local function findCatalogSteps(scenarioID)
   ---@type LDT_ScenarioStep[]
   local list = {}
   for index = 1, #Data.steps do
@@ -649,7 +649,7 @@ end
 
 ---@param scenarioID number
 ---@return number
-local function learnedStepCount(scenarioID)
+local function countLearnedSteps(scenarioID)
   if not Data.db then
     return 0
   end
@@ -666,17 +666,17 @@ end
 ---@param visited number
 ---@param bestSteps LDT_BestStep[]|nil
 ---@return number
-local function expectedStepCount(scenarioID, visited, bestSteps)
+local function countExpectedSteps(scenarioID, visited, bestSteps)
   local count = visited
   local bestCount = bestSteps and #bestSteps or 0
   if bestCount > count then
     count = bestCount
   end
-  local catalog = #catalogSteps(scenarioID)
+  local catalog = #findCatalogSteps(scenarioID)
   if catalog > count then
     count = catalog
   end
-  local learned = learnedStepCount(scenarioID)
+  local learned = countLearnedSteps(scenarioID)
   if learned > count then
     count = learned
   end
@@ -687,7 +687,7 @@ end
 ---@param elapsed number|nil
 ---@param bestElapsed number|nil
 ---@return LDT_TimerNode
-local function splitRow(name, elapsed, bestElapsed)
+local function buildSplit(name, elapsed, bestElapsed)
   ---@type LDT_TimerNode
   local row = {
     name = name,
@@ -700,14 +700,14 @@ end
 
 ---@param run LDT_Run
 ---@return LDT_RunScenario[]
-local function splitScenarios(run)
+local function findSplitScenarios(run)
   ---@type LDT_RunScenario[]
   local list = {}
   local chambers = 0
   for index = 1, #run.scenarios do
     local scenario = run.scenarios[index]
     local keep
-    keep, chambers = keepSplit(resolvedRole(scenario.scenarioID, scenario.role), chambers)
+    keep, chambers = keepSplit(resolveRole(scenario.scenarioID, scenario.role), chambers)
     if keep then
       list[#list + 1] = scenario
     end
@@ -717,7 +717,7 @@ end
 
 ---@param run LDT_Run
 ---@return LDT_BestScenario[]
-local function splitBest(run)
+local function findSplitBest(run)
   ---@type LDT_BestScenario[]
   local list = {}
   local best = run.best
@@ -728,7 +728,7 @@ local function splitBest(run)
   for index = 1, #best.scenarios do
     local scenario = best.scenarios[index]
     local keep
-    keep, chambers = keepSplit(resolvedRole(scenario.scenarioID, nil), chambers)
+    keep, chambers = keepSplit(resolveRole(scenario.scenarioID, nil), chambers)
     if keep then
       list[#list + 1] = scenario
     end
@@ -740,20 +740,20 @@ end
 ---@param role LDT_ScenarioRoleId|nil
 ---@param chamberNumber number
 ---@return string
-local function scenarioSplitName(scenario, role, chamberNumber)
+local function formatSplitName(scenario, role, chamberNumber)
   if role == Constants.scenarioRole.Chamber then
     return format("Chamber %d", chamberNumber)
   end
   if role == Constants.scenarioRole.Boss then
     return "Boss"
   end
-  local name = scenarioName(scenario.scenarioID)
+  local name = findScenarioName(scenario.scenarioID)
   if name then
     return name
   end
   local first = scenario.steps[1]
   if first then
-    local title = stepTitle(first.stepID)
+    local title = findStepTitle(first.stepID)
     if title then
       return title
     end
@@ -777,12 +777,12 @@ end
 ---@param bestSteps LDT_BestStep[]|nil
 ---@return number
 ---@return number|nil
-local function stageProgress(scenarioID, steps, bestSteps)
+local function countStages(scenarioID, steps, bestSteps)
   local visited = 0
   if steps then
     visited = #steps
   end
-  local total = expectedStepCount(scenarioID, visited, bestSteps)
+  local total = countExpectedSteps(scenarioID, visited, bestSteps)
   if total < 1 then
     return 0, nil
   end
@@ -801,9 +801,9 @@ end
 ---@param steps LDT_RunStep[]
 ---@param bestSteps LDT_BestStep[]|nil
 ---@return LDT_TimerNode[]
-local function stageRows(scenarioID, steps, bestSteps)
-  local expected = expectedStepCount(scenarioID, #steps, bestSteps)
-  local catalog = catalogSteps(scenarioID)
+local function buildStages(scenarioID, steps, bestSteps)
+  local expected = countExpectedSteps(scenarioID, #steps, bestSteps)
+  local catalog = findCatalogSteps(scenarioID)
   ---@type LDT_TimerNode[]
   local rows = {}
   for stepIndex = 1, expected do
@@ -819,14 +819,14 @@ local function stageRows(scenarioID, steps, bestSteps)
     if bestStep then
       bestElapsed = bestStep.completedElapsed
     end
-    local row = splitRow(name, elapsed, bestElapsed)
+    local row = buildSplit(name, elapsed, bestElapsed)
     local done
     local total
     if step then
-      done, total = criteriaProgress(step.criteria)
+      done, total = countCriteria(step.criteria)
     end
     if total == nil and catalogStep then
-      total = listCount(catalogStep.criteria)
+      total = countList(catalogStep.criteria)
       done = 0
     end
     setChildProgress(row, done, total)
@@ -841,7 +841,7 @@ local function stageRows(scenarioID, steps, bestSteps)
   end
   if openIndex and rows[openIndex] then
     rows[openIndex].current = true
-    local lines = objectiveLines(steps[openIndex])
+    local lines = buildObjectives(steps[openIndex])
     if lines then
       rows[openIndex].lines = lines
     end
@@ -851,29 +851,29 @@ end
 
 ---@param run LDT_Run
 ---@return LDT_TimerNode[]
-local function labSplitRows(run)
-  local scenarios = splitScenarios(run)
+local function buildLabSplits(run)
+  local scenarios = findSplitScenarios(run)
   ---@type LDT_RunScenario[]
   local chambers = {}
   ---@type LDT_RunScenario|nil
   local boss
   for index = 1, #scenarios do
     local scenario = scenarios[index]
-    local role = resolvedRole(scenario.scenarioID, scenario.role)
+    local role = resolveRole(scenario.scenarioID, scenario.role)
     if role == Constants.scenarioRole.Boss then
       boss = scenario
     elseif #chambers < CHAMBER_SPLIT_LIMIT then
       chambers[#chambers + 1] = scenario
     end
   end
-  local bestScenarios = splitBest(run)
+  local bestScenarios = findSplitBest(run)
   ---@type LDT_BestScenario[]
   local bestChambers = {}
   ---@type LDT_BestScenario|nil
   local bestBoss
   for index = 1, #bestScenarios do
     local scenario = bestScenarios[index]
-    local role = resolvedRole(scenario.scenarioID, nil)
+    local role = resolveRole(scenario.scenarioID, nil)
     if role == Constants.scenarioRole.Boss then
       bestBoss = scenario
     elseif #bestChambers < CHAMBER_SPLIT_LIMIT then
@@ -894,9 +894,9 @@ local function labSplitRows(run)
     if bestScenario then
       bestElapsed = bestScenario.completedElapsed
     end
-    local row = splitRow(format("Chamber %d", chamberIndex), elapsed, bestElapsed)
+    local row = buildSplit(format("Chamber %d", chamberIndex), elapsed, bestElapsed)
     if scenario then
-      local done, total = stageProgress(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
+      local done, total = countStages(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
       setChildProgress(row, done, total)
     end
     rows[#rows + 1] = row
@@ -908,12 +908,12 @@ local function labSplitRows(run)
     local scenario = chambers[openChamber]
     rows[openChamber].current = true
     local bestScenario = bestChambers[openChamber]
-    local nested = stageRows(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
+    local nested = buildStages(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
     if #nested > 0 then
       rows[openChamber].nodes = nested
     end
   end
-  local tier = Helpers.RunTier(run)
+  local tier = Helpers.FindTier(run)
   if not tier or tier < NEMESIS_TIER then
     return rows
   end
@@ -925,9 +925,9 @@ local function labSplitRows(run)
   if bestBoss then
     bossBest = bestBoss.completedElapsed
   end
-  local bossRow = splitRow(NEMESIS_LABEL, bossElapsed, bossBest)
+  local bossRow = buildSplit(NEMESIS_LABEL, bossElapsed, bossBest)
   if boss then
-    local done, total = stageProgress(boss.scenarioID, boss.steps, bestBoss and bestBoss.steps)
+    local done, total = countStages(boss.scenarioID, boss.steps, bestBoss and bestBoss.steps)
     setChildProgress(bossRow, done, total)
   end
   if boss and not boss.completedElapsed then
@@ -936,7 +936,7 @@ local function labSplitRows(run)
       rows[openChamber].nodes = nil
     end
     bossRow.current = true
-    local nested = stageRows(boss.scenarioID, boss.steps, bestBoss and bestBoss.steps)
+    local nested = buildStages(boss.scenarioID, boss.steps, bestBoss and bestBoss.steps)
     if #nested > 0 then
       bossRow.nodes = nested
     end
@@ -947,12 +947,12 @@ end
 
 ---@param run LDT_Run
 ---@return LDT_TimerNode[]
-function Data:StepRows(run)
-  if Helpers.RunMode(run) == Constants.runMode.Lab then
-    return labSplitRows(run)
+function Data:BuildSplits(run)
+  if run.mode == Constants.runMode.Lab then
+    return buildLabSplits(run)
   end
-  local scenarios = splitScenarios(run)
-  local bestScenarios = splitBest(run)
+  local scenarios = findSplitScenarios(run)
+  local bestScenarios = findSplitBest(run)
   local expected = #scenarios
   if #bestScenarios > expected then
     expected = #bestScenarios
@@ -968,7 +968,7 @@ function Data:StepRows(run)
     local scenarioID = scenario and scenario.scenarioID or bestScenario.scenarioID
     local steps = scenario and scenario.steps or {}
     local bestSteps = bestScenario and bestScenario.steps
-    return stageRows(scenarioID, steps, bestSteps)
+    return buildStages(scenarioID, steps, bestSteps)
   end
   ---@type LDT_TimerNode[]
   local rows = {}
@@ -979,19 +979,19 @@ function Data:StepRows(run)
     local name
     local elapsed
     if scenario then
-      local role = resolvedRole(scenario.scenarioID, scenario.role)
+      local role = resolveRole(scenario.scenarioID, scenario.role)
       local chamberNumber = 0
       if role == Constants.scenarioRole.Chamber then
         chamberNumber = index
       end
-      name = scenarioSplitName(scenario, role, chamberNumber)
+      name = formatSplitName(scenario, role, chamberNumber)
       elapsed = scenario.completedElapsed
       if not scenario.completedElapsed then
         openIndex = index
       end
     elseif bestScenario then
-      local role = resolvedRole(bestScenario.scenarioID, nil)
-      name = scenarioSplitName({
+      local role = resolveRole(bestScenario.scenarioID, nil)
+      name = formatSplitName({
         index = index,
         scenarioID = bestScenario.scenarioID,
         enteredElapsed = bestScenario.enteredElapsed,
@@ -1004,10 +1004,10 @@ function Data:StepRows(run)
     if bestScenario then
       bestElapsed = bestScenario.completedElapsed
     end
-    local row = splitRow(name, elapsed, bestElapsed)
+    local row = buildSplit(name, elapsed, bestElapsed)
     local scenarioID = scenario and scenario.scenarioID or (bestScenario and bestScenario.scenarioID)
     if scenarioID then
-      local done, total = stageProgress(scenarioID, scenario and scenario.steps, bestScenario and bestScenario.steps)
+      local done, total = countStages(scenarioID, scenario and scenario.steps, bestScenario and bestScenario.steps)
       setChildProgress(row, done, total)
     end
     rows[#rows + 1] = row
@@ -1016,7 +1016,7 @@ function Data:StepRows(run)
     local scenario = scenarios[openIndex]
     rows[openIndex].current = true
     local bestScenario = bestScenarios[openIndex]
-    local nested = stageRows(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
+    local nested = buildStages(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
     if #nested > 0 then
       rows[openIndex].nodes = nested
     end
@@ -1027,7 +1027,7 @@ end
 ---@param entered number|nil
 ---@param completed number|nil
 ---@return number|nil
-local function shownElapsed(entered, completed)
+local function pickElapsed(entered, completed)
   if completed ~= nil then
     return completed
   end
@@ -1038,7 +1038,7 @@ end
 ---@param role LDT_ScenarioRoleId|nil
 ---@param chamberNumber number
 ---@return string
-local function timelineBlockName(scenario, role, chamberNumber)
+local function formatBlockName(scenario, role, chamberNumber)
   if role == Constants.scenarioRole.Chamber then
     return format("Chamber %d", chamberNumber)
   end
@@ -1049,18 +1049,18 @@ local function timelineBlockName(scenario, role, chamberNumber)
   local first = steps[1]
   if role == Constants.scenarioRole.Hub or role == Constants.scenarioRole.Reward then
     if first then
-      local title = stepTitle(first.stepID)
+      local title = findStepTitle(first.stepID)
       if title then
         return title
       end
     end
   end
-  local name = scenarioName(scenario.scenarioID)
+  local name = findScenarioName(scenario.scenarioID)
   if name then
     return name
   end
   if first then
-    local title = stepTitle(first.stepID)
+    local title = findStepTitle(first.stepID)
     if title then
       return title
     end
@@ -1070,13 +1070,13 @@ end
 
 ---@param run LDT_Run
 ---@return LDT_TimelineRow[]
-function Data:TimelineRows(run)
+function Data:BuildTimeline(run)
   ---@type LDT_TimelineRow[]
   local rows = {}
   local scenarios = run.scenarios
   local stageScenario
-  if Helpers.RunMode(run) ~= Constants.runMode.Lab then
-    local splits = splitScenarios(run)
+  if run.mode ~= Constants.runMode.Lab then
+    local splits = findSplitScenarios(run)
     if #splits == 1 then
       stageScenario = splits[1]
     end
@@ -1084,7 +1084,7 @@ function Data:TimelineRows(run)
   local chamberNumber = 0
   for index = 1, #scenarios do
     local scenario = scenarios[index]
-    local role = resolvedRole(scenario.scenarioID, scenario.role)
+    local role = resolveRole(scenario.scenarioID, scenario.role)
     local flatten = scenario == stageScenario
     local blockNumber = chamberNumber
     if role == Constants.scenarioRole.Chamber then
@@ -1092,15 +1092,15 @@ function Data:TimelineRows(run)
       blockNumber = chamberNumber
     end
     local steps = scenario.steps
-    local blockName = timelineBlockName(scenario, role, blockNumber)
+    local blockName = formatBlockName(scenario, role, blockNumber)
     local sharedTitle
     local first = steps[1]
     if first then
-      sharedTitle = stepTitle(first.stepID)
+      sharedTitle = findStepTitle(first.stepID)
     end
     if sharedTitle then
       for stepIndex = 2, #steps do
-        local other = stepTitle(steps[stepIndex].stepID)
+        local other = findStepTitle(steps[stepIndex].stepID)
         if other ~= sharedTitle then
           sharedTitle = nil
           break
@@ -1119,7 +1119,7 @@ function Data:TimelineRows(run)
       ---@type LDT_TimelineRow
       local block = {
         name = blockName,
-        elapsed = shownElapsed(scenario.enteredElapsed, scenario.completedElapsed),
+        elapsed = pickElapsed(scenario.enteredElapsed, scenario.completedElapsed),
         depth = 0,
       }
       rows[#rows + 1] = block
@@ -1127,7 +1127,7 @@ function Data:TimelineRows(run)
     for stepIndex = 1, #steps do
       local step = steps[stepIndex]
       local stage = step.stage or stepIndex
-      local title = stepTitle(step.stepID)
+      local title = findStepTitle(step.stepID)
       local stepName = format("Stage %d", stage)
       if not sharedTitle and title then
         stepName = format("Stage %d: %s", stage, title)
@@ -1135,19 +1135,19 @@ function Data:TimelineRows(run)
       ---@type LDT_TimelineRow
       local stepRow = {
         name = stepName,
-        elapsed = shownElapsed(step.enteredElapsed, step.completedElapsed),
+        elapsed = pickElapsed(step.enteredElapsed, step.completedElapsed),
         depth = stepDepth,
       }
       rows[#rows + 1] = stepRow
       local criteria = step.criteria
       for criteriaIndex = 1, #criteria do
         local criterion = criteria[criteriaIndex]
-        local label = objectiveLabel(step.stepID, criterion, criteriaIndex)
+        local label = formatObjective(step.stepID, criterion, criteriaIndex)
         if label then
           ---@type LDT_TimelineRow
           local objective = {
             name = label,
-            elapsed = shownElapsed(criterion.enteredElapsed, criterion.completedElapsed),
+            elapsed = pickElapsed(criterion.enteredElapsed, criterion.completedElapsed),
             depth = objectiveDepth,
             done = criterion.completed,
           }

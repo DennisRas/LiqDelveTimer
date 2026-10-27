@@ -92,7 +92,7 @@ function Module:Render()
     self.window = LiqUI:NewElement("Window", windowOptions)
     local sizes = LiqUI.Constants.layout.sizes
     ---@type LiqUI_TableOptions
-    local tableOptions = {
+    local buildTableOptions = {
       name = addon.name .. "History",
       storage = Data.db.global.liqui.tables.History,
       header = { enabled = true, sticky = true, height = sizes.header },
@@ -161,7 +161,7 @@ function Module:Render()
         defaultCompare = compareStartedDescending,
       },
     }
-    self.table = LiqUI:NewElement("Table", tableOptions)
+    self.table = LiqUI:NewElement("Table", buildTableOptions)
     self.table:SetParent(self.window.body)
     self.table:SetPoint("TOPLEFT", self.window.body, "TOPLEFT", 0, 0)
     self.table:SetPoint("BOTTOMRIGHT", self.window.body, "BOTTOMRIGHT", 0, 0)
@@ -181,7 +181,7 @@ function Module:Render()
       end
     end
     local inProgress = run.endedAt == nil
-    local duration = Helpers.Duration(run) or 0
+    local duration = Helpers.FindDuration(run) or 0
     local whenText = Helpers.FormatDate(run.startedAt, Constants.dateLength.Medium)
     local characterName = ""
     local characterText = ""
@@ -197,13 +197,13 @@ function Module:Render()
         end
       end
     end
-    local tier = Helpers.RunTier(run) or 0
+    local tier = Helpers.FindTier(run) or 0
     local tierText = "-"
     if tier > 0 then
       tierText = tostring(tier)
     end
-    local label = Helpers.ResultLabel(run.result)
-    local red, green, blue = Helpers.ResultColor(run.result)
+    local label = Helpers.FormatResult(run.result)
+    local red, green, blue = Helpers.FindResultColor(run.result)
     local resultText = colorText(label, red, green, blue)
     local durationText = "-"
     if not inProgress then

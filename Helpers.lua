@@ -7,7 +7,7 @@ addon.Helpers = Helpers
 
 ---@param value string
 ---@return number|nil, boolean
-function Helpers.BoonAmount(value)
+function Helpers.ParseBoonAmount(value)
   local cleaned = value:gsub("%s+$", ""):gsub("%.$", "")
   local percent = cleaned:find("%%", 1, true) ~= nil
   local numberText = cleaned:match("([%+%-]?%d+%.?%d*)")
@@ -31,7 +31,7 @@ end
 
 ---@param milliseconds number|nil
 ---@return number
-function Helpers.Shown(milliseconds)
+function Helpers.RoundShown(milliseconds)
   local ms = milliseconds or 0
   local sign = 1
   if ms < 0 then
@@ -44,14 +44,14 @@ end
 ---@param left number
 ---@param right number
 ---@return number
-function Helpers.ShownDelta(left, right)
-  return Helpers.Shown(left) - Helpers.Shown(right)
+function Helpers.RoundShownDelta(left, right)
+  return Helpers.RoundShown(left) - Helpers.RoundShown(right)
 end
 
 ---@param milliseconds number|nil
 ---@return string
 function Helpers.FormatElapsed(milliseconds)
-  local shown = Helpers.Shown(milliseconds)
+  local shown = Helpers.RoundShown(milliseconds)
   if shown < 0 then
     shown = -shown
   end
@@ -81,7 +81,7 @@ end
 
 ---@param itemID number|nil
 ---@return boolean
-function Helpers.ItemHidden(itemID)
+function Helpers.IsItemHidden(itemID)
   return itemID ~= nil and addon.Data.hiddenItemIDs[itemID] == true
 end
 
@@ -91,7 +91,7 @@ function Helpers.FormatDelta(delta)
   if not delta then
     return ""
   end
-  local shown = Helpers.Shown(delta)
+  local shown = Helpers.RoundShown(delta)
   local sign = "+"
   if shown < 0 then
     sign = "-"
@@ -118,7 +118,7 @@ end
 
 ---@param result string|nil
 ---@return string
-function Helpers.ResultLabel(result)
+function Helpers.FormatResult(result)
   if result == addon.Constants.runResult.PersonalBest then
     return "Personal Best"
   end
@@ -136,7 +136,7 @@ end
 
 ---@param result string|nil
 ---@return number, number, number
-function Helpers.ResultColor(result)
+function Helpers.FindResultColor(result)
   if result == addon.Constants.runResult.PersonalBest then
     local timer = addon.Data.db and addon.Data.db.global.timer
     local color = timer and timer.aheadColor
@@ -153,7 +153,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.RunTier(run)
+function Helpers.FindTier(run)
   local tier = run.entrance and run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     return tier
@@ -163,7 +163,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.Duration(run)
+function Helpers.FindDuration(run)
   if not run.endedAt then
     return nil
   end
@@ -186,19 +186,13 @@ function Helpers.FormatDate(milliseconds, length)
 end
 
 ---@param run LDT_Run
----@return LDT_RunModeId|nil
-function Helpers.RunMode(run)
-  return run.mode
-end
-
----@param run LDT_Run
 ---@return LDT_Run|nil
-function Helpers.BestRun(run)
-  local tier = Helpers.RunTier(run)
+function Helpers.FindBestRun(run)
+  local tier = Helpers.FindTier(run)
   if not tier then
     return nil
   end
-  local mode = Helpers.RunMode(run)
+  local mode = run.mode
   local scenarioID
   if mode ~= addon.Constants.runMode.Lab then
     local first = run.scenarios[1]
@@ -213,7 +207,7 @@ function Helpers.BestRun(run)
     if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.RunTier(saved) ~= tier or Helpers.RunMode(saved) ~= mode then
+    if Helpers.FindTier(saved) ~= tier or saved.mode ~= mode then
       return
     end
     if scenarioID then
@@ -222,7 +216,7 @@ function Helpers.BestRun(run)
         return
       end
     end
-    local time = Helpers.Duration(saved)
+    local time = Helpers.FindDuration(saved)
     if not time then
       return
     end
@@ -236,7 +230,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.BestDuration(run)
+function Helpers.FindBestDuration(run)
   local best = run.best
   if not best or not best.endedAt or not best.startedAt then
     return nil
@@ -250,7 +244,7 @@ local listedCurrencyAt
 
 ---@param currencyID number|nil
 ---@return boolean
-function Helpers.CurrencyListed(currencyID)
+function Helpers.IsCurrencyListed(currencyID)
   if not currencyID or currencyID <= 0 then
     return false
   end

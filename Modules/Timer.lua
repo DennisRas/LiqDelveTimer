@@ -225,7 +225,7 @@ end
 ---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
 ---@param shown boolean
 ---@param fromGame boolean|nil
-function Timer:SetFrameShown(shown, fromGame)
+function Timer:ApplyFrameShown(shown, fromGame)
   if not self.frame then
     self:Render()
   end
@@ -256,7 +256,7 @@ local SAMPLE_CLOCK = 154000
 
 ---@param nodes LDT_TimerNode[]
 ---@return number|nil
-local function currentBest(nodes)
+local function findCurrentBest(nodes)
   for index = 1, #nodes do
     local node = nodes[index]
     if node.current then
@@ -267,7 +267,7 @@ local function currentBest(nodes)
 end
 
 ---@return LDT_TimerNode[]
-local function sampleRows()
+local function buildSampleRows()
   ---@type LDT_TimerNode[]
   local rows = {}
   ---@type LDT_TimerNode
@@ -309,7 +309,7 @@ end
 ---@param total number|nil
 ---@param showCounts boolean
 ---@return string
-local function splitLabel(name, done, total, showCounts)
+local function formatSplitLabel(name, done, total, showCounts)
   if not showCounts or total == nil or total < 1 then
     return name
   end
@@ -338,7 +338,7 @@ end
 ---@param index integer
 ---@param parent Frame
 ---@return LDT_TimerSplitRow
-local function ensureSplitRow(rows, index, parent)
+local function createSplitRow(rows, index, parent)
   local existing = rows[index]
   if existing then
     return existing
@@ -385,7 +385,7 @@ end
 ---@param row LDT_TimerSplitRow
 ---@param index integer
 ---@return LDT_TimerDetailLine
-local function ensureDetailLine(row, index)
+local function createDetailLine(row, index)
   local existing = row.lines[index]
   if existing then
     return existing
@@ -535,7 +535,7 @@ local function paintLines(row, detail, lines, indent, used, offsetY)
   end
   for index = 1, #lines do
     used = used + 1
-    local line = ensureDetailLine(row, used)
+    local line = createDetailLine(row, used)
     local height = paintLine(line, detail, lines[index], offsetY, indent)
     offsetY = offsetY + height
   end
@@ -555,7 +555,7 @@ local function paintDetail(row, model, showSteps)
     for index = 1, #nodes do
       local node = nodes[index]
       used = used + 1
-      local line = ensureDetailLine(row, used)
+      local line = createDetailLine(row, used)
       paintNode(line, detail, node.name, node.title, offsetY)
       offsetY = offsetY + LINE_HEIGHT
       if node.current then
@@ -592,14 +592,14 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
   for index = 1, #nodes do
     local model = nodes[index]
     stripeIndex = stripeIndex + 1
-    local row = ensureSplitRow(splitRows, index, splits)
+    local row = createSplitRow(splitRows, index, splits)
     local timeText = ""
     local deltaText = ""
     if model.elapsed then
       timeText = Helpers.FormatElapsed(model.elapsed) or ""
       local delta = 0
       if model.best then
-        delta = Helpers.ShownDelta(model.elapsed, model.best)
+        delta = Helpers.RoundShownDelta(model.elapsed, model.best)
       end
       local deltaColor = ahead
       if delta > 0 then
@@ -611,7 +611,7 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     if model.best then
       bestText = Helpers.FormatElapsed(model.best) or ""
     end
-    row.name:SetText(splitLabel(model.name, model.done, model.total, showCounts))
+    row.name:SetText(formatSplitLabel(model.name, model.done, model.total, showCounts))
     row.delta:SetText(deltaText)
     row.time:SetText(timeText)
     row.best:SetText(bestText)
@@ -640,7 +640,7 @@ end
 ---@param run LDT_Run
 ---@param tier number|nil
 ---@return string
-local function runTitle(run, tier)
+local function formatRunTitle(run, tier)
   local instance = run.instance
   local name = instance and instance.name
   if not name or name == "" then
@@ -845,8 +845,8 @@ function Timer:Render()
   end
 
   local options = Data.db.global.timer
-  local inside = Capture:IsInside() or Capture:InInstance()
-  local activeRun = inside and Data:GetActiveRun() or nil
+  local inside = Capture:IsInside() or Capture:IsInInstance()
+  local activeRun = inside and Data:FindActiveRun() or nil
   local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.9 }
   local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
   local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
@@ -863,10 +863,10 @@ function Timer:Render()
   local headerInfo
   local title = "Delve"
   if activeRun then
-    if not Capture:Ended(activeRun) then
-      headerInfo = Capture:ApplyDelveHeader(activeRun)
+    if not Capture:IsEnded(activeRun) then
+      headerInfo = Capture:SetDelveHeader(activeRun)
     end
-    title = runTitle(activeRun, Helpers.RunTier(activeRun))
+    title = formatRunTitle(activeRun, Helpers.FindTier(activeRun))
   else
     title = "The Shadow Enclave (Tier 11)"
   end
@@ -959,29 +959,29 @@ function Timer:Render()
   ---@type LDT_TimerNode[]
   local nodes = {}
   if activeRun then
-    nodes = Data:StepRows(activeRun)
+    nodes = Data:BuildSplits(activeRun)
   else
-    nodes = sampleRows()
+    nodes = buildSampleRows()
   end
 
   local clockValue
   local phraseText
   local phraseColor = ahead
   if activeRun and Capture.clockReady then
-    local frozen = Helpers.Duration(activeRun)
+    local frozen = Helpers.FindDuration(activeRun)
     if frozen then
       clockValue = frozen
     else
-      clockValue = Capture:Elapsed(activeRun)
+      clockValue = Capture:ReadElapsed(activeRun)
     end
     local compare
     if frozen then
-      compare = Helpers.BestDuration(activeRun)
+      compare = Helpers.FindBestDuration(activeRun)
     else
-      compare = currentBest(nodes)
+      compare = findCurrentBest(nodes)
     end
     if clockValue and compare then
-      local delta = Helpers.ShownDelta(clockValue, compare)
+      local delta = Helpers.RoundShownDelta(clockValue, compare)
       phraseText = Helpers.FormatDelta(delta)
       if delta > 0 then
         phraseColor = behind
@@ -989,9 +989,9 @@ function Timer:Render()
     end
   elseif not activeRun then
     clockValue = SAMPLE_CLOCK
-    local compare = currentBest(nodes)
+    local compare = findCurrentBest(nodes)
     if compare then
-      phraseText = Helpers.FormatDelta(Helpers.ShownDelta(SAMPLE_CLOCK, compare))
+      phraseText = Helpers.FormatDelta(Helpers.RoundShownDelta(SAMPLE_CLOCK, compare))
     end
   end
   clockString:SetFont(NUMBER_FONT, CLOCK_SIZE, "")
@@ -1005,7 +1005,7 @@ function Timer:Render()
   phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
   local cueText = ""
   if activeRun then
-    cueText = Data:ClockPrompt(activeRun) or ""
+    cueText = Data:FormatClockPrompt(activeRun) or ""
   end
   cue:SetFontObject("GameFontNormal")
   cue:SetTextColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b, NODE_COLOR.a)
@@ -1026,11 +1026,11 @@ function Timer:Render()
 end
 
 function Timer:ShowRun()
-  self:SetFrameShown(true, true)
+  self:ApplyFrameShown(true, true)
 end
 
 function Timer:HideRun()
-  self:SetFrameShown(false, true)
+  self:ApplyFrameShown(false, true)
 end
 
 function Timer:ToggleWindow()
@@ -1040,7 +1040,7 @@ function Timer:ToggleWindow()
   if not self.frame then
     return
   end
-  self:SetFrameShown(not self.frame:IsShown(), false)
+  self:ApplyFrameShown(not self.frame:IsShown(), false)
 end
 
 function Timer:OnEnable()
