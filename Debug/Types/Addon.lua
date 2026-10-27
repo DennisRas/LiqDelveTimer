@@ -70,6 +70,8 @@
 ---@field companionHeader LDT_RunBlockHeader|nil
 ---@field boonsHeader LDT_RunBlockHeader|nil
 ---@field summaryData LiqUI_TableData|nil
+---@field affixSpells number[]|nil
+---@field affixButtons LDT_RunIconButton[]|nil
 ---@field stagesData LiqUI_TableData|nil
 ---@field boonsData LiqUI_TableData|nil
 ---@field rewardsData LiqUI_TableData|nil

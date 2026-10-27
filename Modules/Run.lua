@@ -274,7 +274,7 @@ end
 ---@param run LDT_Run
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
----@return LiqUI_TableData
+---@return LiqUI_TableData, number[]
 local function summaryData(run, ahead, behind)
   ---@type LiqUI_TableData
   local data = {}
@@ -386,32 +386,33 @@ local function summaryData(run, ahead, behind)
     countValue = format("%s / %s", deathsMarkup, withAtlas("delves-scenario-heart-icon", tostring(run.lives)))
   end
   data[#data + 1] = valueRow(countLabel, countValue)
+  ---@type number[]
+  local affixSpells = {}
   local entrance = run.entrance
   local spellIDs = entrance and entrance.activeSpellIDs
   if spellIDs and #spellIDs > 0 then
-    local icons = {}
     for index = 1, #spellIDs do
       local spellID = spellIDs[index]
       if spellID and not issecretvalue(spellID) then
         local texture = C_Spell.GetSpellTexture(spellID)
         if texture and not issecretvalue(texture) then
-          icons[#icons + 1] = format("|T%s:16|t", texture)
+          affixSpells[#affixSpells + 1] = spellID
         end
       end
     end
-    if #icons > 0 then
+    if #affixSpells > 0 then
       ---@param cellFrame LiqUI_TableCellFrame
       local function showAffixRow(cellFrame)
-        showAffixes(spellIDs, cellFrame)
+        showAffixes(affixSpells, cellFrame)
       end
       ---@type LiqUI_TableDataRowExtended
-      local affixRow = valueRow("Affixes", table.concat(icons, " "))
+      local affixRow = valueRow("Affixes", "")
       affixRow.onEnter = showAffixRow
       affixRow.onLeave = GameTooltip_Hide
       data[#data + 1] = affixRow
     end
   end
-  return data
+  return data, affixSpells
 end
 
 local boonColorNeedles
@@ -778,18 +779,40 @@ local function lfgRoleAtlas(companion)
   return companion.roleAtlas
 end
 
+---@param texture Texture
+local function roundTexture(texture)
+  local parent = texture:GetParent()
+  if not parent then
+    return
+  end
+  texture:ClearAllPoints()
+  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", 1, -1)
+  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -1, 1)
+  local mask = parent:CreateMaskTexture()
+  mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  mask:SetAllPoints(texture)
+  texture:AddMaskTexture(mask)
+  local ring = parent:CreateTexture(nil, "OVERLAY")
+  ring:SetAllPoints(parent)
+  ring:SetAtlas(Constants.media.AffixRing)
+end
+
 ---@param parent Frame
 ---@param anchor Frame|Texture
 ---@param relativePoint string
 ---@param x number
+---@param round boolean|nil
 ---@return LDT_RunIconButton
-local function iconButton(parent, anchor, relativePoint, x)
+local function iconButton(parent, anchor, relativePoint, x, round)
   ---@type LDT_RunIconButton
   local button = CreateFrame("Button", nil, parent)
   button:SetSize(ICON_SIZE, ICON_SIZE)
   button:SetPoint("RIGHT", anchor, relativePoint, x, 0)
   local icon = button:CreateTexture(nil, "ARTWORK")
   icon:SetAllPoints()
+  if round then
+    roundTexture(icon)
+  end
   button.icon = icon
   button:SetScript("OnLeave", GameTooltip_Hide)
   return button
@@ -862,7 +885,7 @@ local function createCompanion(parent)
   local spells = {}
   local previous = role
   for index = 1, 3 do
-    local button = iconButton(icons, previous, "LEFT", -2)
+    local button = iconButton(icons, previous, "LEFT", -2, true)
     ---@param spellButton LDT_RunIconButton
     local function showSpell(spellButton)
       local spellID = spellButton.spellID
@@ -1064,6 +1087,77 @@ local function tableOptions(name, columns, showHeader, headerAlpha, sticky, high
   return options
 end
 
+---@param summary LiqUI_TableInstance
+---@param spellIDs number[]
+---@param buttons LDT_RunIconButton[]
+---@return LDT_RunIconButton[]
+local function paintSummaryAffixes(summary, spellIDs, buttons)
+  for index = 1, #buttons do
+    buttons[index]:Hide()
+  end
+  if #spellIDs == 0 then
+    return buttons
+  end
+  local valueCell
+  local rowFrames = summary.rowFrames
+  for index = 1, #rowFrames do
+    local rowFrame = rowFrames[index]
+    local labelCell = rowFrame.cells[1]
+    local label = labelCell and labelCell.label
+    if rowFrame:IsShown() and label and label:GetText() == "Affixes" then
+      valueCell = rowFrame.cells[2]
+      break
+    end
+  end
+  if not valueCell then
+    return buttons
+  end
+  valueCell.label:SetText("")
+  local anchor = valueCell
+  ---@type FramePoint
+  local relativePoint = "RIGHT"
+  local offsetX = -LiqUI.Constants.layout.sizes.padding
+  for index = #spellIDs, 1, -1 do
+    local spellID = spellIDs[index]
+    local texture = C_Spell.GetSpellTexture(spellID)
+    if texture and not issecretvalue(texture) then
+      local button = buttons[index]
+      if not button then
+        ---@type LDT_RunIconButton
+        button = CreateFrame("Button", nil, valueCell)
+        button:SetSize(ICON_SIZE, ICON_SIZE)
+        local icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        roundTexture(icon)
+        button.icon = icon
+        button:SetScript("OnLeave", GameTooltip_Hide)
+        ---@param affixButton LDT_RunIconButton
+        local function showAffix(affixButton)
+          local shownSpellID = affixButton.spellID
+          if not shownSpellID or issecretvalue(shownSpellID) then
+            return
+          end
+          GameTooltip:SetOwner(affixButton, "ANCHOR_RIGHT")
+          GameTooltip:SetSpellByID(shownSpellID)
+          GameTooltip:Show()
+        end
+        button:SetScript("OnEnter", showAffix)
+        buttons[index] = button
+      end
+      button:SetParent(valueCell)
+      button.spellID = spellID
+      button.icon:SetTexture(texture)
+      button:ClearAllPoints()
+      button:SetPoint("RIGHT", anchor, relativePoint, offsetX, 0)
+      button:Show()
+      anchor = button
+      relativePoint = "LEFT"
+      offsetX = -2
+    end
+  end
+  return buttons
+end
+
 ---@param frame LiqUI_TableInstance
 ---@param data LiqUI_TableData
 ---@param y number
@@ -1209,6 +1303,7 @@ function Module:Layout()
   local shown = self.showingRun == true
   local y = 0
   y = placeTable(self.summary, self.summaryData or {}, y)
+  self.affixButtons = paintSummaryAffixes(self.summary, self.affixSpells or {}, self.affixButtons or {})
   y = placeTable(self.stages, self.stagesData or {}, y)
   y = placeHeader(self.companionHeader, y, shown)
   self.companion:ClearAllPoints()
@@ -1302,6 +1397,7 @@ function Module:Fill(run)
   if not run then
     window:SetTitle("Run")
     self.summaryData = {}
+    self.affixSpells = {}
     self.stagesData = {}
     self.boonsData = {}
     self.rewardsData = {}
@@ -1311,7 +1407,9 @@ function Module:Fill(run)
   end
   Data:SnapshotBest(run)
   window:SetTitle(windowTitle(run))
-  self.summaryData = summaryData(run, ahead, behind)
+  local summaryRows, affixSpells = summaryData(run, ahead, behind)
+  self.summaryData = summaryRows
+  self.affixSpells = affixSpells
   self.stagesData = stageData(run, ahead, behind)
   self.boonsData = boonData(run)
   self.rewardsData = rewardsData(run)

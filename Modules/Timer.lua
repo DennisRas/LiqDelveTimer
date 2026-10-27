@@ -6,6 +6,7 @@ local Timer = addon.Core:NewModule("Timer")
 addon.Module_Timer = Timer
 
 local Data = addon.Data
+local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 
@@ -907,7 +908,15 @@ function Timer:Render()
           local button = CreateFrame("Button", nil, spells)
           button:SetSize(ICON_SIZE, ICON_SIZE)
           local icon = button:CreateTexture(nil, "ARTWORK")
-          icon:SetAllPoints()
+          icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+          icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+          local mask = button:CreateMaskTexture()
+          mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+          mask:SetAllPoints(icon)
+          icon:AddMaskTexture(mask)
+          local ring = button:CreateTexture(nil, "OVERLAY")
+          ring:SetAllPoints(button)
+          ring:SetAtlas(Constants.media.AffixRing)
           ---@type LDT_TimerSpell
           spell = { button = button, icon = icon }
           do

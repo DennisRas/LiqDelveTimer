@@ -18,3 +18,5 @@
 ---@field Icon string
 ---@field Rewards string
 ---@field Timeline string
+---@field CircleMask string
+---@field AffixRing string

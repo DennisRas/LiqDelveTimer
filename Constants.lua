@@ -79,4 +79,6 @@ Constants.media = {
   Icon = "Interface/Icons/INV_Misc_PocketWatch_01",
   Rewards = "Interface/Icons/INV_Misc_Coin_01",
   Timeline = "Interface/Icons/INV_Misc_Map_01",
+  CircleMask = "Interface/CharacterFrame/TempPortraitAlphaMask",
+  AffixRing = "ChallengeMode-AffixRing-Sm",
 }
