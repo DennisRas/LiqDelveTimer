@@ -316,16 +316,10 @@ local function summaryData(run, ahead, behind)
     bestText = Helpers.FormatElapsed(bestTime) or "-"
   end
   data[#data + 1] = valueRow("Best", bestText)
-  local deathsText = "-"
-  if run.deaths ~= nil then
-    deathsText = tostring(run.deaths)
-  end
-  data[#data + 1] = valueRow("Deaths", withAtlas("DungeonSkull", deathsText))
-  local livesText = "-"
+  data[#data + 1] = valueRow("Deaths", withAtlas("DungeonSkull", tostring(run.deaths or 0)))
   if run.lives ~= nil then
-    livesText = tostring(run.lives)
+    data[#data + 1] = valueRow("Lives", withAtlas("delves-scenario-heart-icon", tostring(run.lives)))
   end
-  data[#data + 1] = valueRow("Lives", withAtlas("delves-scenario-heart-icon", livesText))
   local entrance = run.entrance
   local spellIDs = entrance and entrance.activeSpellIDs
   if spellIDs and #spellIDs > 0 then

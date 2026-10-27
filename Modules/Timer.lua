@@ -876,6 +876,9 @@ function Timer:Render()
   local livesCount
   if activeRun then
     deathsCount = activeRun.deaths
+    if deathsCount == nil then
+      deathsCount = 0
+    end
     livesCount = activeRun.lives
   else
     deathsCount = 1
