@@ -1123,6 +1123,28 @@ function Capture:OnMoney()
   addReward(rewardRows(run), Constants.rewardType.Gold, nil, delta)
 end
 
+function Capture:NoteSpec()
+  local run = Data:GetActiveRun()
+  if not run or run.specChanged then
+    return
+  end
+  local character = run.character
+  if not character or character.specID == nil then
+    return
+  end
+  local specIndex = GetSpecialization()
+  if not specIndex or issecretvalue(specIndex) then
+    return
+  end
+  local specID = GetSpecializationInfo(specIndex)
+  if type(specID) ~= "number" or issecretvalue(specID) then
+    return
+  end
+  if specID ~= character.specID then
+    run.specChanged = true
+  end
+end
+
 function Capture:NoteCharacter()
   local run = Data:GetActiveRun()
   if not run then
@@ -1245,6 +1267,7 @@ function Capture:Observe(run)
   end
   self:OnMoney()
   self:NoteCharacter()
+  self:NoteSpec()
 end
 
 function Capture:EnsureRun()
@@ -1530,6 +1553,9 @@ function Capture:Register()
   end, true)
   Events:RegisterEvent("PLAYER_DEAD", function()
     Capture:OnDeath()
+    Capture:Sync()
+  end, true)
+  Events:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", function()
     Capture:Sync()
   end, true)
   Events:RegisterEvent("PLAYER_ENTERING_WORLD", function()

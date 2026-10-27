@@ -289,11 +289,73 @@ local function summaryData(run, ahead, behind)
         characterText = CreateColor(classColor.r, classColor.g, classColor.b):WrapTextInColorCode(character.name)
       end
     end
-    if character.specName and character.specName ~= "" then
-      characterText = format("%s, %s", characterText, character.specName)
+  end
+  local specMarkup = ""
+  if character and character.specID then
+    local _, _, _, specTexture = GetSpecializationInfoByID(character.specID)
+    if (type(specTexture) == "number" or type(specTexture) == "string") and not issecretvalue(specTexture) then
+      specMarkup = format("|T%s:14|t", specTexture)
     end
   end
-  data[#data + 1] = valueRow("Character", characterText)
+  if specMarkup ~= "" then
+    characterText = format("%s %s", characterText, specMarkup)
+  end
+  local characterRow = valueRow("Character", characterText)
+  if character then
+    ---@param cellFrame LiqUI_TableCellFrame
+    local function showCharacter(cellFrame)
+      GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+      local title = character.name or ""
+      if title == "" then
+        title = "Character"
+      end
+      local titleRed, titleGreen, titleBlue = 1, 1, 1
+      if character.classFile then
+        local classColor = C_ClassColor.GetClassColor(character.classFile)
+        if classColor and classColor.r and classColor.g and classColor.b then
+          titleRed, titleGreen, titleBlue = classColor.r, classColor.g, classColor.b
+        end
+      end
+      GameTooltip:SetText(title, titleRed, titleGreen, titleBlue)
+      ---@param label string
+      ---@param value string
+      local function addFact(label, value)
+        GameTooltip:AddDoubleLine(label, value, NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b, 1, 1, 1)
+      end
+      if character.level then
+        addFact("Level", format("%d", character.level))
+      end
+      if character.itemLevel then
+        addFact("Item level", format("%d", character.itemLevel))
+      end
+      local realm = character.realm
+      if not realm or realm == "" then
+        realm = character.homeRealm
+      end
+      if realm and realm ~= "" then
+        addFact("Realm", realm)
+      end
+      local specValue = character.specName
+      if specMarkup ~= "" then
+        if specValue and specValue ~= "" then
+          specValue = format("%s %s", specMarkup, specValue)
+        else
+          specValue = specMarkup
+        end
+      end
+      if specValue and specValue ~= "" then
+        addFact("Spec", specValue)
+      end
+      if run.specChanged then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Specialization changed", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+      end
+      GameTooltip:Show()
+    end
+    characterRow.onEnter = showCharacter
+    characterRow.onLeave = GameTooltip_Hide
+  end
+  data[#data + 1] = characterRow
   data[#data + 1] = valueRow("Started", Helpers.FormatDate(run.startedAt, Constants.dateLength.Full))
   local endedText = "-"
   if run.endedAt then
@@ -316,10 +378,14 @@ local function summaryData(run, ahead, behind)
     bestText = Helpers.FormatElapsed(bestTime) or "-"
   end
   data[#data + 1] = valueRow("Best", bestText)
-  data[#data + 1] = valueRow("Deaths", withAtlas("DungeonSkull", tostring(run.deaths or 0)))
+  local deathsMarkup = withAtlas("DungeonSkull", tostring(run.deaths or 0))
+  local countLabel = "Deaths"
+  local countValue = deathsMarkup
   if run.lives ~= nil then
-    data[#data + 1] = valueRow("Lives", withAtlas("delves-scenario-heart-icon", tostring(run.lives)))
+    countLabel = "Deaths / Lives"
+    countValue = format("%s / %s", deathsMarkup, withAtlas("delves-scenario-heart-icon", tostring(run.lives)))
   end
+  data[#data + 1] = valueRow(countLabel, countValue)
   local entrance = run.entrance
   local spellIDs = entrance and entrance.activeSpellIDs
   if spellIDs and #spellIDs > 0 then

@@ -176,6 +176,7 @@
 ---@field deaths number|nil
 ---@field lives number|nil
 ---@field character LDT_Character|nil
+---@field specChanged boolean|nil
 ---@field entrance LDT_Entrance|nil
 ---@field companion LDT_Companion|nil
 ---@field instance LDT_Instance|nil
