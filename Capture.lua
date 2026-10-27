@@ -1439,7 +1439,7 @@ local function acceptEnterChamber()
   answeredChoiceID = info.choiceID
   C_PlayerChoice.SendPlayerChoiceResponse(buttonID)
   closePlayerChoice(info)
-  addon.Core:Print("Opened the chamber automatically. Right-click the timer and turn off Automatically open chambers to keep the prompt.")
+  addon.Core:Print("Chamber opened automatically. You can turn this off in the timer settings.")
 end
 
 local function hookPlayerChoiceFrame()
