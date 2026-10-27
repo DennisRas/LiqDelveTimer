@@ -16,3 +16,5 @@
 
 ---@class LDT_Media
 ---@field Icon string
+---@field Rewards string
+---@field Timeline string

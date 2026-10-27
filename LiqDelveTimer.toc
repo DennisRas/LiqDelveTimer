@@ -30,7 +30,6 @@ LiqDelveTimer.lua
 
 Modules\Timer.lua
 Modules\Run.lua
-Modules\Timeline.lua
 Modules\History.lua
 
 #@debug@

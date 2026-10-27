@@ -21,7 +21,6 @@
 ---@field Module_Timer LDT_Module_Timer
 ---@field Module_Run LDT_Module_Run
 ---@field Module_History LDT_Module_History
----@field Module_Timeline LDT_Module_Timeline
 ---@field Debug LDT_Debug|nil
 
 ---@class LDT_CaptureState
@@ -58,27 +57,29 @@
 
 ---@class LDT_Module_Run : AceModule
 ---@field window LiqUI_WindowInstance|nil
+---@field detailsColumn LDT_RunColumn|nil
+---@field rewardsColumn LDT_RunColumn|nil
+---@field timelineColumn LDT_RunColumn|nil
+---@field detailsScroll LiqUI_ScrollArea|nil
 ---@field summary LiqUI_TableInstance|nil
 ---@field stages LiqUI_TableInstance|nil
 ---@field boons LiqUI_TableInstance|nil
 ---@field rewards LiqUI_TableInstance|nil
+---@field timeline LiqUI_TableInstance|nil
 ---@field companion LDT_RunCompanion|nil
 ---@field companionHeader LDT_RunBlockHeader|nil
 ---@field boonsHeader LDT_RunBlockHeader|nil
----@field rewardsHeader LDT_RunBlockHeader|nil
----@field bodyScroll LiqUI_ScrollArea|nil
 ---@field summaryData LiqUI_TableData|nil
 ---@field stagesData LiqUI_TableData|nil
 ---@field boonsData LiqUI_TableData|nil
 ---@field rewardsData LiqUI_TableData|nil
+---@field timelineData LiqUI_TableData|nil
 ---@field pinnedRun LDT_Run|nil
 ---@field showingRun boolean|nil
+---@field showRewards boolean|nil
+---@field showTimeline boolean|nil
 
 ---@class LDT_Module_History : AceModule
----@field window LiqUI_WindowInstance|nil
----@field table LiqUI_TableInstance|nil
-
----@class LDT_Module_Timeline : AceModule
 ---@field window LiqUI_WindowInstance|nil
 ---@field table LiqUI_TableInstance|nil
 

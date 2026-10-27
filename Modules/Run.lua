@@ -11,6 +11,7 @@ local Helpers = addon.Helpers
 local LiqUI = addon.libs.LiqUI
 local BindScrollBoxMouseWheel = LiqUI.Utils.BindScrollBoxMouseWheel
 local CreateScrollArea = LiqUI.Utils.CreateScrollArea
+local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
 
 local STAGE_WIDTH = 168
 local NUMBER_WIDTH = 70
@@ -28,6 +29,22 @@ local ICON_SIZE = 16
 local BAR_HEIGHT = 16
 local BLOCK_HEADER = 22
 local SCREEN_MARGIN = 100
+local SCROLLBAR_THICKNESS = LiqUI.Constants.layout.sizes.scrollbar.thickness
+local SCROLL_OVERFLOW = LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance
+local DIVIDER_WIDTH = 3
+---@type ColorRGBAData
+local DIVIDER_COLOR = { r = 0, g = 0, b = 0, a = 0.5 }
+local TIMELINE_TIME_WIDTH = NUMBER_WIDTH
+local TIMELINE_NAME_WIDTH = BODY_WIDTH - TIMELINE_TIME_WIDTH
+local INDENT_STEP = 16
+---@type ColorRGBAData
+local BLOCK_COLOR = { r = 1, g = 1, b = 1, a = 1 }
+---@type ColorRGBAData
+local STEP_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
+---@type ColorRGBAData
+local OBJECTIVE_COLOR = { r = 0.75, g = 0.85, b = 1, a = 1 }
+---@type ColorRGBAData
+local OBJECTIVE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
 
 local measureText = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 measureText:Hide()
@@ -960,19 +977,21 @@ end
 ---@param columns LiqUI_TableOptionsColumn[]
 ---@param showHeader boolean
 ---@param headerAlpha number|nil
+---@param sticky boolean|nil
+---@param highlight boolean|nil
 ---@return LiqUI_TableOptions
-local function tableOptions(name, columns, showHeader, headerAlpha)
+local function tableOptions(name, columns, showHeader, headerAlpha, sticky, highlight)
   ---@type LiqUI_TableOptions
   local options = {
     name = name,
     header = {
       enabled = showHeader,
-      sticky = false,
-      height = 22,
+      sticky = sticky == true,
+      height = BLOCK_HEADER,
       backgroundAlpha = headerAlpha or 0,
     },
     rowStyle = {
-      highlight = false,
+      highlight = highlight == true,
       striped = true,
     },
     cellStyle = {
@@ -1006,12 +1025,119 @@ local function bindBodyWheel(frame, scrollBox)
   end
 end
 
-function Module:Layout()
-  local window = self.window
-  if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.rewards then
+---@param line LDT_TimelineRow
+---@return ColorRGBAData
+local function timelineColor(line)
+  if line.depth == 0 then
+    return BLOCK_COLOR
+  end
+  if line.depth == 1 then
+    return STEP_COLOR
+  end
+  if line.done then
+    return OBJECTIVE_DONE_COLOR
+  end
+  return OBJECTIVE_COLOR
+end
+
+---@param text string
+---@param color ColorRGBAData
+---@return string
+local function colorText(text, color)
+  return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(text)
+end
+
+---@param cellFrame LiqUI_TableCellFrame
+---@param _rowFrame LiqUI_TableRowFrame
+---@param _rowIndex integer
+---@param columnIndex integer
+---@param _columnId string|nil
+---@param rowData LiqUI_TableDataRowExtended
+local function showTimelineLine(cellFrame, _rowFrame, _rowIndex, columnIndex, _columnId, rowData)
+  if columnIndex ~= 1 then
     return
   end
-  if not self.companionHeader or not self.boonsHeader or not self.rewardsHeader then
+  local cells = rowData.data
+  local text = cells[1]
+  if type(text) ~= "string" or text == "" then
+    return
+  end
+  GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
+  GameTooltip:SetText(text, 1, 1, 1, 1, true)
+  GameTooltip:Show()
+end
+
+---@param run LDT_Run|nil
+---@return LiqUI_TableData
+local function timelineTableData(run)
+  ---@type LiqUI_TableData
+  local data = {}
+  if not run then
+    return data
+  end
+  local lines = Data:TimelineRows(run)
+  for lineIndex = 1, #lines do
+    local line = lines[lineIndex]
+    local color = timelineColor(line)
+    local timeText = ""
+    if line.elapsed ~= nil then
+      timeText = colorText(Helpers.FormatElapsed(line.elapsed), color)
+    end
+    ---@type LiqUI_TableDataRowExtended
+    local row = {
+      data = { colorText(line.name, color), timeText },
+      indent = line.depth * INDENT_STEP,
+      onEnter = showTimelineLine,
+      onLeave = GameTooltip_Hide,
+    }
+    data[#data + 1] = row
+  end
+  return data
+end
+
+---@param parent Frame
+---@param name string
+---@return LDT_RunColumn
+local function createColumn(parent, name)
+  ---@type LDT_RunColumn
+  local column = CreateFrame("Frame", addon.name .. name, parent)
+  local divider = CreateFrame("Frame", nil, column)
+  divider:SetWidth(DIVIDER_WIDTH)
+  SetBackgroundColor(divider, DIVIDER_COLOR)
+  divider:Hide()
+  column.divider = divider
+  column:Hide()
+  return column
+end
+
+---@param tableFrame LiqUI_TableInstance
+---@param parent Frame
+---@param data LiqUI_TableData
+---@param viewHeight number
+---@return number
+local function layoutScrollingTable(tableFrame, parent, data, viewHeight)
+  tableFrame:SetParent(parent)
+  tableFrame:ClearAllPoints()
+  tableFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+  tableFrame:SetSize(BODY_WIDTH, viewHeight)
+  tableFrame:SetData(data)
+  local _, contentHeight = tableFrame:GetSize()
+  if contentHeight > viewHeight + SCROLL_OVERFLOW then
+    tableFrame:SetSize(BODY_WIDTH + SCROLLBAR_THICKNESS, viewHeight)
+    return BODY_WIDTH + SCROLLBAR_THICKNESS
+  end
+  return BODY_WIDTH
+end
+
+function Module:Layout()
+  local window = self.window
+  if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.rewards or not self.timeline then
+    return
+  end
+  if not self.companionHeader or not self.boonsHeader then
+    return
+  end
+  if not self.detailsColumn or not self.rewardsColumn or not self.timelineColumn or not self.detailsScroll then
     return
   end
   local shown = self.showingRun == true
@@ -1025,35 +1151,76 @@ function Module:Layout()
   y = y - self.companion:GetHeight()
   y = placeHeader(self.boonsHeader, y, shown)
   y = placeTable(self.boons, self.boonsData or {}, y)
-  y = placeHeader(self.rewardsHeader, y, shown)
-  y = placeTable(self.rewards, self.rewardsData or {}, y)
-  local contentHeight = math.max(22, -y)
+  local detailsHeight = math.max(BLOCK_HEADER, -y)
   local scale = window:GetWindowScale() / 100
   if scale <= 0 then
     scale = 1
   end
   local maxBody = (UIParent:GetHeight() - SCREEN_MARGIN) / scale - LiqUI.Constants.layout.sizes.titlebar.height
-  if maxBody < 22 then
-    maxBody = 22
+  if maxBody < BLOCK_HEADER then
+    maxBody = BLOCK_HEADER
   end
-  local bodyHeight = contentHeight
+  local bodyHeight = detailsHeight
   if bodyHeight > maxBody then
     bodyHeight = maxBody
   end
-  local width = BODY_WIDTH
-  if contentHeight > bodyHeight then
-    width = BODY_WIDTH + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  local detailsWidth = BODY_WIDTH
+  if detailsHeight > bodyHeight + SCROLL_OVERFLOW then
+    detailsWidth = BODY_WIDTH + SCROLLBAR_THICKNESS
   end
-  window:SetBodySize(width, bodyHeight)
-  local scrollArea = self.bodyScroll
-  if not scrollArea then
-    return
+  local rewardsWidth = layoutScrollingTable(self.rewards, self.rewardsColumn, self.rewardsData or {}, bodyHeight)
+  local timelineWidth = layoutScrollingTable(self.timeline, self.timelineColumn, self.timelineData or {}, bodyHeight)
+  ---@type LDT_RunColumn[]
+  local openColumns = {}
+  ---@type number[]
+  local openWidths = {}
+  ---@param column LDT_RunColumn
+  ---@param width number
+  ---@param open boolean
+  local function queueColumn(column, width, open)
+    if not open then
+      column:Hide()
+      return
+    end
+    openColumns[#openColumns + 1] = column
+    openWidths[#openWidths + 1] = width
   end
-  scrollArea:UpdateLayout(BODY_WIDTH, contentHeight)
-  local scrollBox = scrollArea:GetWheelScrollBox()
+  queueColumn(self.detailsColumn, detailsWidth, true)
+  queueColumn(self.rewardsColumn, rewardsWidth, self.showRewards ~= false)
+  queueColumn(self.timelineColumn, timelineWidth, self.showTimeline == true)
+  local x = 0
+  for index = 1, #openColumns do
+    local column = openColumns[index]
+    local width = openWidths[index]
+    local hasNeighbor = index < #openColumns
+    column:Show()
+    column:ClearAllPoints()
+    column:SetPoint("TOPLEFT", window.body, "TOPLEFT", x, 0)
+    column:SetSize(width, bodyHeight)
+    local divider = column.divider
+    if hasNeighbor then
+      divider:ClearAllPoints()
+      divider:SetPoint("TOPLEFT", column, "TOPRIGHT", 0, 0)
+      divider:SetPoint("BOTTOMLEFT", column, "BOTTOMRIGHT", 0, 0)
+      divider:SetWidth(DIVIDER_WIDTH)
+      divider:Show()
+      x = x + width + DIVIDER_WIDTH
+    else
+      divider:Hide()
+      x = x + width
+    end
+  end
+  local detailsScroll = self.detailsScroll
+  local container = detailsScroll.container
+  container:ClearAllPoints()
+  container:SetPoint("TOPLEFT", self.detailsColumn, "TOPLEFT", 0, 0)
+  container:SetSize(detailsWidth, bodyHeight)
+  detailsScroll:UpdateLayout(BODY_WIDTH, detailsHeight)
+  local scrollBox = detailsScroll:GetWheelScrollBox()
   if scrollBox then
-    bindBodyWheel(scrollArea.content, scrollBox)
+    bindBodyWheel(detailsScroll.content, scrollBox)
   end
+  window:SetBodySize(x, bodyHeight)
 end
 
 ---@param run LDT_Run|nil
@@ -1072,6 +1239,7 @@ function Module:Fill(run)
     self.stagesData = {}
     self.boonsData = {}
     self.rewardsData = {}
+    self.timelineData = {}
     paintCompanion(self.companion, nil)
     return
   end
@@ -1081,6 +1249,7 @@ function Module:Fill(run)
   self.stagesData = stageData(run, ahead, behind)
   self.boonsData = boonData(run)
   self.rewardsData = rewardsData(run)
+  self.timelineData = timelineTableData(run)
   paintCompanion(self.companion, run)
 end
 
@@ -1092,40 +1261,59 @@ function Module:Render()
       name = addon.name .. "Run",
       storage = windows.Run,
       title = "Run",
-      width = BODY_WIDTH,
+      width = (BODY_WIDTH * 2) + DIVIDER_WIDTH,
       height = 200,
       onShow = function()
         Module:Render()
       end,
     }
     self.window = LiqUI:NewElement("Window", windowOptions)
+    self.showRewards = true
+    self.showTimeline = false
     ---@type LiqUI_WindowTitlebarButton
     local timelineButton = {
       name = "Timeline",
-      icon = Constants.media.Icon,
+      icon = Constants.media.Timeline,
       tooltipTitle = "Timeline",
       tooltipDescription = "The path of this run.",
       onClick = function()
-        addon.Module_Timeline:Toggle()
+        Module.showTimeline = not Module.showTimeline
+        Module:Layout()
+      end,
+    }
+    ---@type LiqUI_WindowTitlebarButton
+    local rewardsButton = {
+      name = "Rewards",
+      icon = Constants.media.Rewards,
+      tooltipTitle = "Rewards",
+      tooltipDescription = "Rewards from this run.",
+      onClick = function()
+        Module.showRewards = not Module.showRewards
+        Module:Layout()
       end,
     }
     self.window:AddTitlebarButton(timelineButton)
+    self.window:AddTitlebarButton(rewardsButton)
     self.window:HookScript("OnHide", function(hiddenFrame)
       hiddenFrame:SetScript("OnUpdate", nil)
-      addon.Module_Timeline:Hide()
     end)
     local body = self.window.body
-    local scrollArea = CreateScrollArea(body, {
-      name = addon.name .. "RunBodyScroll",
+    local detailsColumn = createColumn(body, "RunDetailsColumn")
+    self.detailsColumn = detailsColumn
+    local detailsScroll = CreateScrollArea(detailsColumn, {
+      name = addon.name .. "RunDetailsColumnScroll",
       vertical = true,
       horizontal = false,
       wheelPanExtent = LiqUI.Constants.layout.sizes.row,
     })
-    scrollArea:SetAllPoints(body)
-    self.bodyScroll = scrollArea
-    local content = scrollArea.content
+    self.detailsScroll = detailsScroll
+    local rewardsColumn = createColumn(body, "RunRewardsColumn")
+    self.rewardsColumn = rewardsColumn
+    local timelineColumn = createColumn(body, "RunTimelineColumn")
+    self.timelineColumn = timelineColumn
+    local content = detailsScroll.content
     local summaryColumns = {
-      { id = "label", headerText = "", width = LABEL_WIDTH, align = "LEFT" },
+      { id = "label", headerText = "Summary", width = LABEL_WIDTH, align = "LEFT" },
       { id = "value", headerText = "", width = VALUE_WIDTH, align = "RIGHT" },
     }
     local stageColumns = {
@@ -1141,10 +1329,10 @@ function Module:Render()
       { id = "valueRight", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
     }
     local rewardColumns = {
-      { id = "name", headerText = "", width = REWARD_NAME_WIDTH, align = "LEFT" },
+      { id = "name", headerText = "Rewards", width = REWARD_NAME_WIDTH, align = "LEFT" },
       { id = "amount", headerText = "", width = REWARD_AMOUNT_WIDTH, align = "RIGHT" },
     }
-    local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, false))
+    local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, true, 0.35, false))
     summary:SetParent(content)
     self.summary = summary
     local stages = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunStages", stageColumns, true, 0.35))
@@ -1156,10 +1344,16 @@ function Module:Render()
     local boons = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunBoons", boonColumns, false))
     boons:SetParent(content)
     self.boons = boons
-    self.rewardsHeader = createBlockHeader(content, "Rewards")
-    local rewards = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunRewards", rewardColumns, false))
-    rewards:SetParent(content)
+    local rewards = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunRewards", rewardColumns, true, 0.35, true, true))
+    rewards:SetParent(rewardsColumn)
     self.rewards = rewards
+    local timelineColumns = {
+      { id = "name", headerText = "Timeline", width = TIMELINE_NAME_WIDTH, align = "LEFT" },
+      { id = "time", headerText = "Time", width = TIMELINE_TIME_WIDTH, align = "RIGHT" },
+    }
+    local timeline = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunTimeline", timelineColumns, true, 0.35, true, true))
+    timeline:SetParent(timelineColumn)
+    self.timeline = timeline
   end
   if not self.window or not self.window:IsShown() then
     return
@@ -1198,7 +1392,6 @@ function Module:ShowRun(run)
     self.window:Show()
     self.window:Raise()
   end
-  addon.Module_Timeline:Follow()
 end
 
 function Module:ToggleWindow()

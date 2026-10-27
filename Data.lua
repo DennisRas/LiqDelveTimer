@@ -28,7 +28,6 @@ Data.defaultDB = {
       windows = {
         Run = {},
         History = {},
-        Timeline = {},
       },
       tables = {
         History = { hiddenColumns = {} },
