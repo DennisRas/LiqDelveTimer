@@ -28,6 +28,7 @@ Data.defaultDB = {
       windows = {
         Run = {},
         History = {},
+        Timeline = {},
       },
       tables = {
         History = { hiddenColumns = {} },
@@ -373,6 +374,8 @@ function Data:SnapshotBest(run)
 end
 
 local CHAMBER_SPLIT_LIMIT = 9
+local NEMESIS_TIER = 8
+local NEMESIS_LABEL = "Nemesis: Kindo'jan"
 
 ---@param role LDT_ScenarioRoleId|nil
 ---@param chambers number
@@ -911,6 +914,10 @@ local function labSplitRows(run)
       rows[openChamber].nodes = nested
     end
   end
+  local tier = Helpers.RunTier(run)
+  if not tier or tier < NEMESIS_TIER then
+    return rows
+  end
   local bossElapsed
   if boss then
     bossElapsed = boss.completedElapsed
@@ -919,7 +926,7 @@ local function labSplitRows(run)
   if bestBoss then
     bossBest = bestBoss.completedElapsed
   end
-  local bossRow = splitRow("Boss", bossElapsed, bossBest)
+  local bossRow = splitRow(NEMESIS_LABEL, bossElapsed, bossBest)
   if boss then
     local done, total = stageProgress(boss.scenarioID, boss.steps, bestBoss and bestBoss.steps)
     setChildProgress(bossRow, done, total)
@@ -1013,6 +1020,107 @@ function Data:StepRows(run)
     local nested = stageRows(scenario.scenarioID, scenario.steps, bestScenario and bestScenario.steps)
     if #nested > 0 then
       rows[openIndex].nodes = nested
+    end
+  end
+  return rows
+end
+
+---@param entered number|nil
+---@param completed number|nil
+---@return number|nil
+local function shownElapsed(entered, completed)
+  if completed ~= nil then
+    return completed
+  end
+  return entered
+end
+
+---@param scenario LDT_RunScenario
+---@param role LDT_ScenarioRoleId|nil
+---@param chamberNumber number
+---@return string
+local function timelineBlockName(scenario, role, chamberNumber)
+  if role == Constants.scenarioRole.Chamber then
+    return format("Chamber %d", chamberNumber)
+  end
+  if role == Constants.scenarioRole.Boss then
+    return NEMESIS_LABEL
+  end
+  local steps = scenario.steps
+  local first = steps[1]
+  if role == Constants.scenarioRole.Hub or role == Constants.scenarioRole.Reward then
+    if first then
+      local title = stepTitle(first.stepID)
+      if title then
+        return title
+      end
+    end
+  end
+  local name = scenarioName(scenario.scenarioID)
+  if name then
+    return name
+  end
+  if first then
+    local title = stepTitle(first.stepID)
+    if title then
+      return title
+    end
+  end
+  return format("Scenario %d", scenario.index)
+end
+
+---@param run LDT_Run
+---@return LDT_TimelineRow[]
+function Data:TimelineRows(run)
+  ---@type LDT_TimelineRow[]
+  local rows = {}
+  local scenarios = run.scenarios
+  local chamberNumber = 0
+  for index = 1, #scenarios do
+    local scenario = scenarios[index]
+    local role = resolvedRole(scenario.scenarioID, scenario.role)
+    local blockNumber = chamberNumber
+    if role == Constants.scenarioRole.Chamber then
+      chamberNumber = chamberNumber + 1
+      blockNumber = chamberNumber
+    end
+    ---@type LDT_TimelineRow
+    local block = {
+      name = timelineBlockName(scenario, role, blockNumber),
+      elapsed = shownElapsed(scenario.enteredElapsed, scenario.completedElapsed),
+      depth = 0,
+    }
+    rows[#rows + 1] = block
+    local steps = scenario.steps
+    for stepIndex = 1, #steps do
+      local step = steps[stepIndex]
+      local stepName = stepTitle(step.stepID)
+      if not stepName then
+        local stage = step.stage or stepIndex
+        stepName = format("Stage %d", stage)
+      end
+      ---@type LDT_TimelineRow
+      local stepRow = {
+        name = stepName,
+        elapsed = shownElapsed(step.enteredElapsed, step.completedElapsed),
+        depth = 1,
+      }
+      rows[#rows + 1] = stepRow
+      local criteria = step.criteria
+      for criteriaIndex = 1, #criteria do
+        local criterion = criteria[criteriaIndex]
+        local label = objectiveLabel(step.stepID, criterion, criteriaIndex)
+        if label then
+          ---@type LDT_TimelineRow
+          local objective = {
+            name = label,
+            elapsed = shownElapsed(criterion.enteredElapsed, criterion.completedElapsed),
+            depth = 2,
+            done = criterion.completed,
+          }
+          rows[#rows + 1] = objective
+        end
+      end
     end
   end
   return rows

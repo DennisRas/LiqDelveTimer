@@ -143,6 +143,12 @@
 ---@field completedElapsed number|nil
 ---@field criteria LDT_RunCriteria[]
 
+---@class LDT_TimelineRow
+---@field name string
+---@field elapsed number|nil
+---@field depth number
+---@field done boolean|nil
+
 ---@class LDT_Reward
 ---@field type LDT_RewardTypeId
 ---@field id number|nil

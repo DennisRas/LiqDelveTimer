@@ -21,6 +21,7 @@
 ---@field Module_Timer LDT_Module_Timer
 ---@field Module_Run LDT_Module_Run
 ---@field Module_History LDT_Module_History
+---@field Module_Timeline LDT_Module_Timeline
 ---@field Debug LDT_Debug|nil
 
 ---@class LDT_CaptureState
@@ -74,6 +75,10 @@
 ---@field showingRun boolean|nil
 
 ---@class LDT_Module_History : AceModule
+---@field window LiqUI_WindowInstance|nil
+---@field table LiqUI_TableInstance|nil
+
+---@class LDT_Module_Timeline : AceModule
 ---@field window LiqUI_WindowInstance|nil
 ---@field table LiqUI_TableInstance|nil
 

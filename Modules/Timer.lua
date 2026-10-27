@@ -14,7 +14,7 @@ local HEADER_PAD = 10
 local ICON_SIZE = 20
 local ICON_GAP = 4
 local SPELL_GAP = 12
-local STAGES_WIDTH = 150
+local STAGES_WIDTH = 180
 local DELTA_WIDTH = 75
 local TIME_WIDTH = 75
 local BEST_WIDTH = 75
@@ -43,7 +43,7 @@ local MARK_CHECK = "ui-questtracker-tracker-check"
 ---@type ColorRGBAData
 local NODE_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
 ---@type ColorRGBAData
-local LINE_COLOR = { r = 0.85, g = 0.9, b = 1, a = 1 }
+local LINE_COLOR = { r = 0.75, g = 0.85, b = 1, a = 1 }
 ---@type ColorRGBAData
 local LINE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
 local CLOCK_HEIGHT = 36
@@ -491,7 +491,7 @@ local function paintLine(line, detail, entry, offsetY, indent)
   icon:ClearAllPoints()
   icon:SetSize(MARK_ICON, MARK_ICON)
   icon:SetAtlas(atlas)
-  icon:SetVertexColor(1, 1, 1)
+  icon:SetVertexColor(color.r, color.g, color.b)
   icon:Show()
   if wrapped then
     icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -LINE_HEIGHT / 2)

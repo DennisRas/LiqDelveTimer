@@ -12,7 +12,7 @@ local LiqUI = addon.libs.LiqUI
 local BindScrollBoxMouseWheel = LiqUI.Utils.BindScrollBoxMouseWheel
 local CreateScrollArea = LiqUI.Utils.CreateScrollArea
 
-local STAGE_WIDTH = 120
+local STAGE_WIDTH = 168
 local NUMBER_WIDTH = 70
 local BODY_WIDTH = STAGE_WIDTH + (NUMBER_WIDTH * 3)
 local LABEL_WIDTH = 110
@@ -1099,8 +1099,20 @@ function Module:Render()
       end,
     }
     self.window = LiqUI:NewElement("Window", windowOptions)
+    ---@type LiqUI_WindowTitlebarButton
+    local timelineButton = {
+      name = "Timeline",
+      icon = Constants.media.Icon,
+      tooltipTitle = "Timeline",
+      tooltipDescription = "The path of this run.",
+      onClick = function()
+        addon.Module_Timeline:Toggle()
+      end,
+    }
+    self.window:AddTitlebarButton(timelineButton)
     self.window:HookScript("OnHide", function(hiddenFrame)
       hiddenFrame:SetScript("OnUpdate", nil)
+      addon.Module_Timeline:Hide()
     end)
     local body = self.window.body
     local scrollArea = CreateScrollArea(body, {
@@ -1182,10 +1194,11 @@ function Module:ShowRun(run)
   if self.window:IsShown() then
     self:Render()
     self.window:Raise()
-    return
+  else
+    self.window:Show()
+    self.window:Raise()
   end
-  self.window:Show()
-  self.window:Raise()
+  addon.Module_Timeline:Follow()
 end
 
 function Module:ToggleWindow()
