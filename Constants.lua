@@ -30,8 +30,8 @@ Constants.scenarioRole = {
   Boss = "boss",
 }
 
----@enum LDT_GainTypeId
-Constants.gainType = {
+---@enum LDT_RewardTypeId
+Constants.rewardType = {
   Gold = "gold",
   Currency = "currency",
   Renown = "renown",

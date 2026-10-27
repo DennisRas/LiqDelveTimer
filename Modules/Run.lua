@@ -15,8 +15,8 @@ local NUMBER_WIDTH = 70
 local BODY_WIDTH = STAGE_WIDTH + (NUMBER_WIDTH * 3)
 local LABEL_WIDTH = 110
 local VALUE_WIDTH = BODY_WIDTH - LABEL_WIDTH
-local GAIN_AMOUNT_WIDTH = NUMBER_WIDTH * 2
-local GAIN_NAME_WIDTH = BODY_WIDTH - GAIN_AMOUNT_WIDTH
+local REWARD_AMOUNT_WIDTH = NUMBER_WIDTH * 2
+local REWARD_NAME_WIDTH = BODY_WIDTH - REWARD_AMOUNT_WIDTH
 local BOON_VALUE_WIDTH = 64
 local BOON_LABEL_WIDTH = (BODY_WIDTH - (BOON_VALUE_WIDTH * 2)) / 2
 local CELL_PADDING = 8
@@ -496,14 +496,14 @@ local function appendAmount(data, name, amount)
   data[#data + 1] = row
 end
 
----@param gains LDT_Gain[]
----@param gainType LDT_GainTypeId
+---@param rewards LDT_Reward[]
+---@param rewardType LDT_RewardTypeId
 ---@return number
-local function amountOfType(gains, gainType)
-  for index = 1, #gains do
-    local gain = gains[index]
-    if gain.type == gainType then
-      return gain.amount
+local function amountOfType(rewards, rewardType)
+  for index = 1, #rewards do
+    local reward = rewards[index]
+    if reward.type == rewardType then
+      return reward.amount
     end
   end
   return 0
@@ -511,19 +511,23 @@ end
 
 ---@param run LDT_Run
 ---@return LiqUI_TableData
-local function gainsData(run)
+local function rewardsData(run)
   ---@type LiqUI_TableData
   local data = {}
-  local gains = run.gains or {}
+  local rewards = run.rewards
+  if not rewards then
+    data[1] = noteRow("No rewards yet", 2)
+    return data
+  end
   local companionName = "Companion"
   if run.companion and run.companion.name and run.companion.name ~= "" then
     companionName = run.companion.name
   end
-  appendAmount(data, "Level", amountOfType(gains, Constants.gainType.Level))
-  appendAmount(data, "Experience", amountOfType(gains, Constants.gainType.Experience))
-  appendAmount(data, companionName .. " level", amountOfType(gains, Constants.gainType.CompanionLevel))
-  appendAmount(data, companionName .. " XP", amountOfType(gains, Constants.gainType.CompanionExperience))
-  local gold = amountOfType(gains, Constants.gainType.Gold)
+  appendAmount(data, "Level", amountOfType(rewards, Constants.rewardType.Level))
+  appendAmount(data, "Experience", amountOfType(rewards, Constants.rewardType.Experience))
+  appendAmount(data, companionName .. " level", amountOfType(rewards, Constants.rewardType.CompanionLevel))
+  appendAmount(data, companionName .. " XP", amountOfType(rewards, Constants.rewardType.CompanionExperience))
+  local gold = amountOfType(rewards, Constants.rewardType.Gold)
   if gold > 0 then
     local copper = gold
     ---@param cellFrame LiqUI_TableCellFrame
@@ -541,11 +545,11 @@ local function gainsData(run)
     }
     data[#data + 1] = row
   end
-  for index = 1, #gains do
-    local change = gains[index]
+  for index = 1, #rewards do
+    local change = rewards[index]
     local currencyID = change.id
     local total = change.amount
-    if change.type == Constants.gainType.Currency and currencyID and total ~= 0 and Helpers.CurrencyListed(currencyID) then
+    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and Helpers.CurrencyListed(currencyID) then
       local name = tostring(currencyID)
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.name and info.name ~= "" then
@@ -570,17 +574,17 @@ local function gainsData(run)
       data[#data + 1] = row
     end
   end
-  for index = 1, #gains do
-    local change = gains[index]
-    if change.type == Constants.gainType.Renown and change.id and change.amount ~= 0 then
+  for index = 1, #rewards do
+    local change = rewards[index]
+    if change.type == Constants.rewardType.Renown and change.id and change.amount ~= 0 then
       appendAmount(data, factionLabel(change.id), change.amount)
     end
   end
   ---@type { itemID: number|nil, itemLink: string|nil, quantity: number, quality: number, qualityKnown: boolean, name: string }[]
   local items = {}
-  for index = 1, #gains do
-    local item = gains[index]
-    if item.type == Constants.gainType.Loot and not Helpers.ItemHidden(item.id) then
+  for index = 1, #rewards do
+    local item = rewards[index]
+    if item.type == Constants.rewardType.Loot and not Helpers.ItemHidden(item.id) then
       items[#items + 1] = {
         itemID = item.id,
         itemLink = item.itemLink,
@@ -661,7 +665,7 @@ local function gainsData(run)
     data[#data + 1] = row
   end
   if #data == 0 then
-    data[1] = noteRow("No gains yet", 2)
+    data[1] = noteRow("No rewards yet", 2)
   end
   return data
 end
@@ -989,10 +993,10 @@ end
 
 function Module:Layout()
   local window = self.window
-  if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.gains then
+  if not window or not self.summary or not self.stages or not self.companion or not self.boons or not self.rewards then
     return
   end
-  if not self.companionHeader or not self.boonsHeader or not self.gainsHeader then
+  if not self.companionHeader or not self.boonsHeader or not self.rewardsHeader then
     return
   end
   local shown = self.showingRun == true
@@ -1006,8 +1010,8 @@ function Module:Layout()
   y = y - self.companion:GetHeight()
   y = placeHeader(self.boonsHeader, y, shown)
   y = placeTable(self.boons, self.boonsData or {}, y)
-  y = placeHeader(self.gainsHeader, y, shown)
-  y = placeTable(self.gains, self.gainsData or {}, y)
+  y = placeHeader(self.rewardsHeader, y, shown)
+  y = placeTable(self.rewards, self.rewardsData or {}, y)
   window:SetBodySize(BODY_WIDTH, math.max(22, -y))
 end
 
@@ -1026,7 +1030,7 @@ function Module:Fill(run)
     self.summaryData = {}
     self.stagesData = {}
     self.boonsData = {}
-    self.gainsData = {}
+    self.rewardsData = {}
     paintCompanion(self.companion, nil)
     return
   end
@@ -1035,7 +1039,7 @@ function Module:Fill(run)
   self.summaryData = summaryData(run, ahead, behind)
   self.stagesData = stageData(run, ahead, behind)
   self.boonsData = boonData(run)
-  self.gainsData = gainsData(run)
+  self.rewardsData = rewardsData(run)
   paintCompanion(self.companion, run)
 end
 
@@ -1074,9 +1078,9 @@ function Module:Render()
       { id = "statRight", headerText = "", width = BOON_LABEL_WIDTH, align = "LEFT" },
       { id = "valueRight", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
     }
-    local gainColumns = {
-      { id = "name", headerText = "", width = GAIN_NAME_WIDTH, align = "LEFT" },
-      { id = "amount", headerText = "", width = GAIN_AMOUNT_WIDTH, align = "RIGHT" },
+    local rewardColumns = {
+      { id = "name", headerText = "", width = REWARD_NAME_WIDTH, align = "LEFT" },
+      { id = "amount", headerText = "", width = REWARD_AMOUNT_WIDTH, align = "RIGHT" },
     }
     local summary = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunSummary", summaryColumns, false))
     summary:SetParent(body)
@@ -1090,10 +1094,10 @@ function Module:Render()
     local boons = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunBoons", boonColumns, false))
     boons:SetParent(body)
     self.boons = boons
-    self.gainsHeader = createBlockHeader(body, "Gains")
-    local gains = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunGains", gainColumns, false))
-    gains:SetParent(body)
-    self.gains = gains
+    self.rewardsHeader = createBlockHeader(body, "Rewards")
+    local rewards = LiqUI:NewElement("Table", tableOptions(addon.name .. "RunRewards", rewardColumns, false))
+    rewards:SetParent(body)
+    self.rewards = rewards
   end
   if not self.window or not self.window:IsShown() then
     return

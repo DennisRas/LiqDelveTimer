@@ -29,41 +29,41 @@ local state = {
   loot = {},
 }
 
----@param gains LDT_Gain[]
----@param gainType LDT_GainTypeId
+---@param rewards LDT_Reward[]
+---@param rewardType LDT_RewardTypeId
 ---@param id number|nil
 ---@param itemLink string|nil
----@return LDT_Gain|nil
-local function findGain(gains, gainType, id, itemLink)
-  for index = 1, #gains do
-    local row = gains[index]
-    if row.type == gainType then
-      if gainType == Constants.gainType.Loot then
+---@return LDT_Reward|nil
+local function findReward(rewards, rewardType, id, itemLink)
+  for index = 1, #rewards do
+    local row = rewards[index]
+    if row.type == rewardType then
+      if rewardType == Constants.rewardType.Loot then
         if row.itemLink == itemLink then
           return row
         end
-      elseif gainType == Constants.gainType.Gold or row.id == id then
+      elseif rewardType == Constants.rewardType.Gold or row.id == id then
         return row
       end
     end
   end
 end
 
----@param gains LDT_Gain[]
----@param gainType LDT_GainTypeId
+---@param rewards LDT_Reward[]
+---@param rewardType LDT_RewardTypeId
 ---@param id number|nil
 ---@param delta number
 ---@param itemLink string|nil
----@return LDT_Gain
-local function addGain(gains, gainType, id, delta, itemLink)
-  local row = findGain(gains, gainType, id, itemLink)
+---@return LDT_Reward
+local function addReward(rewards, rewardType, id, delta, itemLink)
+  local row = findReward(rewards, rewardType, id, itemLink)
   if row then
     row.amount = row.amount + delta
     return row
   end
-  ---@type LDT_Gain
+  ---@type LDT_Reward
   local created = {
-    type = gainType,
+    type = rewardType,
     amount = delta,
   }
   if id then
@@ -72,7 +72,20 @@ local function addGain(gains, gainType, id, delta, itemLink)
   if itemLink then
     created.itemLink = itemLink
   end
-  gains[#gains + 1] = created
+  rewards[#rewards + 1] = created
+  return created
+end
+
+---@param run LDT_Run
+---@return LDT_Reward[]
+local function rewardRows(run)
+  local rewards = run.rewards
+  if rewards then
+    return rewards
+  end
+  ---@type LDT_Reward[]
+  local created = {}
+  run.rewards = created
   return created
 end
 
@@ -982,7 +995,7 @@ function Capture:UpdateCompanion(run)
       companion.startLevel = latest.level
     elseif companion.level and latest.level > companion.level then
       local delta = latest.level - companion.level
-      addGain(run.gains, Constants.gainType.CompanionLevel, nil, delta)
+      addReward(rewardRows(run), Constants.rewardType.CompanionLevel, nil, delta)
     end
     companion.level = latest.level
   end
@@ -992,7 +1005,7 @@ function Capture:UpdateCompanion(run)
       companion.startStanding = latest.standing
     elseif companion.standing and latest.standing > companion.standing then
       local delta = latest.standing - companion.standing
-      addGain(run.gains, Constants.gainType.CompanionExperience, nil, delta)
+      addReward(rewardRows(run), Constants.rewardType.CompanionExperience, nil, delta)
     end
     companion.standing = latest.standing
   end
@@ -1065,7 +1078,7 @@ function Capture:NoteRenown(run, factionID, newLevel, oldLevel)
   if delta == 0 then
     return
   end
-  addGain(run.gains, Constants.gainType.Renown, factionID, delta)
+  addReward(rewardRows(run), Constants.rewardType.Renown, factionID, delta)
 end
 
 function Capture:OnMoney()
@@ -1087,7 +1100,7 @@ function Capture:OnMoney()
     return
   end
   self:EnsureClock(run)
-  addGain(run.gains, Constants.gainType.Gold, nil, delta)
+  addReward(rewardRows(run), Constants.rewardType.Gold, nil, delta)
 end
 
 function Capture:NoteCharacter()
@@ -1110,7 +1123,7 @@ function Capture:NoteCharacter()
   self:EnsureClock(run)
   if level > state.level then
     local levels = level - state.level
-    addGain(run.gains, Constants.gainType.Level, nil, levels)
+    addReward(rewardRows(run), Constants.rewardType.Level, nil, levels)
     local gained = 0
     if xp < state.experience and state.experienceMax > state.experience then
       gained = (state.experienceMax - state.experience) + xp
@@ -1118,16 +1131,16 @@ function Capture:NoteCharacter()
       gained = xp - state.experience
     end
     if gained > 0 then
-      addGain(run.gains, Constants.gainType.Experience, nil, gained)
+      addReward(rewardRows(run), Constants.rewardType.Experience, nil, gained)
     end
   elseif xp < state.experience and state.experienceMax > state.experience then
     local gained = (state.experienceMax - state.experience) + xp
     if gained > 0 then
-      addGain(run.gains, Constants.gainType.Experience, nil, gained)
+      addReward(rewardRows(run), Constants.rewardType.Experience, nil, gained)
     end
   elseif xp > state.experience then
     local gained = xp - state.experience
-    addGain(run.gains, Constants.gainType.Experience, nil, gained)
+    addReward(rewardRows(run), Constants.rewardType.Experience, nil, gained)
   end
   state.level = level
   state.experience = xp
@@ -1139,14 +1152,14 @@ end
 ---@param quantityChange number|nil
 function Capture:OnCurrency(currencyType, _quantity, quantityChange)
   local run = Data:GetActiveRun()
-  if not run or not run.gains or not currencyType or not quantityChange or quantityChange == 0 then
+  if not run or not currencyType or not quantityChange or quantityChange == 0 then
     return
   end
   if not Helpers.CurrencyListed(currencyType) then
     return
   end
   self:EnsureClock(run)
-  addGain(run.gains, Constants.gainType.Currency, currencyType, quantityChange)
+  addReward(rewardRows(run), Constants.rewardType.Currency, currencyType, quantityChange)
 end
 
 ---@param message string|nil
@@ -1174,7 +1187,7 @@ function Capture:OnLoot(message, guid)
   end
   local count = tonumber(message:match("x(%d+)")) or 1
   local elapsed = self:Elapsed(run)
-  local row = findGain(run.gains, Constants.gainType.Loot, nil, itemLink)
+  local row = findReward(rewardRows(run), Constants.rewardType.Loot, nil, itemLink)
   local seen = state.loot[itemLink]
   if row and seen and elapsed - seen < 2000 then
     if count > row.amount then
@@ -1183,7 +1196,7 @@ function Capture:OnLoot(message, guid)
   elseif row then
     row.amount = row.amount + count
   else
-    addGain(run.gains, Constants.gainType.Loot, itemID, count, itemLink)
+    addReward(rewardRows(run), Constants.rewardType.Loot, itemID, count, itemLink)
   end
   state.loot[itemLink] = elapsed
 end

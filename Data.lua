@@ -132,7 +132,7 @@ function Data:CreateRun(startedAt)
     startedAt = startedAt,
     scenarios = {},
     boons = {},
-    gains = {},
+    rewards = {},
   }
   runs[#runs + 1] = run
   self.db.global.activeRunID = run.id

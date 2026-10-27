@@ -141,8 +141,8 @@
 ---@field completedElapsed number|nil
 ---@field criteria LDT_RunCriteria[]
 
----@class LDT_Gain
----@field type LDT_GainTypeId
+---@class LDT_Reward
+---@field type LDT_RewardTypeId
 ---@field id number|nil
 ---@field amount number
 ---@field itemLink string|nil
@@ -172,4 +172,4 @@
 ---@field companion LDT_Companion|nil
 ---@field instance LDT_Instance|nil
 ---@field boons LDT_BoonStat[]
----@field gains LDT_Gain[]
+---@field rewards LDT_Reward[]

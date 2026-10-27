@@ -58,15 +58,15 @@
 ---@field summary LiqUI_TableInstance|nil
 ---@field stages LiqUI_TableInstance|nil
 ---@field boons LiqUI_TableInstance|nil
----@field gains LiqUI_TableInstance|nil
+---@field rewards LiqUI_TableInstance|nil
 ---@field companion LDT_RunCompanion|nil
 ---@field companionHeader LDT_RunBlockHeader|nil
 ---@field boonsHeader LDT_RunBlockHeader|nil
----@field gainsHeader LDT_RunBlockHeader|nil
+---@field rewardsHeader LDT_RunBlockHeader|nil
 ---@field summaryData LiqUI_TableData|nil
 ---@field stagesData LiqUI_TableData|nil
 ---@field boonsData LiqUI_TableData|nil
----@field gainsData LiqUI_TableData|nil
+---@field rewardsData LiqUI_TableData|nil
 ---@field pinnedRun LDT_Run|nil
 ---@field showingRun boolean|nil
 

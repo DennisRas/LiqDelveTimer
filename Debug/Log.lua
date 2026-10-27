@@ -656,16 +656,19 @@ local function addCapture(lines)
     valueText(UnitXP("player")),
     valueText(UnitXPMax("player"))
   )
-  for index = 1, #run.gains do
-    local gain = run.gains[index]
-    lines[#lines + 1] = format(
-      "run.gain[%d] type=%s id=%s amount=%s itemLink=%s",
-      index,
-      valueText(gain.type),
-      valueText(gain.id),
-      valueText(gain.amount),
-      valueText(gain.itemLink)
-    )
+  local rewards = run.rewards
+  if rewards then
+    for index = 1, #rewards do
+      local reward = rewards[index]
+      lines[#lines + 1] = format(
+        "run.reward[%d] type=%s id=%s amount=%s itemLink=%s",
+        index,
+        valueText(reward.type),
+        valueText(reward.id),
+        valueText(reward.amount),
+        valueText(reward.itemLink)
+      )
+    end
   end
   for index = 1, #run.boons do
     local boon = run.boons[index]

@@ -9,7 +9,7 @@
 ---@field runMode table<string, LDT_RunModeId>
 ---@field runResult table<string, LDT_RunResultId>
 ---@field scenarioRole table<string, LDT_ScenarioRoleId>
----@field gainType table<string, LDT_GainTypeId>
+---@field rewardType table<string, LDT_RewardTypeId>
 ---@field boonStatColors LDT_BoonStatColor[]
 ---@field media LDT_Media
 
