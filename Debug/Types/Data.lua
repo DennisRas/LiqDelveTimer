@@ -15,10 +15,7 @@
 ---@field name string
 ---@field mode LDT_RunModeId
 ---@field kinduruCriteriaID number|nil
-
----@class LDT_ObjectiveLine
----@field text string
----@field completed boolean
+---@field pathCriteriaID number|nil
 
 ---@class LDT_ScenarioRow
 ---@field scenarioID number
@@ -40,13 +37,6 @@
 ---@field description string|nil
 ---@field criteria LDT_Criteria[]|nil
 
----@class LDT_StepRow
----@field name string
----@field elapsed number|nil
----@field best number|nil
----@field current boolean
----@field objectives LDT_ObjectiveLine[]|nil
-
 ---@class LDT_TimerOptions
 ---@field point string
 ---@field relativePoint string
@@ -55,6 +45,7 @@
 ---@field replaceTracker boolean
 ---@field showObjectives boolean
 ---@field showObjectiveCounts boolean
+---@field autoOpenChambers boolean
 ---@field aheadColor ColorRGBAData
 ---@field behindColor ColorRGBAData
 ---@field backgroundColor ColorRGBAData

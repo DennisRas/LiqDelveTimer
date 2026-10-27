@@ -195,7 +195,7 @@ local function stageData(run, ahead, behind)
     data[#data + 1] = stageRow(row.name, row.elapsed, row.best, ahead, behind)
   end
   if #data == 0 then
-    data[1] = noteRow("No steps yet", 4)
+    data[1] = noteRow("No splits yet", 4)
   end
   return data
 end
@@ -1067,7 +1067,7 @@ function Module:Render()
       { id = "value", headerText = "", width = VALUE_WIDTH, align = "RIGHT" },
     }
     local stageColumns = {
-      { id = "stage", headerText = "Stages", width = STAGE_WIDTH, align = "LEFT" },
+      { id = "stage", headerText = "Splits", width = STAGE_WIDTH, align = "LEFT" },
       { id = "delta", headerText = "Delta", width = NUMBER_WIDTH, align = "RIGHT" },
       { id = "time", headerText = "Time", width = NUMBER_WIDTH, align = "RIGHT" },
       { id = "best", headerText = "Best", width = NUMBER_WIDTH, align = "RIGHT" },

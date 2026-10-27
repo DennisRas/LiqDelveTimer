@@ -18,7 +18,7 @@ Data.delves = {
   {delveID = 2979, name = "Shadowguard Point", mode = "delve"},
   {delveID = 3003, name = "The Darkway", mode = "delve"},
   {delveID = 3038, name = "Gnarldor Isle", mode = "delve"},
-  {delveID = 3043, name = "The Labyrinth of Kindo'jan", mode = "lab", kinduruCriteriaID = 117017},
+  {delveID = 3043, name = "The Labyrinth of Kindo'jan", mode = "lab", kinduruCriteriaID = 117017, pathCriteriaID = 112888},
   {delveID = 3077, name = "The Ring of Glory", mode = "delve"},
   {delveID = 3079, name = "Venomfall Deeps", mode = "delve"},
 }

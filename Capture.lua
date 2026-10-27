@@ -723,7 +723,8 @@ end
 
 ---@param stored LDT_RunCriteria[]
 ---@param incoming LDT_CriteriaSnap[]
-local function writeCriteria(stored, incoming)
+---@param elapsed number
+local function writeCriteria(stored, incoming, elapsed)
   for index = 1, #incoming do
     local info = incoming[index]
     local criteriaID = plainNumber(info.criteriaID)
@@ -749,7 +750,11 @@ local function writeCriteria(stored, incoming)
           quantity = quantity,
           completed = completed == true,
           failed = failed == true,
+          enteredElapsed = elapsed,
         }
+        if completed == true then
+          row.completedElapsed = elapsed
+        end
         stored[#stored + 1] = row
       elseif not match.completed then
         if quantity ~= nil then
@@ -757,6 +762,9 @@ local function writeCriteria(stored, incoming)
         end
         if completed ~= nil then
           match.completed = completed
+        end
+        if completed == true and not match.completedElapsed then
+          match.completedElapsed = elapsed
         end
         if failed ~= nil then
           match.failed = failed
@@ -837,7 +845,7 @@ local function recordScenario(run, scenario, elapsed)
     steps[#steps + 1] = created
     runStep = created
   end
-  writeCriteria(runStep.criteria, scenario.criteria)
+  writeCriteria(runStep.criteria, scenario.criteria, elapsed)
   if complete and not runStep.completedElapsed then
     runStep.completedElapsed = elapsed
   end
@@ -862,6 +870,18 @@ local function latestElapsed(run)
       end
       if step.completedElapsed and step.completedElapsed > latest then
         latest = step.completedElapsed
+      end
+      local criteria = step.criteria
+      if criteria then
+        for criteriaIndex = 1, #criteria do
+          local criterion = criteria[criteriaIndex]
+          if criterion.enteredElapsed ~= nil and criterion.enteredElapsed > latest then
+            latest = criterion.enteredElapsed
+          end
+          if criterion.completedElapsed ~= nil and criterion.completedElapsed > latest then
+            latest = criterion.completedElapsed
+          end
+        end
       end
     end
   end
@@ -1362,6 +1382,76 @@ function Capture:Sync()
   end
 end
 
+local ENTER_CHAMBER_TEXT = "Enter Chamber"
+local answeredChoiceID
+local choiceHooked
+
+---@param info PlayerChoiceInfo
+local function closePlayerChoice(info)
+  if not PlayerChoiceFrame or not PlayerChoiceFrame:IsShown() then
+    return
+  end
+  if not issecretvalue(info.keepOpenAfterChoice) and info.keepOpenAfterChoice then
+    return
+  end
+  if InCombatLockdown() then
+    PlayerChoiceFrame:Hide()
+    return
+  end
+  HideUIPanel(PlayerChoiceFrame)
+end
+
+local function acceptEnterChamber()
+  if not Data.db or Data.db.global.timer.autoOpenChambers == false then
+    return
+  end
+  local run = Data:GetActiveRun()
+  if not run or Helpers.RunMode(run) ~= Constants.runMode.Lab then
+    return
+  end
+  local info = C_PlayerChoice.GetCurrentPlayerChoiceInfo()
+  if not info or issecretvalue(info.choiceID) then
+    return
+  end
+  if info.choiceID == answeredChoiceID then
+    closePlayerChoice(info)
+    return
+  end
+  if issecretvalue(info.options) or #info.options ~= 1 then
+    return
+  end
+  local option = info.options[1]
+  if issecretvalue(option.buttons) or #option.buttons ~= 1 then
+    return
+  end
+  local button = option.buttons[1]
+  if issecretvalue(button.text) or button.text ~= ENTER_CHAMBER_TEXT or button.disabled or button.confirmation then
+    return
+  end
+  local buttonID = button.id
+  if type(buttonID) ~= "number" or issecretvalue(buttonID) then
+    return
+  end
+  if C_PlayerChoice.IsWaitingForPlayerChoiceResponse() then
+    closePlayerChoice(info)
+    return
+  end
+  answeredChoiceID = info.choiceID
+  C_PlayerChoice.SendPlayerChoiceResponse(buttonID)
+  closePlayerChoice(info)
+  addon.Core:Print("Opened the chamber automatically. Right-click the timer and turn off Automatically open chambers to keep the prompt.")
+end
+
+local function hookPlayerChoiceFrame()
+  if choiceHooked or not PlayerChoiceFrame then
+    return
+  end
+  choiceHooked = true
+  PlayerChoiceFrame:HookScript("OnShow", function()
+    acceptEnterChamber()
+  end)
+end
+
 function Capture:Register()
   ---@param _frame Frame
   ---@param _event string
@@ -1394,8 +1484,18 @@ function Capture:Register()
     if name == "Blizzard_DelvesDifficultyPicker" then
       Capture:Sync()
     end
+    if name == "Blizzard_PlayerChoice" then
+      hookPlayerChoiceFrame()
+    end
   end
 
+  Events:RegisterEvent("PLAYER_CHOICE_UPDATE", function()
+    acceptEnterChamber()
+  end, true)
+  Events:RegisterEvent("PLAYER_CHOICE_CLOSE", function()
+    answeredChoiceID = nil
+  end, true)
+  hookPlayerChoiceFrame()
   Events:RegisterEvent("SCENARIO_COMPLETED", function()
     Capture:OnScenarioCompleted()
     Capture:Sync()

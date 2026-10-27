@@ -64,7 +64,7 @@ Data.scenarios = {
   {scenarioID = 3430, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
   {scenarioID = 3442, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
   {scenarioID = 3443, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
-  {scenarioID = 3444, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
+  {scenarioID = 3444, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "boss"},
   {scenarioID = 3446, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
   {scenarioID = 3447, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},
   {scenarioID = 3464, delveID = 3043, name = "The Labyrinth of Kindo'jan", flags = 146, role = "chamber"},

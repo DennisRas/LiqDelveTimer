@@ -125,6 +125,8 @@
 ---@field quantity number|nil
 ---@field completed boolean
 ---@field failed boolean
+---@field enteredElapsed number|nil
+---@field completedElapsed number|nil
 
 ---@class LDT_RunScenario
 ---@field index number

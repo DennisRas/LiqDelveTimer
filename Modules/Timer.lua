@@ -8,8 +8,6 @@ addon.Module_Timer = Timer
 local Data = addon.Data
 local Helpers = addon.Helpers
 local Capture = addon.Capture
-local LiqUI = addon.libs.LiqUI
-local TableGet = LiqUI.Utils.TableGet
 
 local HEADER_HEIGHT = 40
 local HEADER_PAD = 10
@@ -20,14 +18,34 @@ local STAGES_WIDTH = 150
 local DELTA_WIDTH = 75
 local TIME_WIDTH = 75
 local BEST_WIDTH = 75
+local TABLE_WIDTH = STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH
+local COLUMN_X = {
+  0,
+  STAGES_WIDTH,
+  STAGES_WIDTH + DELTA_WIDTH,
+  STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH,
+}
+local COLUMN_WIDTH = {
+  STAGES_WIDTH,
+  DELTA_WIDTH,
+  TIME_WIDTH,
+  BEST_WIDTH,
+}
 local CELL_PADDING = 8
 local ROW_HEIGHT = 28
-local OBJECTIVE_ROW_HEIGHT = 20
-local OBJECTIVE_INDENT = 8
-local OBJECTIVE_ICON = 14
-local OBJECTIVE_GAP_AFTER = 4
-local OBJECTIVE_NUB = "ui-questtracker-objective-nub"
-local OBJECTIVE_CHECK = "ui-questtracker-tracker-check"
+local LINE_HEIGHT = 16
+local DETAIL_PAD = 4
+local NODE_INDENT = 8
+local LINE_INDENT = 26
+local MARK_ICON = 14
+local MARK_NUB = "ui-questtracker-objective-nub"
+local MARK_CHECK = "ui-questtracker-tracker-check"
+---@type ColorRGBAData
+local NODE_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
+---@type ColorRGBAData
+local LINE_COLOR = { r = 0.85, g = 0.9, b = 1, a = 1 }
+---@type ColorRGBAData
+local LINE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
 local CLOCK_HEIGHT = 36
 local TITLE_SIZE = 16
 local META_SIZE = 14
@@ -152,17 +170,22 @@ function Timer:OpenMenu(owner)
       options.replaceTracker = not options.replaceTracker
       Capture:Sync()
     end)
-    rootMenu:CreateCheckbox("Show objectives", function()
+    rootMenu:CreateCheckbox("Show objective count", function()
+      return options.showObjectiveCounts == true
+    end, function()
+      options.showObjectiveCounts = options.showObjectiveCounts ~= true
+      Timer:Render()
+    end)
+    rootMenu:CreateCheckbox("Show objective steps", function()
       return options.showObjectives ~= false
     end, function()
       options.showObjectives = options.showObjectives == false
       Timer:Render()
     end)
-    rootMenu:CreateCheckbox("Show objective counts", function()
-      return options.showObjectiveCounts ~= false
+    rootMenu:CreateCheckbox("Automatically open chambers", function()
+      return options.autoOpenChambers ~= false
     end, function()
-      options.showObjectiveCounts = options.showObjectiveCounts == false
-      Timer:Render()
+      options.autoOpenChambers = options.autoOpenChambers == false
     end)
     addColorSwatch(rootMenu, "Faster than best", options.aheadColor)
     addColorSwatch(rootMenu, "Slower than best", options.behindColor)
@@ -230,220 +253,345 @@ end
 local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
 local SAMPLE_CLOCK = 154000
 
----@param stepRows LDT_StepRow[]
+---@param nodes LDT_TimerNode[]
 ---@return number|nil
-local function currentBest(stepRows)
-  for index = 1, #stepRows do
-    local row = stepRows[index]
-    if row.current then
-      return row.best
+local function currentBest(nodes)
+  for index = 1, #nodes do
+    local node = nodes[index]
+    if node.current then
+      return node.best
     end
   end
   return nil
 end
 
----@param name string
----@param done number
----@param total number
----@param showCounts boolean
----@return string
-local function sampleStageName(name, done, total, showCounts)
-  if not showCounts then
-    return name
-  end
-  return format("%s (%d/%d)", name, done, total)
-end
-
----@param showCounts boolean
----@return LDT_StepRow[]
-local function sampleRows(showCounts)
-  ---@type LDT_StepRow[]
+---@return LDT_TimerNode[]
+local function sampleRows()
+  ---@type LDT_TimerNode[]
   local rows = {}
-  ---@type LDT_StepRow
-  local stageOne = { name = sampleStageName("Stage 1", 1, 1, showCounts), elapsed = 84200, best = 90000, current = false }
-  ---@type LDT_ObjectiveLine
+  ---@type LDT_TimerNode
+  local rowOne = { name = "Stage 1", elapsed = 84200, best = 90000, current = false, done = 1, total = 1 }
+  ---@type LDT_TimerLine
   local openGate = { text = "(1/1) Open the gate", completed = true }
-  ---@type LDT_ObjectiveLine
+  ---@type LDT_TimerLine
   local cultists = { text = "(1/3) Kill the cultists", completed = false }
-  ---@type LDT_ObjectiveLine
+  ---@type LDT_TimerLine
   local ritual = { text = "(40%) Disrupt the ritual", completed = false }
-  ---@type LDT_ObjectiveLine[]
-  local sampleObjectives = { openGate, cultists, ritual }
-  ---@type LDT_StepRow
-  local stageTwo = {
-    name = sampleStageName("Stage 2", 0, 3, showCounts),
+  ---@type LDT_TimerLine[]
+  local sampleLines = { openGate, cultists, ritual }
+  ---@type LDT_TimerNode
+  local rowTwo = {
+    name = "Stage 2",
     elapsed = nil,
     best = 160000,
     current = true,
-    objectives = sampleObjectives,
+    lines = sampleLines,
+    done = 0,
+    total = 3,
   }
-  ---@type LDT_StepRow
-  local stageThree = { name = sampleStageName("Stage 3", 0, 2, showCounts), elapsed = nil, best = 230000, current = false }
-  ---@type LDT_StepRow
-  local stageFour = { name = sampleStageName("Stage 4", 0, 1, showCounts), elapsed = nil, best = 310000, current = false }
-  ---@type LDT_StepRow
-  local stageFive = { name = sampleStageName("Stage 5", 0, 4, showCounts), elapsed = nil, best = 390000, current = false }
-  rows[1] = stageOne
-  rows[2] = stageTwo
-  rows[3] = stageThree
-  rows[4] = stageFour
-  rows[5] = stageFive
+  ---@type LDT_TimerNode
+  local rowThree = { name = "Stage 3", elapsed = nil, best = 230000, current = false, done = 0, total = 2 }
+  ---@type LDT_TimerNode
+  local rowFour = { name = "Stage 4", elapsed = nil, best = 310000, current = false, done = 0, total = 1 }
+  ---@type LDT_TimerNode
+  local rowFive = { name = "Stage 5", elapsed = nil, best = 390000, current = false, done = 0, total = 4 }
+  rows[1] = rowOne
+  rows[2] = rowTwo
+  rows[3] = rowThree
+  rows[4] = rowFour
+  rows[5] = rowFive
   return rows
 end
 
----@param list LDT_Criteria[]
----@param criteriaID number
----@param slot number
----@return LDT_Criteria|nil
-local function criterionMatch(list, criteriaID, slot)
-  if criteriaID ~= 0 then
-    for index = 1, #list do
-      local row = list[index]
-      if row.criteriaID == criteriaID then
-        return row
+---@param name string
+---@param done number|nil
+---@param total number|nil
+---@param showCounts boolean
+---@return string
+local function splitLabel(name, done, total, showCounts)
+  if not showCounts or total == nil or total < 1 then
+    return name
+  end
+  return format("%s (%d/%d)", name, done or 0, total)
+end
+
+---@param fontString FontString
+---@param parent Frame
+---@param column integer
+---@param align "LEFT"|"RIGHT"
+local function placeColumn(fontString, parent, column, align)
+  local x = COLUMN_X[column] or 0
+  local width = COLUMN_WIDTH[column] or 0
+  fontString:ClearAllPoints()
+  fontString:SetWidth(width - CELL_PADDING * 2)
+  fontString:SetJustifyH(align)
+  fontString:SetWordWrap(false)
+  if align == "RIGHT" then
+    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - CELL_PADDING, -ROW_HEIGHT / 2)
+  else
+    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + CELL_PADDING, -ROW_HEIGHT / 2)
+  end
+end
+
+---@param rows LDT_TimerSplitRow[]
+---@param index integer
+---@param parent Frame
+---@return LDT_TimerSplitRow
+local function ensureSplitRow(rows, index, parent)
+  local existing = rows[index]
+  if existing then
+    return existing
+  end
+  local frame = CreateFrame("Frame", nil, parent)
+  local bar = CreateFrame("Frame", nil, frame)
+  bar:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  bar:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+  bar:SetHeight(ROW_HEIGHT)
+  local background = bar:CreateTexture(nil, "BACKGROUND")
+  background:SetAllPoints()
+  local name = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local delta = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local time = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local best = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  placeColumn(name, bar, 1, "LEFT")
+  placeColumn(delta, bar, 2, "RIGHT")
+  placeColumn(time, bar, 3, "RIGHT")
+  placeColumn(best, bar, 4, "RIGHT")
+  local detail = CreateFrame("Frame", nil, frame)
+  detail:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
+  detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
+  local detailBackground = detail:CreateTexture(nil, "BACKGROUND")
+  detailBackground:SetAllPoints()
+  detailBackground:SetColorTexture(0, 0, 0, 0.35)
+  ---@type LDT_TimerDetailLine[]
+  local lines = {}
+  ---@type LDT_TimerSplitRow
+  local row = {
+    frame = frame,
+    bar = bar,
+    background = background,
+    name = name,
+    delta = delta,
+    time = time,
+    best = best,
+    detail = detail,
+    lines = lines,
+  }
+  rows[index] = row
+  return row
+end
+
+---@param row LDT_TimerSplitRow
+---@param index integer
+---@return LDT_TimerDetailLine
+local function ensureDetailLine(row, index)
+  local existing = row.lines[index]
+  if existing then
+    return existing
+  end
+  local frame = CreateFrame("Frame", nil, row.detail)
+  local icon = frame:CreateTexture(nil, "OVERLAY")
+  icon:SetSize(MARK_ICON, MARK_ICON)
+  local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  local time = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ---@type LDT_TimerDetailLine
+  local line = {
+    frame = frame,
+    icon = icon,
+    text = text,
+    time = time,
+  }
+  row.lines[index] = line
+  return line
+end
+
+---@param line LDT_TimerDetailLine
+---@param detail Frame
+---@param label string
+---@param title string|nil
+---@param offsetY number
+local function paintNode(line, detail, label, title, offsetY)
+  local frame = line.frame
+  frame:SetScript("OnEnter", nil)
+  frame:SetScript("OnLeave", nil)
+  frame:EnableMouse(false)
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
+  frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
+  frame:SetHeight(LINE_HEIGHT)
+  local icon = line.icon
+  icon:ClearAllPoints()
+  icon:SetSize(MARK_ICON, MARK_ICON)
+  icon:SetPoint("LEFT", frame, "LEFT", NODE_INDENT, 0)
+  icon:SetAtlas(MARK_NUB)
+  icon:SetVertexColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b)
+  icon:Show()
+  local textLeft = NODE_INDENT + MARK_ICON + 4
+  local shown = label
+  if title and title ~= "" then
+    shown = format("%s: %s", label, WHITE_FONT_COLOR:WrapTextInColorCode(title))
+  end
+  local text = line.text
+  text:SetFontObject("GameFontNormal")
+  text:SetTextColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b)
+  text:SetWordWrap(false)
+  text:SetJustifyH("LEFT")
+  text:SetJustifyV("MIDDLE")
+  text:ClearAllPoints()
+  text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
+  text:SetWidth(TABLE_WIDTH - textLeft - CELL_PADDING)
+  text:SetText(shown)
+  line.time:Hide()
+  frame:Show()
+end
+
+---@param line LDT_TimerDetailLine
+---@param detail Frame
+---@param entry LDT_TimerLine
+---@param offsetY number
+---@param indent number
+---@return number
+local function paintLine(line, detail, entry, offsetY, indent)
+  local frame = line.frame
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
+  frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
+  local textLeft = indent + MARK_ICON + 4
+  local textWidth = TABLE_WIDTH - textLeft - CELL_PADDING
+  local color = LINE_COLOR
+  local atlas = MARK_NUB
+  if entry.completed then
+    color = LINE_DONE_COLOR
+    atlas = MARK_CHECK
+  end
+  local text = line.text
+  text:SetFontObject("GameFontHighlightSmall")
+  text:SetTextColor(color.r, color.g, color.b)
+  text:SetJustifyH("LEFT")
+  text:SetWordWrap(false)
+  text:ClearAllPoints()
+  text:SetWidth(textWidth)
+  text:SetText(entry.text)
+  local oneLine = text:GetStringHeight()
+  text:SetWordWrap(true)
+  local textHeight = text:GetStringHeight()
+  if oneLine < 1 then
+    oneLine = LINE_HEIGHT
+  end
+  if textHeight < oneLine then
+    textHeight = oneLine
+  end
+  local wrapped = textHeight > oneLine + 1
+  local rowHeight = LINE_HEIGHT
+  if wrapped and textHeight > rowHeight then
+    rowHeight = textHeight
+  end
+  frame:SetHeight(rowHeight)
+  local icon = line.icon
+  icon:ClearAllPoints()
+  icon:SetSize(MARK_ICON, MARK_ICON)
+  icon:SetAtlas(atlas)
+  icon:SetVertexColor(1, 1, 1)
+  icon:Show()
+  if wrapped then
+    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -LINE_HEIGHT / 2)
+    text:SetJustifyV("TOP")
+    text:SetPoint("TOPLEFT", frame, "TOPLEFT", textLeft, 0)
+    text:SetHeight(textHeight)
+  else
+    icon:SetPoint("LEFT", frame, "LEFT", indent, 0)
+    text:SetJustifyV("MIDDLE")
+    text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
+    text:SetHeight(LINE_HEIGHT)
+  end
+  line.time:Hide()
+  local plain = entry.text
+  frame:EnableMouse(true)
+  frame:SetScript("OnEnter", function(owner)
+    if not wrapped then
+      return
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(plain, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame:SetScript("OnLeave", GameTooltip_Hide)
+  frame:Show()
+  return rowHeight
+end
+
+---@param row LDT_TimerSplitRow
+---@param detail Frame
+---@param lines LDT_TimerLine[]|nil
+---@param indent number
+---@param used number
+---@param offsetY number
+---@return number
+---@return number
+local function paintLines(row, detail, lines, indent, used, offsetY)
+  if not lines then
+    return used, offsetY
+  end
+  for index = 1, #lines do
+    used = used + 1
+    local line = ensureDetailLine(row, used)
+    local height = paintLine(line, detail, lines[index], offsetY, indent)
+    offsetY = offsetY + height
+  end
+  return used, offsetY
+end
+
+---@param row LDT_TimerSplitRow
+---@param model LDT_TimerNode
+---@param showSteps boolean
+---@return number
+local function paintDetail(row, model, showSteps)
+  local detail = row.detail
+  local used = 0
+  local offsetY = DETAIL_PAD
+  local nodes = model.nodes
+  if showSteps and model.current and nodes and #nodes > 0 then
+    for index = 1, #nodes do
+      local node = nodes[index]
+      used = used + 1
+      local line = ensureDetailLine(row, used)
+      paintNode(line, detail, node.name, node.title, offsetY)
+      offsetY = offsetY + LINE_HEIGHT
+      if node.current then
+        used, offsetY = paintLines(row, detail, node.lines, LINE_INDENT, used, offsetY)
       end
     end
-    return nil
+  elseif showSteps and model.current then
+    used, offsetY = paintLines(row, detail, model.lines, NODE_INDENT, used, offsetY)
   end
-  local row = list[slot]
-  if row and row.criteriaID == 0 then
-    return row
+  for index = used + 1, #row.lines do
+    row.lines[index].frame:Hide()
   end
-  return nil
+  if used == 0 then
+    detail:Hide()
+    return 0
+  end
+  offsetY = offsetY + DETAIL_PAD
+  detail:SetHeight(offsetY)
+  detail:Show()
+  return offsetY
 end
 
----@param description string|nil
----@param totalQuantity number|nil
----@param weighted boolean
----@param match LDT_Criteria|nil
----@return string|nil, number|nil, boolean
-local function applyCriterion(description, totalQuantity, weighted, match)
-  if not match then
-    return description, totalQuantity, weighted
-  end
-  if not description then
-    description = match.description
-  end
-  if totalQuantity == nil then
-    totalQuantity = match.totalQuantity
-  end
-  if match.isWeightedProgress ~= nil then
-    weighted = match.isWeightedProgress
-  end
-  return description, totalQuantity, weighted
-end
-
----@param stepID number
----@param criteriaID number
----@param slot number
----@return string|nil, number|nil, boolean
-local function criterionFacts(stepID, criteriaID, slot)
-  local description
-  local totalQuantity
-  local weighted = false
-  local known = TableGet(Data.steps, "stepID", stepID)
-  local knownCriteria = known and known.criteria
-  if knownCriteria then
-    description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(knownCriteria, criteriaID, slot))
-  end
-  if Data.db then
-    local learned = Data.db.global.steps[stepID]
-    local learnedCriteria = learned and learned.criteria
-    if learnedCriteria then
-      description, totalQuantity, weighted = applyCriterion(description, totalQuantity, weighted, criterionMatch(learnedCriteria, criteriaID, slot))
-    end
-  end
-  return description, totalQuantity, weighted
-end
-
----@param stepID number
----@param criteria LDT_RunCriteria
----@param slot number
----@return string|nil
-local function objectiveLabel(stepID, criteria, slot)
-  local description, totalQuantity, weighted = criterionFacts(stepID, criteria.criteriaID, slot)
-  description = description or ""
-  local progress
-  if weighted then
-    if criteria.quantity ~= nil then
-      progress = format("%d%%", criteria.quantity)
-    end
-  elseif criteria.quantity ~= nil and totalQuantity ~= nil and totalQuantity > 0 then
-    progress = format("%d/%d", criteria.quantity, totalQuantity)
-  end
-  if progress and progress ~= "" then
-    if description ~= "" then
-      return format("(%s) %s", progress, description)
-    end
-    return format("(%s)", progress)
-  end
-  if description == "" then
-    return nil
-  end
-  return description
-end
-
----@param rows LDT_StepRow[]
----@param run LDT_Run
-local function fillObjectives(rows, run)
-  local scenario = run.scenarios[#run.scenarios]
-  if not scenario then
-    return
-  end
-  local step = scenario.steps[#scenario.steps]
-  if not step then
-    return
-  end
-  local criteria = step.criteria
-  if not criteria or #criteria == 0 then
-    return
-  end
-  ---@type LDT_ObjectiveLine[]
-  local lines = {}
-  for index = 1, #criteria do
-    local criteriaRow = criteria[index]
-    local label = objectiveLabel(step.stepID, criteriaRow, index)
-    if label then
-      ---@type LDT_ObjectiveLine
-      local line = { text = label, completed = criteriaRow.completed == true }
-      lines[#lines + 1] = line
-    end
-  end
-  if #lines == 0 then
-    return
-  end
-  for index = 1, #rows do
-    if rows[index].current then
-      rows[index].objectives = lines
-    end
-  end
-end
-
----@param line LDT_ObjectiveLine
----@return string
-local function objectiveLineText(line)
-  local atlas = OBJECTIVE_NUB
-  if line.completed then
-    atlas = OBJECTIVE_CHECK
-  end
-  local icon = CreateAtlasMarkup(atlas, OBJECTIVE_ICON, OBJECTIVE_ICON) or ""
-  local textColor = CreateColor(0.85, 0.9, 1)
-  if line.completed then
-    textColor = CreateColor(0.65, 0.85, 0.65)
-  end
-  return format("%s %s", icon, textColor:WrapTextInColorCode(line.text))
-end
-
----@param stepRows LDT_StepRow[]
+---@param splits Frame
+---@param splitRows LDT_TimerSplitRow[]
+---@param nodes LDT_TimerNode[]
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
----@param showObjectives boolean
----@return LiqUI_TableData
-local function timetableRows(stepRows, ahead, behind, showObjectives)
-  ---@type LiqUI_TableData
-  local data = {}
-  for index = 1, #stepRows do
-    local model = stepRows[index]
+---@param showSteps boolean
+---@param showCounts boolean
+---@return number
+local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts)
+  local offsetY = 0
+  local stripeIndex = 0
+  for index = 1, #nodes do
+    local model = nodes[index]
+    stripeIndex = stripeIndex + 1
+    local row = ensureSplitRow(splitRows, index, splits)
     local timeText = ""
     local deltaText = ""
     if model.elapsed then
@@ -462,43 +610,30 @@ local function timetableRows(stepRows, ahead, behind, showObjectives)
     if model.best then
       bestText = Helpers.FormatElapsed(model.best) or ""
     end
-    ---@type ColorRGBAData|nil
-    local backgroundColor
+    row.name:SetText(splitLabel(model.name, model.done, model.total, showCounts))
+    row.delta:SetText(deltaText)
+    row.time:SetText(timeText)
+    row.best:SetText(bestText)
     if model.current then
-      backgroundColor = ACTIVE_ROW_COLOR
+      row.background:SetColorTexture(ACTIVE_ROW_COLOR.r, ACTIVE_ROW_COLOR.g, ACTIVE_ROW_COLOR.b, ACTIVE_ROW_COLOR.a)
+    elseif stripeIndex % 2 == 1 then
+      row.background:SetColorTexture(1, 1, 1, 0.08)
+    else
+      row.background:SetColorTexture(0, 0, 0, 0)
     end
-    local objectives = model.objectives
-    local showLines = model.current and showObjectives and objectives and #objectives > 0
-    ---@type LiqUI_TableDataRowExtended
-    local row = {
-      backgroundColor = backgroundColor,
-      -- paddingBottom = showLines and 2 or nil,
-      data = {
-        model.name,
-        deltaText,
-        timeText,
-        bestText,
-      },
-    }
-    data[#data + 1] = row
-    if showLines and objectives then
-      for objectiveIndex = 1, #objectives do
-        ---@type LiqUI_TableDataRowExtended
-        local objectiveRow = {
-          height = OBJECTIVE_ROW_HEIGHT,
-          indent = OBJECTIVE_INDENT,
-          padding = 0,
-          span = true,
-          skipStripe = true,
-          gapBefore = objectiveIndex == 1 and OBJECTIVE_GAP_AFTER or nil,
-          gapAfter = objectiveIndex == #objectives and OBJECTIVE_GAP_AFTER or nil,
-          data = { objectiveLineText(objectives[objectiveIndex]), "", "", "" },
-        }
-        data[#data + 1] = objectiveRow
-      end
-    end
+    local detailHeight = paintDetail(row, model, showSteps)
+    local height = ROW_HEIGHT + detailHeight
+    row.frame:ClearAllPoints()
+    row.frame:SetPoint("TOPLEFT", splits, "TOPLEFT", 0, -offsetY)
+    row.frame:SetPoint("TOPRIGHT", splits, "TOPRIGHT", 0, -offsetY)
+    row.frame:SetHeight(height)
+    row.frame:Show()
+    offsetY = offsetY + height
   end
-  return data
+  for index = #nodes + 1, #splitRows do
+    splitRows[index].frame:Hide()
+  end
+  return offsetY
 end
 
 ---@param run LDT_Run
@@ -546,7 +681,7 @@ function Timer:Render()
     local options = Data.db.global.timer
     ---@type LDT_TimerFrame
     local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
-    frame:SetSize(STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH, HEADER_HEIGHT)
+    frame:SetSize(TABLE_WIDTH, HEADER_HEIGHT)
     frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
@@ -608,42 +743,34 @@ function Timer:Render()
     title:SetWordWrap(false)
     self.title = title
 
-    ---@type LiqUI_TableOptions
-    local tableOptions = {
-      name = addon.name .. "Timer",
-      header = {
-        enabled = true,
-        sticky = false,
-        height = ROW_HEIGHT,
-        fontObject = "GameFontNormal",
-        backgroundAlpha = 0,
-      },
-      rowStyle = {
-        height = ROW_HEIGHT,
-        highlight = false,
-        striped = true,
-        stripeColor = { r = 1, g = 1, b = 1, a = 0.08 },
-      },
-      cellStyle = {
-        padding = CELL_PADDING,
-        highlight = false,
-        fontObject = "GameFontHighlight",
-      },
-      columns = {
-        { id = "stage", headerText = "Stages", width = STAGES_WIDTH, align = "LEFT" },
-        { id = "delta", headerText = "Delta", width = DELTA_WIDTH, align = "RIGHT" },
-        { id = "time", headerText = "Time", width = TIME_WIDTH, align = "RIGHT" },
-        { id = "best", headerText = "Best", width = BEST_WIDTH, align = "RIGHT" },
-      },
-    }
-    local timetable = LiqUI:NewElement("Table", tableOptions)
-    timetable:SetParent(frame)
-    timetable:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
-    self.table = timetable
+    local columns = CreateFrame("Frame", nil, frame)
+    columns:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    columns:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    columns:SetHeight(ROW_HEIGHT)
+    local headerSplits = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerSplits:SetText("Splits")
+    placeColumn(headerSplits, columns, 1, "LEFT")
+    local headerDelta = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerDelta:SetText("Delta")
+    placeColumn(headerDelta, columns, 2, "RIGHT")
+    local headerTime = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerTime:SetText("Time")
+    placeColumn(headerTime, columns, 3, "RIGHT")
+    local headerBest = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerBest:SetText("Best")
+    placeColumn(headerBest, columns, 4, "RIGHT")
+
+    local splits = CreateFrame("Frame", nil, frame)
+    splits:SetPoint("TOPLEFT", columns, "BOTTOMLEFT", 0, 0)
+    splits:SetPoint("TOPRIGHT", columns, "BOTTOMRIGHT", 0, 0)
+    splits:SetHeight(1)
+    self.splits = splits
+    ---@type LDT_TimerSplitRow[]
+    self.splitRows = {}
 
     local clockFrame = CreateFrame("Frame", nil, frame)
-    clockFrame:SetPoint("TOPLEFT", timetable, "BOTTOMLEFT", 0, 0)
-    clockFrame:SetPoint("TOPRIGHT", timetable, "BOTTOMRIGHT", 0, 0)
+    clockFrame:SetPoint("TOPLEFT", splits, "BOTTOMLEFT", 0, 0)
+    clockFrame:SetPoint("TOPRIGHT", splits, "BOTTOMRIGHT", 0, 0)
     clockFrame:SetHeight(CLOCK_HEIGHT)
     self.clockFrame = clockFrame
 
@@ -654,11 +781,17 @@ function Timer:Render()
     self.clock = clock
 
     local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
-    phrase:SetPoint("LEFT", clockFrame, "LEFT", HEADER_PAD, 0)
     phrase:SetPoint("RIGHT", clock, "LEFT", -12, 0)
     phrase:SetJustifyH("RIGHT")
     phrase:SetWordWrap(false)
     self.phrase = phrase
+
+    local cue = clockFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    cue:SetPoint("LEFT", clockFrame, "LEFT", HEADER_PAD, 0)
+    cue:SetPoint("RIGHT", phrase, "LEFT", -8, 0)
+    cue:SetJustifyH("LEFT")
+    cue:SetWordWrap(false)
+    self.cue = cue
 
     frame:Hide()
     frame:SetScript("OnShow", function(shownFrame)
@@ -685,9 +818,11 @@ function Timer:Render()
   local livesIcon = self.livesIcon
   local spells = self.spells
   local spellButtons = self.spellButtons
-  local timetable = self.table
+  local splits = self.splits
+  local splitRows = self.splitRows
   local clockFrame = self.clockFrame
   local clockString = self.clock
+  local cue = self.cue
   local phrase = self.phrase
   if
     not header
@@ -698,9 +833,11 @@ function Timer:Render()
     or not livesIcon
     or not spells
     or not spellButtons
-    or not timetable
+    or not splits
+    or not splitRows
     or not clockFrame
     or not clockString
+    or not cue
     or not phrase
   then
     return
@@ -709,7 +846,7 @@ function Timer:Render()
   local options = Data.db.global.timer
   local inside = Capture:IsInside() or Capture:InInstance()
   local activeRun = inside and Data:GetActiveRun() or nil
-  local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
+  local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.9 }
   local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
   local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
   local behind = options.behindColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
@@ -807,14 +944,12 @@ function Timer:Render()
   spells:ClearAllPoints()
   spells:SetPoint("RIGHT", countAnchor, countPoint, spellOffset, 0)
 
-  local stepRows = {}
+  ---@type LDT_TimerNode[]
+  local nodes = {}
   if activeRun then
-    stepRows = Data:StepRows(activeRun)
-    if options.showObjectives ~= false then
-      fillObjectives(stepRows, activeRun)
-    end
+    nodes = Data:StepRows(activeRun)
   else
-    stepRows = sampleRows(options.showObjectiveCounts ~= false)
+    nodes = sampleRows()
   end
 
   local clockValue
@@ -831,7 +966,7 @@ function Timer:Render()
     if frozen then
       compare = Helpers.BestDuration(activeRun)
     else
-      compare = currentBest(stepRows)
+      compare = currentBest(nodes)
     end
     if clockValue and compare then
       local delta = Helpers.ShownDelta(clockValue, compare)
@@ -842,7 +977,7 @@ function Timer:Render()
     end
   elseif not activeRun then
     clockValue = SAMPLE_CLOCK
-    local compare = currentBest(stepRows)
+    local compare = currentBest(nodes)
     if compare then
       phraseText = Helpers.FormatDelta(Helpers.ShownDelta(SAMPLE_CLOCK, compare))
     end
@@ -856,19 +991,26 @@ function Timer:Render()
   end
   phrase:SetText(phraseText or "")
   phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
-
-  timetable:SetData(timetableRows(stepRows, ahead, behind, options.showObjectives ~= false))
-
-  local tableWidth, tableHeight = timetable:GetSize()
-  if tableWidth < 1 then
-    tableWidth = STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH
+  local cueText = ""
+  if activeRun then
+    cueText = Data:ClockPrompt(activeRun) or ""
   end
-  if tableHeight < 1 then
-    tableHeight = ROW_HEIGHT
-  end
-  timetable:SetSize(tableWidth, tableHeight)
+  cue:SetFontObject("GameFontNormal")
+  cue:SetTextColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b, NODE_COLOR.a)
+  cue:SetText(cueText)
+
+  local splitsHeight = paintSplits(
+    splits,
+    splitRows,
+    nodes,
+    ahead,
+    behind,
+    options.showObjectives ~= false,
+    options.showObjectiveCounts == true
+  )
+  splits:SetHeight(splitsHeight)
   clockFrame:SetHeight(CLOCK_HEIGHT)
-  frame:SetSize(tableWidth, HEADER_HEIGHT + tableHeight + CLOCK_HEIGHT)
+  frame:SetSize(TABLE_WIDTH, HEADER_HEIGHT + ROW_HEIGHT + splitsHeight + CLOCK_HEIGHT)
 end
 
 function Timer:ShowRun()

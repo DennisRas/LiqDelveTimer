@@ -48,9 +48,11 @@
 ---@field livesIcon Texture|nil
 ---@field spells Frame|nil
 ---@field spellButtons LDT_TimerSpell[]|nil
----@field table LiqUI_TableInstance|nil
+---@field splits Frame|nil
+---@field splitRows LDT_TimerSplitRow[]|nil
 ---@field clockFrame Frame|nil
 ---@field clock FontString|nil
+---@field cue FontString|nil
 ---@field phrase FontString|nil
 
 ---@class LDT_Module_Run : AceModule
