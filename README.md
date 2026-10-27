@@ -1,16 +1,17 @@
 # Liq Delve Timer
 
-Liq Delve Timer is a speedrun timer for delves.
-The clock starts when you enter the delve. Good luck!
+Lost track of how long a delve took, or which chamber slowed the Labyrinth down?
+
+Liq Delve Timer is a speedrun clock for delves and the Labyrinth of Kindo'jan.  
+It saves each visit so you can compare it with your best. Good luck!
 
 ## Features
 
-- Times the delve from entry until you leave.
-- Shows timers, companion progress, boons, gold, currencies, renown, and loot.
-- Compares the run with your best clear of that delve at the same tier.
-- Keeps a history of every run, so you can go back in time and see your previous runs.
-- Works with the Labyrinth of Kindo'jan, including its chambers.
-- Minimap button opens the tracker, settings, or History.
+- Times the visit from entry until the clear.
+- Splits a delve into stages and splits the Labyrinth into Chambers.
+- Opens Lab chamber doors automatically when enabled.
+- Compares the run, and each split, with your best clear at that tier.
+- Keeps a history of every run; The summary, the companion, the boons, the rewards, and a Timeline of the whole visit.
 
 ## Slash commands
 
