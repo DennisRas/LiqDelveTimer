@@ -1,6 +1,5 @@
 # Changelog
 
-## v0.1.0 - TBD
+## v1.0.0 - 2026-10-28
 
 - First release.
-- Updated performance.

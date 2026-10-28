@@ -5,12 +5,67 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
-local LiqUI = addon.libs.LiqUI
-local TableForEach = LiqUI.Utils.TableForEach
+local Constants = addon.Constants
+
+---@param value string|nil
+---@return string|nil
+function Helpers.ReadPlainString(value)
+  if type(value) ~= "string" or issecretvalue(value) or value == "" then
+    return nil
+  end
+  return value
+end
+
+---@param value number|nil
+---@return number|nil
+function Helpers.ReadPlainNumber(value)
+  if type(value) ~= "number" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param value boolean|nil
+---@return boolean|nil
+function Helpers.ReadPlainBoolean(value)
+  if type(value) ~= "boolean" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param delta number
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return ColorRGBAData
+function Helpers.FindDeltaColor(delta, ahead, behind)
+  if delta > 0 then
+    return behind
+  end
+  return ahead
+end
+
+---@param texture Texture
+function Helpers.RoundIcon(texture)
+  local parent = texture:GetParent()
+  if not parent then
+    return
+  end
+  texture:ClearAllPoints()
+  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
+  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
+  local mask = parent:CreateMaskTexture()
+  mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  mask:SetAllPoints(texture)
+  texture:AddMaskTexture(mask)
+  local ring = parent:CreateTexture(nil, "OVERLAY")
+  ring:SetAllPoints(parent)
+  ring:SetAtlas(Constants.media.AffixRing)
+end
 
 ---@param value string
 ---@return number|nil, boolean
-function Helpers.BoonAmount(value)
+function Helpers.ParseBoonAmount(value)
   local cleaned = value:gsub("%s+$", ""):gsub("%.$", "")
   local percent = cleaned:find("%%", 1, true) ~= nil
   local numberText = cleaned:match("([%+%-]?%d+%.?%d*)")
@@ -32,25 +87,42 @@ function Helpers.FormatBoonAmount(amount)
   return text .. "%"
 end
 
----@param elapsed number|nil
----@return string
-function Helpers.FormatElapsed(elapsed)
-  local secondsElapsed = 0
-  if elapsed then
-    if elapsed >= 0 then
-      secondsElapsed = elapsed
-    end
+---@param milliseconds number|nil
+---@return number
+function Helpers.RoundShown(milliseconds)
+  local ms = milliseconds or 0
+  local sign = 1
+  if ms < 0 then
+    sign = -1
+    ms = -ms
   end
-  local tenths = math.floor((secondsElapsed * 10) % 10)
-  local whole = math.floor(secondsElapsed)
+  return sign * math.floor(ms / 10 + 0.5) * 10
+end
+
+---@param left number
+---@param right number
+---@return number
+function Helpers.RoundShownDelta(left, right)
+  return Helpers.RoundShown(left) - Helpers.RoundShown(right)
+end
+
+---@param milliseconds number|nil
+---@return string
+function Helpers.FormatElapsed(milliseconds)
+  local shown = Helpers.RoundShown(milliseconds)
+  if shown < 0 then
+    shown = -shown
+  end
+  local hundredths = math.floor(shown / 10) % 100
+  local whole = math.floor(shown / 1000)
   local seconds = whole % 60
   local minutes = math.floor(whole / 60)
   local hours = math.floor(minutes / 60)
   minutes = minutes % 60
   if hours > 0 then
-    return format("%d:%02d:%02d.%d", hours, minutes, seconds, tenths)
+    return format("%d:%02d:%02d.%02d", hours, minutes, seconds, hundredths)
   end
-  return format("%d:%02d.%d", minutes, seconds, tenths)
+  return format("%d:%02d.%02d", minutes, seconds, hundredths)
 end
 
 ---@param copper number|nil
@@ -67,7 +139,7 @@ end
 
 ---@param itemID number|nil
 ---@return boolean
-function Helpers.ItemHidden(itemID)
+function Helpers.IsItemHidden(itemID)
   return itemID ~= nil and addon.Data.hiddenItemIDs[itemID] == true
 end
 
@@ -77,84 +149,151 @@ function Helpers.FormatDelta(delta)
   if not delta then
     return ""
   end
+  local shown = Helpers.RoundShown(delta)
   local sign = "+"
-  if delta < -0.05 then
+  if shown < 0 then
     sign = "-"
-    delta = -delta
-  elseif delta <= 0.05 then
-    return Helpers.FormatElapsed(0)
+    shown = -shown
   end
-  return sign .. Helpers.FormatElapsed(delta)
+  local text = format("%s%s", sign, Helpers.FormatElapsed(shown))
+  if text then
+    return text
+  end
+  return ""
 end
 
----@param record LDT_Record
+---@param result string|nil
+---@return boolean
+function Helpers.IsCleared(result)
+  return result == addon.Constants.runResult.Completed or result == addon.Constants.runResult.PersonalBest or result == "complete"
+end
+
+---@param result string|nil
+---@return boolean
+function Helpers.IsAbandoned(result)
+  return result == addon.Constants.runResult.Abandoned or result == "left"
+end
+
+---@param result string|nil
+---@return string
+function Helpers.FormatResult(result)
+  if result == addon.Constants.runResult.PersonalBest then
+    return "Personal Best"
+  end
+  if Helpers.IsCleared(result) then
+    return "Completed"
+  end
+  if Helpers.IsAbandoned(result) then
+    return "Abandoned"
+  end
+  if result == addon.Constants.runResult.Active then
+    return "In progress"
+  end
+  return ""
+end
+
+---@param result string|nil
+---@return number, number, number
+function Helpers.FindResultColor(result)
+  if result == addon.Constants.runResult.PersonalBest then
+    local timer = addon.Data.db and addon.Data.db.global.timer
+    local color = timer and timer.aheadColor
+    if color then
+      return color.r, color.g, color.b
+    end
+    return 0.35, 0.9, 0.5
+  end
+  if Helpers.IsAbandoned(result) then
+    return 1, 0.35, 0.35
+  end
+  return 0.95, 0.95, 0.95
+end
+
+---@param run LDT_Run
 ---@return number|nil
-function Helpers.RunTier(record)
-  local tier = record.entrance and record.entrance.tierInfo and record.entrance.tierInfo.tier
+function Helpers.FindTier(run)
+  local tier = run.entrance and run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     return tier
   end
   return nil
 end
 
----@param record LDT_Record
+---@param run LDT_Run
 ---@return number|nil
-function Helpers.CompletionTime(record)
-  if record.finishedElapsed then
-    return record.finishedElapsed
-  end
-  if record.bossElapsed then
-    return record.bossElapsed
-  end
-  if record.result ~= addon.Constants.runResult.Active and record.endedElapsed then
-    return record.endedElapsed
-  end
-  return nil
-end
-
----@param record LDT_Record
----@return LDT_Record|nil
-function Helpers.BestRun(record)
-  local character = addon.Data:GetCharacter()
-  local instance = record.instance
-  if not character or not instance then
+function Helpers.FindDuration(run)
+  if not run.endedAt then
     return nil
   end
-  local tier = Helpers.RunTier(record)
+  return run.endedAt - run.startedAt
+end
+
+---@param milliseconds number
+---@param length LDT_DateLengthId
+---@return string
+function Helpers.FormatDate(milliseconds, length)
+  local pattern = "%Y-%m-%d %H:%M"
+  if length == addon.Constants.dateLength.Full then
+    pattern = "%Y-%m-%d %H:%M:%S"
+  end
+  local text = date(pattern, math.floor(milliseconds / 1000))
+  if type(text) ~= "string" then
+    return ""
+  end
+  return text
+end
+
+---@param run LDT_Run
+---@return LDT_Run|nil
+function Helpers.FindBestRun(run)
+  local tier = Helpers.FindTier(run)
   if not tier then
     return nil
   end
-  local mapID = instance.mapID
-  local name = instance.name
+  local mode = run.mode
+  local scenarioID
+  if mode ~= addon.Constants.runMode.Lab then
+    local first = run.scenarios[1]
+    scenarioID = first and first.scenarioID
+    if not scenarioID then
+      return nil
+    end
+  end
   local best
   local bestTime
-  TableForEach(character.records, function(candidate)
-    if candidate == record or candidate.result ~= addon.Constants.runResult.Complete then
+  addon.Data:ForEachRun(function(saved)
+    if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.RunTier(candidate) ~= tier then
+    if Helpers.FindTier(saved) ~= tier or saved.mode ~= mode then
       return
     end
-    local candidateInstance = candidate.instance
-    local samePlace = false
-    if mapID and candidateInstance and candidateInstance.mapID == mapID then
-      samePlace = true
-    elseif name and name ~= "" and candidateInstance and candidateInstance.name == name then
-      samePlace = true
+    if scenarioID then
+      local savedFirst = saved.scenarios[1]
+      if not savedFirst or savedFirst.scenarioID ~= scenarioID then
+        return
+      end
     end
-    if not samePlace then
-      return
-    end
-    local time = Helpers.CompletionTime(candidate)
+    local time = Helpers.FindDuration(saved)
     if not time then
       return
     end
     if not bestTime or time < bestTime then
-      best = candidate
+      best = saved
       bestTime = time
     end
   end)
   return best
+end
+
+---@param run LDT_Run
+---@return number|nil
+function Helpers.FindBestDuration(run)
+  local best = run.best
+  if not best or not best.endedAt or not best.startedAt then
+    return nil
+  end
+  return best.endedAt - best.startedAt
 end
 
 local listedCurrencyIDs
@@ -163,7 +302,7 @@ local listedCurrencyAt
 
 ---@param currencyID number|nil
 ---@return boolean
-function Helpers.CurrencyListed(currencyID)
+function Helpers.IsCurrencyListed(currencyID)
   if not currencyID or currencyID <= 0 then
     return false
   end

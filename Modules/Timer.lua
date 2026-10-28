@@ -8,17 +8,43 @@ addon.Module_Timer = Timer
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local FormatElapsed = Helpers.FormatElapsed
+local RoundShownDelta = Helpers.RoundShownDelta
+local FindDeltaColor = Helpers.FindDeltaColor
+local FormatDelta = Helpers.FormatDelta
+local FindTier = Helpers.FindTier
+local RoundIcon = Helpers.RoundIcon
+local FindDuration = Helpers.FindDuration
+local FindBestDuration = Helpers.FindBestDuration
 local Capture = addon.Capture
-local LiqUI = addon.libs.LiqUI
-local TableForEach = LiqUI.Utils.TableForEach
 
-local HEADER_HEIGHT = 28
-local ICON_SIZE = 16
-local ICON_GAP = 4
-local TIME_WIDTH = 72
-local COLUMN_GAP = 20
-local ROW_HEIGHT = 16
-local NUMBER_FONT = "Fonts\\ARIALN.TTF"
+---@param icon Texture
+---@param text FontString
+---@param atlas string
+---@param count number|nil
+---@param anchor Region
+---@param point string
+---@param offsetX number
+---@return Region
+---@return string
+---@return number
+local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
+  text:SetFont(Constants.media.NumberFont, Constants.sizes.timer.metaFont, "")
+  icon:ClearAllPoints()
+  text:ClearAllPoints()
+  if count == nil then
+    icon:Hide()
+    text:Hide()
+    return anchor, point, offsetX
+  end
+  icon:SetAtlas(atlas)
+  icon:Show()
+  text:SetText(tostring(count))
+  text:Show()
+  icon:SetPoint("RIGHT", anchor, point, offsetX, 0)
+  text:SetPoint("RIGHT", icon, "LEFT", -Constants.sizes.timer.iconGap, 0)
+  return text, "LEFT", -Constants.sizes.timer.iconGap
+end
 
 ---@param color ColorRGBAData
 ---@param apply function
@@ -69,62 +95,17 @@ local function showColorPicker(color, apply)
   ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
 end
 
----@param owner Frame
----@param text string
-local function bindTooltip(owner, text)
-  owner:SetScript("OnEnter", function()
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    GameTooltip:SetText(text, 1, 1, 1)
-    GameTooltip:Show()
-  end)
-  owner:SetScript("OnLeave", GameTooltip_Hide)
-end
+local paintRemaining = 0
 
----@param record LDT_Record
----@param stepName string
----@return number|nil
-local function bestChamberTime(record, stepName)
-  local character = Data:GetCharacter()
-  if not character then
-    return nil
-  end
-  local tier = Helpers.RunTier(record)
-  local mapID = record.instance and record.instance.mapID
-  local best
-  TableForEach(character.records, function(candidate)
-    if candidate == record or candidate.result ~= Constants.runResult.Complete or not candidate.labyrinth then
-      return
-    end
-    if tier and Helpers.RunTier(candidate) ~= tier then
-      return
-    end
-    local candidateMap = candidate.instance and candidate.instance.mapID
-    if mapID and candidateMap ~= mapID then
-      return
-    end
-    TableForEach(candidate.chambers, function(chamber)
-      if chamber.name == stepName and chamber.completedElapsed and (not best or chamber.completedElapsed < best) then
-        best = chamber.completedElapsed
-      end
-    end)
-  end)
-  return best
-end
-
-function Timer:StartTicker()
-  if self.ticker then
+---@param _frame Frame
+---@param elapsed number
+local function onPaintUpdate(_frame, elapsed)
+  paintRemaining = paintRemaining - elapsed
+  if paintRemaining > 0 then
     return
   end
-  self.ticker = C_Timer.NewTicker(0.1, function()
-    Timer:Render()
-  end)
-end
-
-function Timer:StopTicker()
-  if self.ticker then
-    self.ticker:Cancel()
-    self.ticker = nil
-  end
+  paintRemaining = Constants.timing.paint
+  Timer:Render()
 end
 
 ---@param rootMenu RootMenuDescriptionProxy
@@ -149,21 +130,27 @@ function Timer:OpenMenu(owner)
       options.replaceTracker = not options.replaceTracker
       Capture:Sync()
     end)
+    rootMenu:CreateCheckbox("Show objective count", function()
+      return options.showObjectiveCounts == true
+    end, function()
+      options.showObjectiveCounts = options.showObjectiveCounts ~= true
+      Timer:Render()
+    end)
+    rootMenu:CreateCheckbox("Show objective steps", function()
+      return options.showObjectives ~= false
+    end, function()
+      options.showObjectives = options.showObjectives == false
+      Timer:Render()
+    end)
+    rootMenu:CreateCheckbox("Automatically open chambers", function()
+      return options.autoOpenChambers ~= false
+    end, function()
+      options.autoOpenChambers = options.autoOpenChambers == false
+    end)
     addColorSwatch(rootMenu, "Faster than best", options.aheadColor)
     addColorSwatch(rootMenu, "Slower than best", options.behindColor)
     addColorSwatch(rootMenu, "Background", options.backgroundColor)
     addColorSwatch(rootMenu, "Border", options.borderColor)
-    local sizeMenu = rootMenu:CreateButton("Font size")
-    local sizes = { 10, 12, 14, 16 }
-    for index = 1, #sizes do
-      local size = sizes[index]
-      sizeMenu:CreateRadio(tostring(size), function()
-        return options.fontSize == size
-      end, function()
-        options.fontSize = size
-        Timer:Render()
-      end)
-    end
   end)
 end
 
@@ -194,293 +181,679 @@ function Timer:Place()
   frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
 end
 
-function Timer:Build()
-  if self.frame then
+---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
+---@param shown boolean
+---@param fromGame boolean|nil
+function Timer:ApplyFrameShown(shown, fromGame)
+  if not self.frame then
+    self:Render()
+  end
+  local frame = self.frame
+  if not frame then
     return
   end
-  local options = Data.db.global.timer
-  ---@type LDT_TimerFrame
-  local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
-  frame:SetSize(280, 80)
-  frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
-  frame:SetMovable(true)
-  frame:SetClampedToScreen(true)
-  frame:SetFrameStrata("HIGH")
-  self.frame = frame
-
-  local header = CreateFrame("Button", nil, frame)
-  header:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -4)
-  header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -4)
-  header:SetHeight(HEADER_HEIGHT)
-  header:RegisterForDrag("LeftButton")
-  header:SetScript("OnDragStart", function()
-    frame:StartMoving()
-  end)
-  header:SetScript("OnDragStop", function()
-    frame:StopMovingOrSizing()
-    Timer:SaveScreenPoint()
-  end)
-  self.header = header
-
-  local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("LEFT", header, "LEFT", 0, 0)
-  title:SetJustifyH("LEFT")
-  title:SetWordWrap(false)
-  self.title = title
-
-  local closeButton = CreateFrame("Button", nil, header)
-  closeButton:SetSize(ICON_SIZE, ICON_SIZE)
-  closeButton:SetPoint("RIGHT", header, "RIGHT", 0, 0)
-  local closeIcon = closeButton:CreateTexture(nil, "ARTWORK")
-  closeIcon:SetAllPoints()
-  closeIcon:SetAtlas("common-search-clearbutton")
-  closeButton:SetScript("OnClick", function()
+  if shown then
+    if fromGame then
+      if not frame:IsShown() then
+        Capture.timerFromGame = true
+      end
+    else
+      Capture.timerFromGame = false
+    end
+    frame:Show()
+    frame:Raise()
+    return
+  end
+  if not fromGame then
     Capture.timerFromGame = false
-    frame:Hide()
-  end)
-  bindTooltip(closeButton, "Close")
-
-  local settingsButton = CreateFrame("DropdownButton", nil, header)
-  settingsButton:SetSize(ICON_SIZE, ICON_SIZE)
-  settingsButton:SetPoint("RIGHT", closeButton, "LEFT", -ICON_GAP, 0)
-  local settingsIcon = settingsButton:CreateTexture(nil, "ARTWORK")
-  settingsIcon:SetAllPoints()
-  settingsIcon:SetTexture(LiqUI.Constants.layout.media.iconSettings)
-  settingsButton:SetScript("OnClick", function()
-    Timer:OpenMenu(settingsButton)
-  end)
-  bindTooltip(settingsButton, "Settings")
-
-  local recordsButton = CreateFrame("Button", nil, header)
-  recordsButton:SetSize(ICON_SIZE, ICON_SIZE)
-  recordsButton:SetPoint("RIGHT", settingsButton, "LEFT", -ICON_GAP, 0)
-  local recordsIcon = recordsButton:CreateTexture(nil, "ARTWORK")
-  recordsIcon:SetAllPoints()
-  recordsIcon:SetTexture(Constants.media.Icon)
-  recordsButton:SetScript("OnClick", function()
-    if addon.Module_Records then
-      addon.Module_Records:ToggleWindow()
-    end
-  end)
-  bindTooltip(recordsButton, "Records")
-
-  local reportButton = CreateFrame("Button", nil, header)
-  reportButton:SetSize(ICON_SIZE, ICON_SIZE)
-  reportButton:SetPoint("RIGHT", recordsButton, "LEFT", -ICON_GAP, 0)
-  local reportIcon = reportButton:CreateTexture(nil, "ARTWORK")
-  reportIcon:SetAllPoints()
-  reportIcon:SetAtlas("poi-door-arrow-down")
-  reportButton:SetScript("OnClick", function()
-    if addon.Module_Report then
-      addon.Module_Report:ShowRecord(Data:GetActiveRecord())
-    end
-  end)
-  bindTooltip(reportButton, "Report")
-
-  local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  deaths:SetPoint("RIGHT", reportButton, "LEFT", -8, 0)
-  deaths:SetJustifyH("RIGHT")
-  self.deaths = deaths
-  title:SetPoint("RIGHT", deaths, "LEFT", -8, 0)
-
-  local spells = CreateFrame("Frame", nil, frame)
-  spells:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -2)
-  spells:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -2)
-  spells:SetHeight(ICON_SIZE)
-  self.spells = spells
-  ---@type LDT_TimerSpell[]
-  self.spellButtons = {}
-
-  local clock = frame:CreateFontString(nil, "OVERLAY")
-  clock:SetJustifyH("LEFT")
-  self.clock = clock
-
-  local phrase = frame:CreateFontString(nil, "OVERLAY")
-  phrase:SetJustifyH("LEFT")
-  self.phrase = phrase
-
-  local timeHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  timeHeader:SetJustifyH("RIGHT")
-  timeHeader:SetText("Time")
-  self.timeHeader = timeHeader
-
-  local bestHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  bestHeader:SetJustifyH("RIGHT")
-  bestHeader:SetText("Best")
-  self.bestHeader = bestHeader
-
-  ---@type LDT_TimerRow[]
-  self.rows = {}
-
-  frame:SetScript("OnShow", function()
-    Timer:Place()
-    Timer:StartTicker()
-    Timer:Render()
-  end)
-  frame:SetScript("OnHide", function()
-    Timer:StopTicker()
-  end)
+  end
+  frame:Hide()
 end
 
----@param parent Frame
----@return LDT_TimerRow
-function Timer:CreateRow(parent)
-  local highlight = parent:CreateTexture(nil, "BACKGROUND")
-  highlight:SetColorTexture(1, 1, 1, 0.06)
-  highlight:Hide()
-  local name = parent:CreateFontString(nil, "OVERLAY")
-  name:SetJustifyH("LEFT")
-  name:SetWordWrap(false)
-  local timeText = parent:CreateFontString(nil, "OVERLAY")
-  timeText:SetJustifyH("RIGHT")
-  local bestText = parent:CreateFontString(nil, "OVERLAY")
-  bestText:SetJustifyH("RIGHT")
-  ---@type LDT_TimerRow
-  local row = {
-    name = name,
-    time = timeText,
-    best = bestText,
-    highlight = highlight,
+local SAMPLE_TITLE = "The Shadow Enclave (Tier 11)"
+local SAMPLE_DEATHS = 1
+local SAMPLE_LIVES = 4
+local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
+local SAMPLE_CLOCK = 154000
+
+---@param nodes LDT_TimerNode[]
+---@return number|nil
+local function findCurrentBest(nodes)
+  for index = 1, #nodes do
+    local node = nodes[index]
+    if node.current then
+      return node.best
+    end
+  end
+  return nil
+end
+
+---@return LDT_TimerNode[]
+local function buildSampleRows()
+  ---@type LDT_TimerNode[]
+  local rows = {}
+  ---@type LDT_TimerNode
+  local rowOne = { name = "Stage 1", elapsed = 84200, best = 90000, current = false, done = 1, total = 1 }
+  ---@type LDT_TimerLine
+  local openGate = { text = "(1/1) Open the gate", completed = true }
+  ---@type LDT_TimerLine
+  local cultists = { text = "(1/3) Kill the cultists", completed = false }
+  ---@type LDT_TimerLine
+  local ritual = { text = "(40%) Disrupt the ritual", completed = false }
+  ---@type LDT_TimerLine[]
+  local sampleLines = { openGate, cultists, ritual }
+  ---@type LDT_TimerNode
+  local rowTwo = {
+    name = "Stage 2",
+    elapsed = nil,
+    best = 160000,
+    current = true,
+    lines = sampleLines,
+    done = 0,
+    total = 3,
   }
+  ---@type LDT_TimerNode
+  local rowThree = { name = "Stage 3", elapsed = nil, best = 230000, current = false, done = 0, total = 2 }
+  ---@type LDT_TimerNode
+  local rowFour = { name = "Stage 4", elapsed = nil, best = 310000, current = false, done = 0, total = 1 }
+  ---@type LDT_TimerNode
+  local rowFive = { name = "Stage 5", elapsed = nil, best = 390000, current = false, done = 0, total = 4 }
+  rows[1] = rowOne
+  rows[2] = rowTwo
+  rows[3] = rowThree
+  rows[4] = rowFour
+  rows[5] = rowFive
+  return rows
+end
+
+---@param name string
+---@param done number|nil
+---@param total number|nil
+---@param showCounts boolean
+---@return string
+local function formatSplitLabel(name, done, total, showCounts)
+  if not showCounts or total == nil or total < 1 then
+    return name
+  end
+  return format("%s (%d/%d)", name, done or 0, total)
+end
+
+---@param fontString FontString
+---@param parent Frame
+---@param column integer
+---@param align "LEFT"|"RIGHT"
+local function placeColumn(fontString, parent, column, align)
+  local x = Constants.sizes.timer.columnX[column] or 0
+  local width = Constants.sizes.timer.columnWidth[column] or 0
+  fontString:ClearAllPoints()
+  fontString:SetWidth(width - Constants.sizes.timer.padding * 2)
+  fontString:SetJustifyH(align)
+  fontString:SetWordWrap(false)
+  if align == "RIGHT" then
+    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - Constants.sizes.timer.padding, -Constants.sizes.timer.row / 2)
+  else
+    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + Constants.sizes.timer.padding, -Constants.sizes.timer.row / 2)
+  end
+end
+
+---@param rows LDT_TimerSplitRow[]
+---@param index integer
+---@param parent Frame
+---@return LDT_TimerSplitRow
+local function createSplitRow(rows, index, parent)
+  local existing = rows[index]
+  if existing then
+    return existing
+  end
+  local frame = CreateFrame("Frame", nil, parent)
+  local bar = CreateFrame("Frame", nil, frame)
+  bar:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+  bar:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+  bar:SetHeight(Constants.sizes.timer.row)
+  local background = bar:CreateTexture(nil, "BACKGROUND")
+  background:SetAllPoints()
+  local name = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local delta = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local time = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  local best = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  placeColumn(name, bar, 1, "LEFT")
+  placeColumn(delta, bar, 2, "RIGHT")
+  placeColumn(time, bar, 3, "RIGHT")
+  placeColumn(best, bar, 4, "RIGHT")
+  local detail = CreateFrame("Frame", nil, frame)
+  detail:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
+  detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
+  local detailBackground = detail:CreateTexture(nil, "BACKGROUND")
+  detailBackground:SetAllPoints()
+  detailBackground:SetColorTexture(Constants.colors.wash.r, Constants.colors.wash.g, Constants.colors.wash.b, Constants.colors.wash.a)
+  ---@type LDT_TimerDetailLine[]
+  local lines = {}
+  ---@type LDT_TimerSplitRow
+  local row = {
+    frame = frame,
+    bar = bar,
+    background = background,
+    name = name,
+    delta = delta,
+    time = time,
+    best = best,
+    detail = detail,
+    lines = lines,
+  }
+  rows[index] = row
   return row
 end
 
----@param record LDT_Record
----@return { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-function Timer:StepRows(record)
-  ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-  local rows = {}
-  if record.labyrinth then
-    local currentName = record.watch and record.watch.routeStep
-    local chambers = record.chambers or {}
-    for index = 1, #chambers do
-      local chamber = chambers[index]
-      rows[#rows + 1] = {
-        name = chamber.name,
-        elapsed = chamber.completedElapsed,
-        best = bestChamberTime(record, chamber.name),
-        current = chamber.name == currentName and chamber.completedElapsed == nil,
-      }
-    end
-    return rows
+---@param row LDT_TimerSplitRow
+---@param index integer
+---@return LDT_TimerDetailLine
+local function createDetailLine(row, index)
+  local existing = row.lines[index]
+  if existing then
+    return existing
   end
-  local route
-  if record.routeID then
-    route = Data.db.global.routes[record.routeID]
-  end
-  ---@type string[]
-  local steps = {}
-  if route then
-    steps = route.steps
-  end
-  local currentName = record.watch and record.watch.routeStep
-  for index = 1, #steps do
-    local stepName = steps[index]
-    local elapsed = record.splits and record.splits[stepName]
-    rows[#rows + 1] = {
-      name = stepName,
-      elapsed = elapsed,
-      best = Data:BestSplit(record, stepName),
-      current = stepName == currentName and elapsed == nil,
-    }
-  end
-  return rows
+  local frame = CreateFrame("Frame", nil, row.detail)
+  local icon = frame:CreateTexture(nil, "OVERLAY")
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
+  local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  local time = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ---@type LDT_TimerDetailLine
+  local line = {
+    frame = frame,
+    icon = icon,
+    text = text,
+    time = time,
+  }
+  row.lines[index] = line
+  return line
 end
 
----@param preview LDT_Preview
----@return { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-function Timer:PreviewRows(preview)
-  ---@type { name: string, elapsed: number|nil, best: number|nil, current: boolean }[]
-  local rows = {}
-  local route
-  if preview.routeID then
-    route = Data.db.global.routes[preview.routeID]
+---@param line LDT_TimerDetailLine
+---@param detail Frame
+---@param label string
+---@param title string|nil
+---@param offsetY number
+local function paintNode(line, detail, label, title, offsetY)
+  local frame = line.frame
+  frame:SetScript("OnEnter", nil)
+  frame:SetScript("OnLeave", nil)
+  frame:EnableMouse(false)
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
+  frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
+  frame:SetHeight(Constants.sizes.timer.line)
+  local icon = line.icon
+  icon:ClearAllPoints()
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
+  icon:SetPoint("LEFT", frame, "LEFT", Constants.sizes.timer.nodeIndent, 0)
+  icon:SetAtlas(Constants.media.MarkNub)
+  icon:SetVertexColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
+  icon:Show()
+  local textLeft = Constants.sizes.timer.nodeIndent + Constants.sizes.timer.mark + Constants.sizes.timer.markGap
+  local shown = label
+  if title and title ~= "" then
+    shown = format("%s: %s", label, WHITE_FONT_COLOR:WrapTextInColorCode(title))
   end
-  ---@type string[]
-  local steps = {}
-  if route then
-    steps = route.steps
+  local text = line.text
+  text:SetFontObject("GameFontNormal")
+  text:SetTextColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
+  text:SetWordWrap(false)
+  text:SetJustifyH("LEFT")
+  text:SetJustifyV("MIDDLE")
+  text:ClearAllPoints()
+  text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
+  text:SetWidth(Constants.sizes.timer.width - textLeft - Constants.sizes.timer.padding)
+  text:SetText(shown)
+  line.time:Hide()
+  frame:Show()
+end
+
+---@param line LDT_TimerDetailLine
+---@param detail Frame
+---@param entry LDT_TimerLine
+---@param offsetY number
+---@param indent number
+---@return number
+local function paintLine(line, detail, entry, offsetY, indent)
+  local frame = line.frame
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
+  frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
+  local textLeft = indent + Constants.sizes.timer.mark + Constants.sizes.timer.markGap
+  local textWidth = Constants.sizes.timer.width - textLeft - Constants.sizes.timer.padding
+  local color = Constants.colors.objective
+  local atlas = Constants.media.MarkNub
+  if entry.completed then
+    color = Constants.colors.objectiveDone
+    atlas = Constants.media.MarkCheck
   end
-  for index = 1, #steps do
-    local stepName = steps[index]
-    rows[#rows + 1] = {
-      name = stepName,
-      elapsed = nil,
-      best = Data:BestSplitFor(preview.routeID, preview.tier, stepName),
-      current = false,
-    }
+  local text = line.text
+  text:SetFontObject("GameFontHighlightSmall")
+  text:SetTextColor(color.r, color.g, color.b)
+  text:SetJustifyH("LEFT")
+  text:SetWordWrap(false)
+  text:ClearAllPoints()
+  text:SetWidth(textWidth)
+  text:SetText(entry.text)
+  local oneLine = text:GetStringHeight()
+  text:SetWordWrap(true)
+  local textHeight = text:GetStringHeight()
+  if oneLine < 1 then
+    oneLine = Constants.sizes.timer.line
   end
-  return rows
+  if textHeight < oneLine then
+    textHeight = oneLine
+  end
+  local wrapped = textHeight > oneLine + 1
+  local rowHeight = Constants.sizes.timer.line
+  if wrapped and textHeight > rowHeight then
+    rowHeight = textHeight
+  end
+  frame:SetHeight(rowHeight)
+  local icon = line.icon
+  icon:ClearAllPoints()
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
+  icon:SetAtlas(atlas)
+  icon:SetVertexColor(color.r, color.g, color.b)
+  icon:Show()
+  if wrapped then
+    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -Constants.sizes.timer.line / 2)
+    text:SetJustifyV("TOP")
+    text:SetPoint("TOPLEFT", frame, "TOPLEFT", textLeft, 0)
+    text:SetHeight(textHeight)
+  else
+    icon:SetPoint("LEFT", frame, "LEFT", indent, 0)
+    text:SetJustifyV("MIDDLE")
+    text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
+    text:SetHeight(Constants.sizes.timer.line)
+  end
+  line.time:Hide()
+  local plain = entry.text
+  frame:EnableMouse(true)
+  frame:SetScript("OnEnter", function(owner)
+    if not wrapped then
+      return
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetText(plain, 1, 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  frame:SetScript("OnLeave", GameTooltip_Hide)
+  frame:Show()
+  return rowHeight
+end
+
+---@param row LDT_TimerSplitRow
+---@param detail Frame
+---@param lines LDT_TimerLine[]|nil
+---@param indent number
+---@param used number
+---@param offsetY number
+---@return number
+---@return number
+local function paintLines(row, detail, lines, indent, used, offsetY)
+  if not lines then
+    return used, offsetY
+  end
+  for index = 1, #lines do
+    used = used + 1
+    local line = createDetailLine(row, used)
+    local height = paintLine(line, detail, lines[index], offsetY, indent)
+    offsetY = offsetY + height
+  end
+  return used, offsetY
+end
+
+---@param row LDT_TimerSplitRow
+---@param model LDT_TimerNode
+---@param showSteps boolean
+---@return number
+local function paintDetail(row, model, showSteps)
+  local detail = row.detail
+  local used = 0
+  local offsetY = Constants.sizes.timer.detailPad
+  local nodes = model.nodes
+  if showSteps and model.current and nodes and #nodes > 0 then
+    for index = 1, #nodes do
+      local node = nodes[index]
+      used = used + 1
+      local line = createDetailLine(row, used)
+      paintNode(line, detail, node.name, node.title, offsetY)
+      offsetY = offsetY + Constants.sizes.timer.line
+      if node.current then
+        used, offsetY = paintLines(row, detail, node.lines, Constants.sizes.timer.lineIndent, used, offsetY)
+      end
+    end
+  elseif showSteps and model.current then
+    used, offsetY = paintLines(row, detail, model.lines, Constants.sizes.timer.nodeIndent, used, offsetY)
+  end
+  for index = used + 1, #row.lines do
+    row.lines[index].frame:Hide()
+  end
+  if used == 0 then
+    detail:Hide()
+    return 0
+  end
+  offsetY = offsetY + Constants.sizes.timer.detailPad
+  detail:SetHeight(offsetY)
+  detail:Show()
+  return offsetY
+end
+
+---@param splits Frame
+---@param splitRows LDT_TimerSplitRow[]
+---@param nodes LDT_TimerNode[]
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@param showSteps boolean
+---@param showCounts boolean
+---@return number
+local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts)
+  local offsetY = 0
+  local stripeIndex = 0
+  for index = 1, #nodes do
+    local model = nodes[index]
+    stripeIndex = stripeIndex + 1
+    local row = createSplitRow(splitRows, index, splits)
+    local timeText = ""
+    local deltaText = ""
+    if model.elapsed then
+      timeText = FormatElapsed(model.elapsed) or ""
+      local delta = 0
+      if model.best then
+        delta = RoundShownDelta(model.elapsed, model.best)
+      end
+      local deltaColor = FindDeltaColor(delta, ahead, behind)
+      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta))
+    end
+    local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
+    if model.best then
+      bestText = FormatElapsed(model.best) or ""
+    end
+    row.name:SetText(formatSplitLabel(model.name, model.done, model.total, showCounts))
+    row.delta:SetText(deltaText)
+    row.time:SetText(timeText)
+    row.best:SetText(bestText)
+    if model.current then
+      row.background:SetColorTexture(Constants.colors.activeRow.r, Constants.colors.activeRow.g, Constants.colors.activeRow.b, Constants.colors.activeRow.a)
+    elseif stripeIndex % 2 == 1 then
+      row.background:SetColorTexture(Constants.colors.stripe.r, Constants.colors.stripe.g, Constants.colors.stripe.b, Constants.colors.stripe.a)
+    else
+      row.background:SetColorTexture(Constants.colors.clear.r, Constants.colors.clear.g, Constants.colors.clear.b, Constants.colors.clear.a)
+    end
+    local detailHeight = paintDetail(row, model, showSteps)
+    local height = Constants.sizes.timer.row + detailHeight
+    row.frame:ClearAllPoints()
+    row.frame:SetPoint("TOPLEFT", splits, "TOPLEFT", 0, -offsetY)
+    row.frame:SetPoint("TOPRIGHT", splits, "TOPRIGHT", 0, -offsetY)
+    row.frame:SetHeight(height)
+    row.frame:Show()
+    offsetY = offsetY + height
+  end
+  for index = #nodes + 1, #splitRows do
+    splitRows[index].frame:Hide()
+  end
+  return offsetY
+end
+
+---@param run LDT_Run
+---@param tier number|nil
+---@return string
+local function formatRunTitle(run, tier)
+  local instance = run.instance
+  local name = instance and instance.name
+  if not name or name == "" then
+    local placeName = instance and (instance.subzone or instance.zone)
+    if placeName and placeName ~= "" then
+      name = placeName
+    else
+      name = "Delve"
+    end
+  end
+  local variant = run.variant
+  if not variant or variant == "" then
+    local header = run.entrance and run.entrance.header
+    if header and header ~= "" and header ~= name then
+      variant = header
+    end
+  end
+  local title = name
+  if variant and variant ~= name then
+    local withVariant = format("%s - %s", name, variant)
+    if withVariant then
+      title = withVariant
+    end
+  end
+  if tier then
+    local withTier = format("%s (Tier %d)", title, tier)
+    if withTier then
+      title = withTier
+    end
+  end
+  if type(title) ~= "string" or title == "" then
+    return "Delve"
+  end
+  return title
 end
 
 function Timer:Render()
-  self:Build()
+  if not self.frame then
+    local options = Data.db.global.timer
+    ---@type LDT_TimerFrame
+    local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
+    frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.header)
+    frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
+    frame:SetMovable(true)
+    frame:SetClampedToScreen(true)
+    frame:SetFrameStrata("HIGH")
+    self.frame = frame
+
+    local header = CreateFrame("Frame", nil, frame)
+    header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
+    header:SetHeight(Constants.sizes.timer.header)
+    local headerBackground = header:CreateTexture(nil, "BACKGROUND")
+    headerBackground:SetPoint("TOPLEFT", header, "TOPLEFT", Constants.sizes.timer.border, -Constants.sizes.timer.border)
+    headerBackground:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -Constants.sizes.timer.border, 0)
+    headerBackground:SetColorTexture(Constants.colors.header.r, Constants.colors.header.g, Constants.colors.header.b, Constants.colors.header.a)
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function()
+      frame:StartMoving()
+    end)
+    header:SetScript("OnDragStop", function()
+      frame:StopMovingOrSizing()
+      Timer:SaveScreenPoint()
+    end)
+    header:SetScript("OnMouseUp", function(_, button)
+      if button == "RightButton" then
+        Timer:OpenMenu(header)
+      end
+    end)
+    self.header = header
+
+    local livesIcon = header:CreateTexture(nil, "ARTWORK")
+    livesIcon:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
+    self.livesIcon = livesIcon
+
+    local lives = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    lives:SetJustifyH("RIGHT")
+    lives:SetWordWrap(false)
+    self.lives = lives
+
+    local deathsIcon = header:CreateTexture(nil, "ARTWORK")
+    deathsIcon:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
+    self.deathsIcon = deathsIcon
+
+    local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    deaths:SetJustifyH("RIGHT")
+    deaths:SetWordWrap(false)
+    self.deaths = deaths
+
+    local spells = CreateFrame("Frame", nil, header)
+    spells:SetHeight(Constants.sizes.timer.icon)
+    self.spells = spells
+    ---@type LDT_TimerSpell[]
+    self.spellButtons = {}
+
+    local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    title:SetPoint("LEFT", header, "LEFT", Constants.sizes.timer.headerPad, 0)
+    title:SetPoint("RIGHT", spells, "LEFT", -Constants.sizes.timer.headerPad, 0)
+    title:SetJustifyH("LEFT")
+    title:SetWordWrap(false)
+    self.title = title
+
+    local columns = CreateFrame("Frame", nil, frame)
+    columns:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
+    columns:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
+    columns:SetHeight(Constants.sizes.timer.row)
+    local headerSplits = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerSplits:SetText("Splits")
+    placeColumn(headerSplits, columns, 1, "LEFT")
+    local headerDelta = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerDelta:SetText("Delta")
+    placeColumn(headerDelta, columns, 2, "RIGHT")
+    local headerTime = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerTime:SetText("Time")
+    placeColumn(headerTime, columns, 3, "RIGHT")
+    local headerBest = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerBest:SetText("Best")
+    placeColumn(headerBest, columns, 4, "RIGHT")
+
+    local splits = CreateFrame("Frame", nil, frame)
+    splits:SetPoint("TOPLEFT", columns, "BOTTOMLEFT", 0, 0)
+    splits:SetPoint("TOPRIGHT", columns, "BOTTOMRIGHT", 0, 0)
+    splits:SetHeight(1)
+    self.splits = splits
+    ---@type LDT_TimerSplitRow[]
+    self.splitRows = {}
+
+    local clockFrame = CreateFrame("Frame", nil, frame)
+    clockFrame:SetPoint("TOPLEFT", splits, "BOTTOMLEFT", 0, 0)
+    clockFrame:SetPoint("TOPRIGHT", splits, "BOTTOMRIGHT", 0, 0)
+    clockFrame:SetHeight(Constants.sizes.timer.clock)
+    self.clockFrame = clockFrame
+
+    local clock = clockFrame:CreateFontString(nil, "OVERLAY")
+    clock:SetPoint("RIGHT", clockFrame, "RIGHT", -Constants.sizes.timer.headerPad, 0)
+    clock:SetJustifyH("RIGHT")
+    clock:SetWordWrap(false)
+    self.clock = clock
+
+    local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
+    phrase:SetPoint("RIGHT", clock, "LEFT", -Constants.sizes.timer.phraseGap, 0)
+    phrase:SetJustifyH("RIGHT")
+    phrase:SetWordWrap(false)
+    self.phrase = phrase
+
+    local cue = clockFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    cue:SetPoint("LEFT", clockFrame, "LEFT", Constants.sizes.timer.headerPad, 0)
+    cue:SetPoint("RIGHT", phrase, "LEFT", -Constants.sizes.timer.cueGap, 0)
+    cue:SetJustifyH("LEFT")
+    cue:SetWordWrap(false)
+    self.cue = cue
+
+    frame:Hide()
+    frame:SetScript("OnShow", function(shownFrame)
+      paintRemaining = 0
+      shownFrame:SetScript("OnUpdate", onPaintUpdate)
+      Timer:Place()
+      Timer:Render()
+    end)
+    frame:SetScript("OnHide", function(hiddenFrame)
+      hiddenFrame:SetScript("OnUpdate", nil)
+    end)
+  end
+
   local frame = self.frame
   if not frame or not frame:IsShown() then
     return
   end
+
+  local header = self.header
   local titleText = self.title
   local deathsText = self.deaths
+  local deathsIcon = self.deathsIcon
+  local livesText = self.lives
+  local livesIcon = self.livesIcon
   local spells = self.spells
   local spellButtons = self.spellButtons
-  local clock = self.clock
+  local splits = self.splits
+  local splitRows = self.splitRows
+  local clockFrame = self.clockFrame
+  local clockString = self.clock
+  local cue = self.cue
   local phrase = self.phrase
-  local timeHeader = self.timeHeader
-  local bestHeader = self.bestHeader
-  local rows = self.rows
-  if not titleText or not deathsText or not spells or not spellButtons or not clock or not phrase or not timeHeader or not bestHeader or not rows then
+  if
+    not header
+    or not titleText
+    or not deathsText
+    or not deathsIcon
+    or not livesText
+    or not livesIcon
+    or not spells
+    or not spellButtons
+    or not splits
+    or not splitRows
+    or not clockFrame
+    or not clockString
+    or not cue
+    or not phrase
+  then
     return
   end
+
   local options = Data.db.global.timer
-  local inside = Capture:IsInside() or Capture:InInstance()
-  local record = inside and Data:GetActiveRecord() or nil
-  local preview = (not record) and Capture.preview or nil
-  local fontSize = options.fontSize or 12
-  local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.5 }
-  local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
+  local inside = Capture:IsInside() or Capture:IsInInstance()
+  local activeRun = inside and Data:FindActiveRun() or nil
+  local background = options.backgroundColor or Constants.colors.background
+  local border = options.borderColor or Constants.colors.border
+  local ahead = options.aheadColor or Constants.colors.ahead
+  local behind = options.behindColor or Constants.colors.behind
+
   frame:SetBackdrop({
-    bgFile = "Interface/Buttons/WHITE8X8",
-    edgeFile = "Interface/Buttons/WHITE8X8",
-    edgeSize = 1,
+    bgFile = Constants.media.WhiteSquare,
+    edgeFile = Constants.media.WhiteSquare,
+    edgeSize = Constants.sizes.timer.border,
   })
   frame:SetBackdropColor(background.r, background.g, background.b, background.a)
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
+  local headerInfo
   local title = "Delve"
-  if record then
-    local delve = record.instance and record.instance.name
-    if not delve or delve == "" then
-      delve = record.place and (record.place.subzone or record.place.zone) or "Delve"
+  if activeRun then
+    if not Capture:IsEnded(activeRun) then
+      headerInfo = Capture:SetDelveHeader(activeRun)
     end
-    local tier = Helpers.RunTier(record)
-    if tier then
-      title = format("%s  Tier %d", delve, tier)
-    else
-      title = delve
-    end
-    deathsText:SetText(format("Deaths %d", record.deaths or 0))
-  elseif preview then
-    local delve = preview.name or "Delve"
-    if preview.variant then
-      delve = format("%s  %s", delve, preview.variant)
-    end
-    if preview.tier then
-      title = format("%s  Tier %d", delve, preview.tier)
-    else
-      title = delve
-    end
-    deathsText:SetText("")
+    title = formatRunTitle(activeRun, FindTier(activeRun))
   else
-    deathsText:SetText("")
+    title = SAMPLE_TITLE
   end
+  titleText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.titleFont, "")
+  titleText:SetTextColor(Constants.colors.title.r, Constants.colors.title.g, Constants.colors.title.b, Constants.colors.title.a)
   titleText:SetText(title)
-  deathsText:SetFont(NUMBER_FONT, fontSize, "")
+  local deathsCount
+  local livesCount
+  if activeRun then
+    deathsCount = activeRun.deaths
+    if deathsCount == nil then
+      deathsCount = 0
+    end
+    livesCount = activeRun.lives
+  else
+    deathsCount = SAMPLE_DEATHS
+    livesCount = SAMPLE_LIVES
+  end
+  local countAnchor, countPoint, countOffset = placeCount(livesIcon, livesText, Constants.media.Heart, livesCount, header, "RIGHT", -Constants.sizes.timer.headerPad)
+  countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, Constants.media.Skull, deathsCount, countAnchor, countPoint, countOffset)
 
   local spellIDs = {}
-  if record and record.entrance and record.entrance.activeSpellIDs then
-    spellIDs = record.entrance.activeSpellIDs
-  elseif preview and preview.activeSpellIDs then
-    spellIDs = preview.activeSpellIDs
+  if headerInfo and #headerInfo.spellIDs > 0 then
+    spellIDs = headerInfo.spellIDs
+  elseif activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
+    spellIDs = activeRun.entrance.activeSpellIDs
+  elseif not activeRun then
+    spellIDs = SAMPLE_SPELLS
   end
   local spellCount = 0
   for index = 1, #spellIDs do
@@ -492,9 +865,9 @@ function Timer:Render()
         local spell = spellButtons[spellCount]
         if not spell then
           local button = CreateFrame("Button", nil, spells)
-          button:SetSize(ICON_SIZE, ICON_SIZE)
+          button:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
           local icon = button:CreateTexture(nil, "ARTWORK")
-          icon:SetAllPoints()
+          RoundIcon(icon)
           ---@type LDT_TimerSpell
           spell = { button = button, icon = icon }
           do
@@ -514,7 +887,7 @@ function Timer:Render()
         spell.spellID = spellID
         spell.icon:SetTexture(texture)
         spell.button:ClearAllPoints()
-        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (ICON_SIZE + 4), 0)
+        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (Constants.sizes.timer.icon + Constants.sizes.timer.iconGap), 0)
         spell.button:Show()
       end
     end
@@ -522,185 +895,101 @@ function Timer:Render()
   for index = spellCount + 1, #spellButtons do
     spellButtons[index].button:Hide()
   end
-  local spellHeight = 0
+  local spellWidth = 0
   if spellCount > 0 then
-    spellHeight = ICON_SIZE + 6
+    spellWidth = spellCount * Constants.sizes.timer.icon + (spellCount - 1) * Constants.sizes.timer.iconGap
   end
-  spells:SetHeight(math.max(spellHeight, 1))
+  local spellOffset = countOffset
+  if spellWidth > 0 and (deathsCount ~= nil or livesCount ~= nil) then
+    spellOffset = -Constants.sizes.timer.spellGap
+  end
+  spells:SetWidth(spellWidth)
+  spells:ClearAllPoints()
+  spells:SetPoint("RIGHT", countAnchor, countPoint, spellOffset, 0)
 
-  local clockSize = fontSize + 8
-  clock:SetFont(NUMBER_FONT, clockSize, "")
-  phrase:SetFont(NUMBER_FONT, fontSize, "")
-  timeHeader:SetFont(NUMBER_FONT, fontSize, "")
-  bestHeader:SetFont(NUMBER_FONT, fontSize, "")
-  timeHeader:SetTextColor(0.7, 0.7, 0.7)
-  bestHeader:SetTextColor(0.7, 0.7, 0.7)
+  ---@type LDT_TimerNode[]
+  local nodes = {}
+  if activeRun then
+    nodes = Data:BuildSplits(activeRun)
+  else
+    nodes = buildSampleRows()
+  end
 
   local clockValue
   local phraseText
-  local phraseColor = options.aheadColor
-  if not phraseColor then
-    phraseColor = { r = 0.2, g = 1, b = 0.2, a = 1 }
-  end
-  if record and Capture.clockReady then
-    local frozen = record.finishedElapsed or record.bossElapsed
+  local phraseColor = ahead
+  if activeRun and Capture.clockReady then
+    local frozen = FindDuration(activeRun)
     if frozen then
-      clockValue = Helpers.CompletionTime(record) or frozen
-    elseif record.result == Constants.runResult.Active then
-      clockValue = Capture:Elapsed(record)
+      clockValue = frozen
     else
-      clockValue = record.endedElapsed
+      clockValue = Capture:ReadElapsed(activeRun)
     end
     local compare
     if frozen then
-      local bestRun = Helpers.BestRun(record)
-      compare = bestRun and Helpers.CompletionTime(bestRun) or nil
-    elseif record.watch and record.watch.routeStep then
-      compare = Data:BestSplit(record, record.watch.routeStep)
+      compare = FindBestDuration(activeRun)
+    else
+      compare = findCurrentBest(nodes)
     end
     if clockValue and compare then
-      local gap = compare - clockValue
-      if gap >= 0 then
-        phraseText = format("%s faster", Helpers.FormatElapsed(gap))
-        phraseColor = options.aheadColor
-      else
-        phraseText = format("%s slower", Helpers.FormatElapsed(-gap))
-        phraseColor = options.behindColor
-      end
+      local delta = RoundShownDelta(clockValue, compare)
+      phraseText = FormatDelta(delta)
+      phraseColor = FindDeltaColor(delta, ahead, behind)
     end
-  elseif preview and preview.bestFinish then
-    clockValue = preview.bestFinish
+  elseif not activeRun then
+    clockValue = SAMPLE_CLOCK
+    local compare = findCurrentBest(nodes)
+    if compare then
+      phraseText = FormatDelta(RoundShownDelta(SAMPLE_CLOCK, compare))
+    end
   end
+  clockString:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockFont, "")
+  phrase:SetFont(Constants.media.NumberFont, Constants.sizes.timer.phraseFont, "")
   if clockValue then
-    clock:SetText(Helpers.FormatElapsed(clockValue))
-  elseif preview then
-    clock:SetText("")
+    clockString:SetText(FormatElapsed(clockValue))
   else
-    clock:SetText("0:00.0")
+    clockString:SetText("0:00.00")
   end
   phrase:SetText(phraseText or "")
   phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
+  local cueText = ""
+  if activeRun then
+    cueText = Data:FormatClockPrompt(activeRun) or ""
+  end
+  cue:SetFontObject("GameFontNormal")
+  cue:SetTextColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b, Constants.colors.step.a)
+  cue:SetText(cueText)
 
-  local rightPad = 8
-  local bestRight = -rightPad
-  local timeRight = -(rightPad + TIME_WIDTH + COLUMN_GAP)
-  local nameRight = timeRight - TIME_WIDTH - 8
-  local clockY = -(4 + HEADER_HEIGHT + spellHeight)
-  clock:ClearAllPoints()
-  clock:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, clockY)
-  phrase:ClearAllPoints()
-  phrase:SetPoint("LEFT", clock, "RIGHT", 12, 0)
-  local headerY = clockY - clockSize - 6
-  timeHeader:ClearAllPoints()
-  timeHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, headerY)
-  timeHeader:SetWidth(TIME_WIDTH)
-  bestHeader:ClearAllPoints()
-  bestHeader:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, headerY)
-  bestHeader:SetWidth(TIME_WIDTH)
-
-  local stepRows = {}
-  if record then
-    stepRows = self:StepRows(record)
-  elseif preview then
-    stepRows = self:PreviewRows(preview)
-  end
-  local y = headerY - fontSize - 2
-  for index = 1, #stepRows do
-    local model = stepRows[index]
-    local row = rows[index]
-    if not row then
-      row = self:CreateRow(frame)
-      rows[index] = row
-    end
-    row.name:SetFont(NUMBER_FONT, fontSize, "")
-    row.time:SetFont(NUMBER_FONT, fontSize, "")
-    row.best:SetFont(NUMBER_FONT, fontSize, "")
-    row.name:SetText(model.name)
-    if model.current then
-      row.name:SetTextColor(1, 0.82, 0)
-    else
-      row.name:SetTextColor(0.9, 0.9, 0.9)
-    end
-    if model.elapsed then
-      row.time:SetText(Helpers.FormatElapsed(model.elapsed))
-      if model.best and model.elapsed < model.best - 0.05 then
-        row.time:SetTextColor(options.aheadColor.r, options.aheadColor.g, options.aheadColor.b)
-      elseif model.best and model.elapsed > model.best + 0.05 then
-        row.time:SetTextColor(options.behindColor.r, options.behindColor.g, options.behindColor.b)
-      else
-        row.time:SetTextColor(0.95, 0.95, 0.95)
-      end
-    else
-      row.time:SetText("")
-    end
-    if model.best then
-      row.best:SetText(Helpers.FormatElapsed(model.best))
-      row.best:SetTextColor(0.55, 0.55, 0.55)
-    else
-      row.best:SetText("")
-    end
-    row.highlight:ClearAllPoints()
-    row.highlight:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, y)
-    row.highlight:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, y)
-    row.highlight:SetHeight(ROW_HEIGHT)
-    if model.current then
-      row.highlight:Show()
-    else
-      row.highlight:Hide()
-    end
-    row.name:ClearAllPoints()
-    row.name:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, y)
-    row.name:SetPoint("TOPRIGHT", frame, "TOPRIGHT", nameRight, y)
-    row.name:SetHeight(ROW_HEIGHT)
-    row.best:ClearAllPoints()
-    row.best:SetPoint("TOPRIGHT", frame, "TOPRIGHT", bestRight, y)
-    row.best:SetWidth(TIME_WIDTH)
-    row.best:SetHeight(ROW_HEIGHT)
-    row.time:ClearAllPoints()
-    row.time:SetPoint("TOPRIGHT", frame, "TOPRIGHT", timeRight, y)
-    row.time:SetWidth(TIME_WIDTH)
-    row.time:SetHeight(ROW_HEIGHT)
-    row.name:Show()
-    row.time:Show()
-    row.best:Show()
-    y = y - ROW_HEIGHT
-  end
-  for index = #stepRows + 1, #rows do
-    local row = rows[index]
-    row.name:Hide()
-    row.time:Hide()
-    row.best:Hide()
-    row.highlight:Hide()
-  end
-  frame:SetWidth(280)
-  frame:SetHeight(math.max(80, -y + 8))
+  local splitsHeight = paintSplits(
+    splits,
+    splitRows,
+    nodes,
+    ahead,
+    behind,
+    options.showObjectives ~= false,
+    options.showObjectiveCounts == true
+  )
+  splits:SetHeight(splitsHeight)
+  clockFrame:SetHeight(Constants.sizes.timer.clock)
+  frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.header + Constants.sizes.timer.row + splitsHeight + Constants.sizes.timer.clock)
 end
 
 function Timer:ShowRun()
-  self:Build()
-  if not self.frame or self.frame:IsShown() then
-    return
-  end
-  self.frame:Show()
-  self.frame:Raise()
+  self:ApplyFrameShown(true, true)
 end
 
 function Timer:HideRun()
-  if self.frame then
-    self.frame:Hide()
-  end
+  self:ApplyFrameShown(false, true)
 end
 
 function Timer:ToggleWindow()
-  self:Build()
+  if not self.frame then
+    self:Render()
+  end
   if not self.frame then
     return
   end
-  if self.frame:IsShown() then
-    self.frame:Hide()
-    return
-  end
-  self.frame:Show()
+  self:ApplyFrameShown(not self.frame:IsShown(), false)
 end
 
 function Timer:OnEnable()

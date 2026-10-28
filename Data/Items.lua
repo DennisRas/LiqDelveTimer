@@ -4,7 +4,6 @@ local addon = select(2, ...)
 ---@class LDT_Data
 local Data = addon.Data
 
-Data.labyrinthMapID = 2647
 Data.boonSpellID = 1280098
 
 Data.hiddenItemIDs = {

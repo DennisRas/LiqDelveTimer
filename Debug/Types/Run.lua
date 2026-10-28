@@ -1,0 +1,184 @@
+---@class LDT_Character
+---@field guid WOWGUID|nil
+---@field name string|nil
+---@field realm string|nil
+---@field homeRealm string|nil
+---@field classFile string|nil
+---@field classID number|nil
+---@field level number|nil
+---@field itemLevel number|nil
+---@field specID number|nil
+---@field specName string|nil
+
+---@class LDT_TierReward
+---@field id number
+---@field quantity number
+---@field rewardType number
+---@field context number
+
+---@class LDT_Entrance
+---@field entranceType number|nil
+---@field title string|nil
+---@field header string|nil
+---@field description string|nil
+---@field mapID number|nil
+---@field pdeID number|nil
+---@field seasonNumber number|nil
+---@field worldTierDifficulty number|nil
+---@field affixSpellIDs number[]|nil
+---@field activeSpellIDs number[]|nil
+---@field tierInfo TieredEntranceTierInfo|nil
+
+---@class LDT_DelveHeader
+---@field tier number|nil
+---@field lives number|nil
+---@field deaths number|nil
+---@field spellIDs number[]
+
+---@class LDT_BestStep
+---@field stepID number
+---@field stage number|nil
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+
+---@class LDT_BestScenario
+---@field index number
+---@field scenarioID number
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field steps LDT_BestStep[]
+
+---@class LDT_RunBest
+---@field id string|nil
+---@field startedAt number|nil
+---@field endedAt number|nil
+---@field scenarios LDT_BestScenario[]
+
+---@class LDT_Companion
+---@field companionID number|nil
+---@field creatureDisplayInfoID number|nil
+---@field factionID number|nil
+---@field name string|nil
+---@field description string|nil
+---@field level number|nil
+---@field maxLevel number|nil
+---@field flavorName string|nil
+---@field flavorNodeID number|nil
+---@field flavorSpellID number|nil
+---@field roleNodeID number|nil
+---@field traitTreeID number|nil
+---@field combatCurioNodeID number|nil
+---@field utilityCurioNodeID number|nil
+---@field roleName string|nil
+---@field roleSpellID number|nil
+---@field roleAtlas string|nil
+---@field combatCurioName string|nil
+---@field combatCurioSpellID number|nil
+---@field utilityCurioName string|nil
+---@field utilityCurioSpellID number|nil
+---@field standing number|nil
+---@field reactionThreshold number|nil
+---@field nextThreshold number|nil
+---@field startLevel number|nil
+---@field startStanding number|nil
+
+---@class LDT_Instance
+---@field name string|nil
+---@field instanceType string|nil
+---@field difficultyID number|nil
+---@field difficultyName string|nil
+---@field maxPlayers number|nil
+---@field dynamicDifficulty number|nil
+---@field isDynamic boolean|nil
+---@field instanceID number|nil
+---@field instanceGroupSize number|nil
+---@field lfgDungeonID number|nil
+---@field hasWorldTier boolean|nil
+---@field mapID number|nil
+---@field mapName string|nil
+---@field zone string|nil
+---@field subzone string|nil
+
+---@class LDT_CriteriaSnap
+---@field description string
+---@field criteriaType number
+---@field completed boolean
+---@field quantity number
+---@field totalQuantity number
+---@field flags number
+---@field assetID number
+---@field criteriaID number
+---@field duration number
+---@field elapsed number
+---@field failed boolean
+---@field isWeightedProgress boolean
+---@field isFormatted boolean
+---@field quantityString string
+
+---@class LDT_Scenario
+---@field info ScenarioInformation|nil
+---@field step ScenarioStepInfo|nil
+---@field criteria LDT_CriteriaSnap[]
+
+---@class LDT_RunCriteria
+---@field criteriaID number
+---@field quantity number|nil
+---@field completed boolean
+---@field failed boolean
+---@field enteredElapsed number|nil
+---@field completedElapsed number|nil
+
+---@class LDT_RunScenario
+---@field index number
+---@field scenarioID number
+---@field role LDT_ScenarioRoleId|nil
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field steps LDT_RunStep[]
+
+---@class LDT_RunStep
+---@field stepID number
+---@field stage number|nil
+---@field enteredElapsed number
+---@field completedElapsed number|nil
+---@field criteria LDT_RunCriteria[]
+
+---@class LDT_TimelineRow
+---@field name string
+---@field elapsed number|nil
+---@field depth number
+---@field done boolean|nil
+
+---@class LDT_Reward
+---@field type LDT_RewardTypeId
+---@field id number|nil
+---@field amount number
+---@field itemLink string|nil
+
+---@class LDT_BoonStat
+---@field label string|nil
+---@field amount number|nil
+---@field percent boolean|nil
+---@field text string|nil
+
+---@class LDT_DelvesDifficultyPickerFrame : Frame
+---@field GetSelectedTierInfo fun(self: LDT_DelvesDifficultyPickerFrame): TieredEntranceTierInfo?
+
+---@class LDT_Run
+---@field id string
+---@field result LDT_RunResultId
+---@field mode LDT_RunModeId|nil
+---@field scenarios LDT_RunScenario[]
+---@field startedAt number
+---@field endedAt number|nil
+---@field best LDT_RunBest|nil
+---@field variant string|nil
+---@field deaths number|nil
+---@field lives number|nil
+---@field character LDT_Character|nil
+---@field specChanged boolean|nil
+---@field entrance LDT_Entrance|nil
+---@field companion LDT_Companion|nil
+---@field instance LDT_Instance|nil
+---@field boons LDT_BoonStat[]
+---@field rewards LDT_Reward[]

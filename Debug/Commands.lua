@@ -6,39 +6,37 @@ local Debug = {}
 addon.Debug = Debug
 
 local Data = addon.Data
-local Helpers = addon.Helpers
 
 ---@param input string|nil
 ---@return boolean
 function Debug:OnChatCommand(input)
   ---@type string?
   local command = addon.Core:GetArgs(input or "", 1)
-  if not command or command:lower() ~= "dump" then
+  if type(command) ~= "string" then
     return false
   end
-  local record = Data:GetActiveRecord() or Data:GetLatestRecord()
-  if not record then
-    addon.Core:Print("No delve record yet.")
+  local token = command:lower()
+  local stepID
+  if type(select(2, addon.Core:GetArgs(input or "", 2))) == "string" then
+    stepID = tonumber(select(2, addon.Core:GetArgs(input or "", 2)))
+  end
+  if token == "probe" then
+    if not stepID or not addon.Log then
+      addon.Core:Print(format("Usage: /%s probe <stepID>", addon.name:lower()))
+      return true
+    end
+    addon.Log:ReadStep(stepID)
     return true
   end
-  addon.Core:Print(format("Record %s (%s)", record.id, record.result))
-  local chambers = record.chambers
-  for index = 1, #chambers do
-    local chamber = chambers[index]
-    local completed = "open"
-    if chamber.completedElapsed then
-      completed = Helpers.FormatElapsed(chamber.completedElapsed)
-    end
-    addon.Core:Print(format("Chamber %s entered %s complete %s", chamber.name, Helpers.FormatElapsed(chamber.enteredElapsed), completed))
+  if token ~= "dump" then
+    return false
   end
-  local log = record.log
-  local first = #log - 29
-  if first < 1 then
-    first = 1
+  local run = Data:FindActiveRun() or Data:FindLatestRun()
+  if not run then
+    addon.Core:Print("No delve run yet.")
+    return true
   end
-  for index = first, #log do
-    local entry = log[index]
-    addon.Core:Print(format("%s %s", Helpers.FormatElapsed(entry.elapsed), entry.text))
-  end
+  local mode = run.mode or "none"
+  addon.Core:Print(format("Run %s (%s) mode %s scenarios %d", run.id, run.result, mode, #run.scenarios))
   return true
 end
