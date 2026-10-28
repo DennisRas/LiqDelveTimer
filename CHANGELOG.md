@@ -7,6 +7,8 @@
 - Added an option to reset the colors back to default.
 - Added a tooltip on the timer header for settings and dragging.
 - Updated the timer so it starts where the objective tracker is.
+- Updated the Splits column to be narrower.
+- Fixed the boss split so it says Nemesis: Kindo'jan instead of just "Boss".
 - Removed an unused dark background behind expanded timer steps/objectives.
 
 ## v1.0.0 - 2026-10-28

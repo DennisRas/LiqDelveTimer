@@ -96,7 +96,7 @@ Constants.colors = {
   bar = { r = 0.25, g = 0.55, b = 0.9, a = 0.95 },
 }
 
-local timerStageWidth = 180
+local timerStageWidth = 135
 local timerNumberWidth = 75
 local runStageWidth = 168
 local runNumberWidth = 70

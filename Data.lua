@@ -757,7 +757,7 @@ local function formatSplitName(scenario, role, chamberNumber)
     return format("Chamber %d", chamberNumber)
   end
   if role == Constants.scenarioRole.Boss then
-    return "Boss"
+    return NEMESIS_LABEL
   end
   local name = findScenarioName(scenario.scenarioID)
   if name then
