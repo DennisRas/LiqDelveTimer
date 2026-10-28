@@ -4,7 +4,7 @@
 ## Version: @project-version@
 ## Author: Liquidor
 ## SavedVariables: LiqDelveTimerDB
-## IconTexture: Interface/Icons/INV_Misc_PocketWatch_01
+## IconTexture: Interface/AddOns/LiqDelveTimer/Media/Icon.blp
 ## X-Website: https://github.com/DennisRas/LiqDelveTimer
 
 Libs\LibStub\LibStub.lua

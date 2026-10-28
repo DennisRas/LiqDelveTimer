@@ -1395,6 +1395,7 @@ function Module:Render()
     local timelineButton = {
       name = "Timeline",
       icon = Constants.media.Timeline,
+      iconSize = 16,
       tooltipTitle = "Timeline",
       tooltipDescription = "The path of this run.",
       onClick = function()
@@ -1406,6 +1407,7 @@ function Module:Render()
     local rewardsButton = {
       name = "Rewards",
       icon = Constants.media.Rewards,
+      iconSize = 13,
       tooltipTitle = "Rewards",
       tooltipDescription = "Rewards from this run.",
       onClick = function()

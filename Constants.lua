@@ -181,9 +181,9 @@ Constants.timing = {
 }
 
 Constants.media = {
-  Icon = "Interface/Icons/INV_Misc_PocketWatch_01",
-  Rewards = "Interface/Icons/INV_Misc_Coin_01",
-  Timeline = "Interface/Icons/INV_Misc_Map_01",
+  Icon = format("Interface/AddOns/%s/Media/Icon.blp", addon.name),
+  Rewards = format("Interface/AddOns/%s/Media/Icon_Rewards.blp", addon.name),
+  Timeline = format("Interface/AddOns/%s/Media/Icon_Timeline.blp", addon.name),
   WhiteSquare = "Interface/Buttons/WHITE8X8",
   CircleMask = "Interface/CharacterFrame/TempPortraitAlphaMask",
   AffixRing = "ChallengeMode-AffixRing-Sm",
