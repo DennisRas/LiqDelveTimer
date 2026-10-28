@@ -15,7 +15,7 @@ It saves each visit so you can compare it with your best. Good luck!
 
 ## Slash commands
 
-- **/liqdelvetimer** - show or hide the tracker
+- **/liqdelvetimer** - show or hide the timer
 - **/liqdelvetimer history** - open History
 - **/liqdelvetimer log** - open the log
 

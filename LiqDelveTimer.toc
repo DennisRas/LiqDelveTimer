@@ -1,11 +1,14 @@
 ## Interface: 120105
 ## Title: Liq Delve Timer
-## Notes: Time delve runs and keep a history of each run
+## Notes: A speedrun clock for delves and the Labyrinth of Kindo'jan.
 ## Version: @project-version@
 ## Author: Liquidor
 ## SavedVariables: LiqDelveTimerDB
-## IconTexture: Interface/AddOns/LiqDelveTimer/Media/Icon.blp
+## IconTexture: Interface/Icons/INV_Misc_PocketWatch_01
+# ## IconTexture: Interface/AddOns/LiqDelveTimer/Media/Icon.blp
 ## X-Website: https://github.com/DennisRas/LiqDelveTimer
+## X-Curse-Project-ID: 1769870
+## X-Wago-ID: 56nb8W69
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
