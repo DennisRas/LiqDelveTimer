@@ -13,46 +13,10 @@ local BindScrollBoxMouseWheel = LiqUI.Utils.BindScrollBoxMouseWheel
 local CreateScrollArea = LiqUI.Utils.CreateScrollArea
 local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
 
-local STAGE_WIDTH = 168
-local NUMBER_WIDTH = 70
-local BODY_WIDTH = STAGE_WIDTH + (NUMBER_WIDTH * 3)
-local LABEL_WIDTH = 110
-local VALUE_WIDTH = BODY_WIDTH - LABEL_WIDTH
-local REWARD_AMOUNT_WIDTH = NUMBER_WIDTH * 2
-local REWARD_NAME_WIDTH = BODY_WIDTH - REWARD_AMOUNT_WIDTH
-local BOON_VALUE_WIDTH = 64
-local BOON_LABEL_WIDTH = (BODY_WIDTH - (BOON_VALUE_WIDTH * 2)) / 2
-local CELL_PADDING = 8
-local STAGE_TEXT_WIDTH = STAGE_WIDTH - (CELL_PADDING * 2)
-local COMPANION_PAD = 8
-local ICON_SIZE = 16
-local BAR_HEIGHT = 16
-local BLOCK_HEADER = 22
-local SCREEN_MARGIN = 100
-local SCROLLBAR_THICKNESS = LiqUI.Constants.layout.sizes.scrollbar.thickness
-local SCROLL_OVERFLOW = LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance
-local DIVIDER_WIDTH = 3
----@type ColorRGBAData
-local DIVIDER_COLOR = { r = 0, g = 0, b = 0, a = 0.5 }
-local TIMELINE_TIME_WIDTH = NUMBER_WIDTH
-local TIMELINE_NAME_WIDTH = BODY_WIDTH - TIMELINE_TIME_WIDTH
-local INDENT_STEP = 16
----@type ColorRGBAData
-local BLOCK_COLOR = { r = 1, g = 1, b = 1, a = 1 }
----@type ColorRGBAData
-local STEP_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
----@type ColorRGBAData
-local OBJECTIVE_COLOR = { r = 0.75, g = 0.85, b = 1, a = 1 }
----@type ColorRGBAData
-local OBJECTIVE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
----@type ColorRGBAData
-local NESTED_TIME_COLOR = { r = 0.5, g = 0.5, b = 0.5, a = 1 }
-
 local measureText = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 measureText:Hide()
 measureText:SetWordWrap(false)
 
-local PAINT_INTERVAL = 0.1
 local paintRemaining = 0
 
 ---@param _frame Frame
@@ -62,7 +26,7 @@ local function onPaintUpdate(_frame, elapsed)
   if paintRemaining > 0 then
     return
   end
-  paintRemaining = PAINT_INTERVAL
+  paintRemaining = Constants.timing.paint
   Module:Render()
 end
 
@@ -158,7 +122,7 @@ end
 ---@param name string
 ---@return LiqUI_TableDataCellValue
 local function buildStageCell(name)
-  local shown, trimmed = fitText(name, STAGE_TEXT_WIDTH)
+  local shown, trimmed = fitText(name, Constants.sizes.run.stageText)
   if not trimmed then
     return shown
   end
@@ -267,7 +231,7 @@ end
 ---@param value string
 ---@return string
 local function formatWithAtlas(atlas, value)
-  local icon = CreateAtlasMarkup(atlas, 14, 14) or ""
+  local icon = CreateAtlasMarkup(atlas, Constants.sizes.run.atlas, Constants.sizes.run.atlas) or ""
   return format("%s %s", icon, value)
 end
 
@@ -786,8 +750,8 @@ local function roundTexture(texture)
     return
   end
   texture:ClearAllPoints()
-  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", 1, -1)
-  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -1, 1)
+  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
+  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
   local mask = parent:CreateMaskTexture()
   mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   mask:SetAllPoints(texture)
@@ -806,7 +770,7 @@ end
 local function createIconButton(parent, anchor, relativePoint, x, round)
   ---@type LDT_RunIconButton
   local button = CreateFrame("Button", nil, parent)
-  button:SetSize(ICON_SIZE, ICON_SIZE)
+  button:SetSize(Constants.sizes.run.icon, Constants.sizes.run.icon)
   button:SetPoint("RIGHT", anchor, relativePoint, x, 0)
   local icon = button:CreateTexture(nil, "ARTWORK")
   icon:SetAllPoints()
@@ -824,29 +788,29 @@ local function createCompanion(parent)
   ---@type LDT_RunCompanion
   local frame = CreateFrame("Frame", nil, parent)
   local name = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  name:SetPoint("TOPLEFT", frame, "TOPLEFT", COMPANION_PAD, -COMPANION_PAD)
+  name:SetPoint("TOPLEFT", frame, "TOPLEFT", Constants.sizes.run.companionPad, -Constants.sizes.run.companionPad)
   name:SetJustifyH("LEFT")
   name:SetWordWrap(false)
   frame.name = name
   local level = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  level:SetPoint("TOP", frame, "TOP", 0, -COMPANION_PAD)
+  level:SetPoint("TOP", frame, "TOP", 0, -Constants.sizes.run.companionPad)
   level:SetJustifyH("CENTER")
   frame.level = level
   local gain = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  gain:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -COMPANION_PAD, -COMPANION_PAD)
+  gain:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Constants.sizes.run.companionPad, -Constants.sizes.run.companionPad)
   gain:SetJustifyH("RIGHT")
-  gain:SetTextColor(0.4, 0.8, 1)
+  gain:SetTextColor(Constants.colors.gain.r, Constants.colors.gain.g, Constants.colors.gain.b)
   frame.gain = gain
   local empty = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  empty:SetPoint("TOPLEFT", frame, "TOPLEFT", COMPANION_PAD, -COMPANION_PAD)
-  empty:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -COMPANION_PAD, -COMPANION_PAD)
+  empty:SetPoint("TOPLEFT", frame, "TOPLEFT", Constants.sizes.run.companionPad, -Constants.sizes.run.companionPad)
+  empty:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Constants.sizes.run.companionPad, -Constants.sizes.run.companionPad)
   empty:SetJustifyH("LEFT")
   empty:SetText("No companion")
   frame.empty = empty
   local row = CreateFrame("Frame", nil, frame)
-  row:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -6)
-  row:SetPoint("RIGHT", frame, "RIGHT", -COMPANION_PAD, 0)
-  row:SetHeight(BAR_HEIGHT)
+  row:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -Constants.sizes.run.companionGap)
+  row:SetPoint("RIGHT", frame, "RIGHT", -Constants.sizes.run.companionPad, 0)
+  row:SetHeight(Constants.sizes.run.bar)
   frame.row = row
   local icons = CreateFrame("Frame", nil, row)
   icons:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
@@ -854,17 +818,17 @@ local function createCompanion(parent)
   icons:SetWidth(1)
   frame.icons = icons
   local bar = CreateFrame("StatusBar", nil, row)
-  bar:SetStatusBarTexture("Interface/Buttons/WHITE8X8")
-  bar:SetStatusBarColor(0.25, 0.55, 0.9, 0.95)
+  bar:SetStatusBarTexture(Constants.media.WhiteSquare)
+  bar:SetStatusBarColor(Constants.colors.bar.r, Constants.colors.bar.g, Constants.colors.bar.b, Constants.colors.bar.a)
   bar:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-  bar:SetPoint("BOTTOMRIGHT", icons, "BOTTOMLEFT", -6, 0)
+  bar:SetPoint("BOTTOMRIGHT", icons, "BOTTOMLEFT", -Constants.sizes.run.companionGap, 0)
   local track = bar:CreateTexture(nil, "BACKGROUND")
   track:SetAllPoints()
-  track:SetColorTexture(1, 1, 1, 0.08)
+  track:SetColorTexture(Constants.colors.stripe.r, Constants.colors.stripe.g, Constants.colors.stripe.b, Constants.colors.stripe.a)
   frame.bar = bar
   local barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  barText:SetPoint("LEFT", bar, "LEFT", 4, 0)
-  barText:SetPoint("RIGHT", bar, "RIGHT", -4, 0)
+  barText:SetPoint("LEFT", bar, "LEFT", Constants.sizes.run.barTextPad, 0)
+  barText:SetPoint("RIGHT", bar, "RIGHT", -Constants.sizes.run.barTextPad, 0)
   barText:SetJustifyH("LEFT")
   barText:SetWordWrap(false)
   frame.barText = barText
@@ -876,7 +840,7 @@ local function createCompanion(parent)
       return
     end
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-    GameTooltip:SetText(tip, 1, 1, 1)
+    GameTooltip:SetText(tip, Constants.colors.block.r, Constants.colors.block.g, Constants.colors.block.b)
     GameTooltip:Show()
   end
   role:SetScript("OnEnter", showRole)
@@ -885,7 +849,7 @@ local function createCompanion(parent)
   local spells = {}
   local previous = role
   for index = 1, 3 do
-    local button = createIconButton(icons, previous, "LEFT", -2, true)
+    local button = createIconButton(icons, previous, "LEFT", -Constants.sizes.run.iconGap, true)
     ---@param spellButton LDT_RunIconButton
     local function showSpell(spellButton)
       local spellID = spellButton.spellID
@@ -919,7 +883,7 @@ local function paintCompanion(frame, run)
     end
     if run then
       frame.empty:Show()
-      frame:SetHeight((COMPANION_PAD * 2) + 14)
+      frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLine)
     else
       frame.empty:Hide()
       frame:SetHeight(0)
@@ -1012,13 +976,13 @@ local function paintCompanion(frame, run)
   frame.bar:SetPoint("TOPLEFT", frame.row, "TOPLEFT", 0, 0)
   if iconCount > 0 then
     frame.icons:Show()
-    frame.icons:SetWidth(iconCount * ICON_SIZE + (iconCount - 1) * 2)
-    frame.bar:SetPoint("BOTTOMRIGHT", frame.icons, "BOTTOMLEFT", -6, 0)
+    frame.icons:SetWidth(iconCount * Constants.sizes.run.icon + (iconCount - 1) * Constants.sizes.run.iconGap)
+    frame.bar:SetPoint("BOTTOMRIGHT", frame.icons, "BOTTOMLEFT", -Constants.sizes.run.companionGap, 0)
   else
     frame.icons:Hide()
     frame.bar:SetPoint("BOTTOMRIGHT", frame.row, "BOTTOMRIGHT", 0, 0)
   end
-  frame:SetHeight((COMPANION_PAD * 2) + 14 + 6 + BAR_HEIGHT)
+  frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLine + Constants.sizes.run.companionGap + Constants.sizes.run.bar)
 end
 
 ---@param parent Frame
@@ -1027,13 +991,13 @@ end
 local function createBlockHeader(parent, text)
   ---@type LDT_RunBlockHeader
   local header = CreateFrame("Frame", nil, parent)
-  header:SetHeight(BLOCK_HEADER)
+  header:SetHeight(Constants.sizes.run.blockHeader)
   local background = header:CreateTexture(nil, "BACKGROUND")
   background:SetAllPoints()
-  background:SetColorTexture(0, 0, 0, 0.35)
+  background:SetColorTexture(Constants.colors.wash.r, Constants.colors.wash.g, Constants.colors.wash.b, Constants.colors.wash.a)
   local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("LEFT", header, "LEFT", 8, 0)
-  title:SetPoint("RIGHT", header, "RIGHT", -8, 0)
+  title:SetPoint("LEFT", header, "LEFT", Constants.sizes.run.padding, 0)
+  title:SetPoint("RIGHT", header, "RIGHT", -Constants.sizes.run.padding, 0)
   title:SetJustifyH("LEFT")
   title:SetJustifyV("MIDDLE")
   title:SetWordWrap(false)
@@ -1054,8 +1018,8 @@ local function placeHeader(header, y, shown)
   header:Show()
   header:ClearAllPoints()
   header:SetPoint("TOPLEFT", header:GetParent(), "TOPLEFT", 0, y)
-  header:SetWidth(BODY_WIDTH)
-  return y - BLOCK_HEADER
+  header:SetWidth(Constants.sizes.run.body)
+  return y - Constants.sizes.run.blockHeader
 end
 
 ---@param name string
@@ -1072,7 +1036,7 @@ local function buildTableOptions(name, columns, showHeader, headerAlpha, sticky,
     header = {
       enabled = showHeader,
       sticky = sticky == true,
-      height = BLOCK_HEADER,
+      height = Constants.sizes.run.blockHeader,
       backgroundAlpha = headerAlpha or 0,
     },
     rowStyle = {
@@ -1125,7 +1089,7 @@ local function paintSummaryAffixes(summary, spellIDs, buttons)
       if not button then
         ---@type LDT_RunIconButton
         button = CreateFrame("Button", nil, valueCell)
-        button:SetSize(ICON_SIZE, ICON_SIZE)
+        button:SetSize(Constants.sizes.run.icon, Constants.sizes.run.icon)
         local icon = button:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
         roundTexture(icon)
@@ -1152,7 +1116,7 @@ local function paintSummaryAffixes(summary, spellIDs, buttons)
       button:Show()
       anchor = button
       relativePoint = "LEFT"
-      offsetX = -2
+      offsetX = -Constants.sizes.run.iconGap
     end
   end
   return buttons
@@ -1185,15 +1149,15 @@ end
 ---@return ColorRGBAData
 local function findTimelineColor(line)
   if line.depth == 0 then
-    return BLOCK_COLOR
+    return Constants.colors.block
   end
   if line.done ~= nil then
     if line.done then
-      return OBJECTIVE_DONE_COLOR
+      return Constants.colors.objectiveDone
     end
-    return OBJECTIVE_COLOR
+    return Constants.colors.objective
   end
-  return STEP_COLOR
+  return Constants.colors.step
 end
 
 ---@param text string
@@ -1235,9 +1199,9 @@ local function buildTimelineData(run)
   for lineIndex = 1, #lines do
     local line = lines[lineIndex]
     local labelColor = findTimelineColor(line)
-    local timeColor = NESTED_TIME_COLOR
+    local timeColor = Constants.colors.nestedTime
     if line.depth == 0 then
-      timeColor = BLOCK_COLOR
+      timeColor = Constants.colors.block
     end
     local timeText = ""
     if line.elapsed ~= nil then
@@ -1246,7 +1210,7 @@ local function buildTimelineData(run)
     ---@type LiqUI_TableDataRowExtended
     local row = {
       data = { colorText(line.name, labelColor), timeText },
-      indent = line.depth * INDENT_STEP,
+      indent = line.depth * Constants.sizes.run.indent,
       onEnter = showTimelineLine,
       onLeave = GameTooltip_Hide,
     }
@@ -1262,8 +1226,8 @@ local function createColumn(parent, name)
   ---@type LDT_RunColumn
   local column = CreateFrame("Frame", addon.name .. name, parent)
   local divider = CreateFrame("Frame", nil, column)
-  divider:SetWidth(DIVIDER_WIDTH)
-  SetBackgroundColor(divider, DIVIDER_COLOR)
+  divider:SetWidth(Constants.sizes.run.divider)
+  SetBackgroundColor(divider, Constants.colors.divider)
   divider:Hide()
   column.divider = divider
   column:Hide()
@@ -1279,14 +1243,14 @@ local function layoutScrollingTable(tableFrame, parent, data, viewHeight)
   tableFrame:SetParent(parent)
   tableFrame:ClearAllPoints()
   tableFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-  tableFrame:SetSize(BODY_WIDTH, viewHeight)
+  tableFrame:SetSize(Constants.sizes.run.body, viewHeight)
   tableFrame:SetData(data)
   local _, contentHeight = tableFrame:GetSize()
-  if contentHeight > viewHeight + SCROLL_OVERFLOW then
-    tableFrame:SetSize(BODY_WIDTH + SCROLLBAR_THICKNESS, viewHeight)
-    return BODY_WIDTH + SCROLLBAR_THICKNESS
+  if contentHeight > viewHeight + LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance then
+    tableFrame:SetSize(Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness, viewHeight)
+    return Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness
   end
-  return BODY_WIDTH
+  return Constants.sizes.run.body
 end
 
 function Module:Layout()
@@ -1308,26 +1272,26 @@ function Module:Layout()
   y = placeHeader(self.companionHeader, y, shown)
   self.companion:ClearAllPoints()
   self.companion:SetPoint("TOPLEFT", self.companion:GetParent(), "TOPLEFT", 0, y)
-  self.companion:SetWidth(BODY_WIDTH)
+  self.companion:SetWidth(Constants.sizes.run.body)
   y = y - self.companion:GetHeight()
   y = placeHeader(self.boonsHeader, y, shown)
   y = placeTable(self.boons, self.boonsData or {}, y)
-  local detailsHeight = math.max(BLOCK_HEADER, -y)
+  local detailsHeight = math.max(Constants.sizes.run.blockHeader, -y)
   local scale = window:GetWindowScale() / 100
   if scale <= 0 then
     scale = 1
   end
-  local maxBody = (UIParent:GetHeight() - SCREEN_MARGIN) / scale - LiqUI.Constants.layout.sizes.titlebar.height
-  if maxBody < BLOCK_HEADER then
-    maxBody = BLOCK_HEADER
+  local maxBody = (UIParent:GetHeight() - Constants.sizes.run.screenMargin) / scale - LiqUI.Constants.layout.sizes.titlebar.height
+  if maxBody < Constants.sizes.run.blockHeader then
+    maxBody = Constants.sizes.run.blockHeader
   end
   local bodyHeight = detailsHeight
   if bodyHeight > maxBody then
     bodyHeight = maxBody
   end
-  local detailsWidth = BODY_WIDTH
-  if detailsHeight > bodyHeight + SCROLL_OVERFLOW then
-    detailsWidth = BODY_WIDTH + SCROLLBAR_THICKNESS
+  local detailsWidth = Constants.sizes.run.body
+  if detailsHeight > bodyHeight + LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance then
+    detailsWidth = Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness
   end
   local rewardsWidth = layoutScrollingTable(self.rewards, self.rewardsColumn, self.rewardsData or {}, bodyHeight)
   local timelineWidth = layoutScrollingTable(self.timeline, self.timelineColumn, self.timelineData or {}, bodyHeight)
@@ -1363,9 +1327,9 @@ function Module:Layout()
       divider:ClearAllPoints()
       divider:SetPoint("TOPLEFT", column, "TOPRIGHT", 0, 0)
       divider:SetPoint("BOTTOMLEFT", column, "BOTTOMRIGHT", 0, 0)
-      divider:SetWidth(DIVIDER_WIDTH)
+      divider:SetWidth(Constants.sizes.run.divider)
       divider:Show()
-      x = x + width + DIVIDER_WIDTH
+      x = x + width + Constants.sizes.run.divider
     else
       divider:Hide()
       x = x + width
@@ -1376,7 +1340,7 @@ function Module:Layout()
   container:ClearAllPoints()
   container:SetPoint("TOPLEFT", self.detailsColumn, "TOPLEFT", 0, 0)
   container:SetSize(detailsWidth, bodyHeight)
-  detailsScroll:UpdateLayout(BODY_WIDTH, detailsHeight)
+  detailsScroll:UpdateLayout(Constants.sizes.run.body, detailsHeight)
   local scrollBox = detailsScroll:GetWheelScrollBox()
   if scrollBox then
     bindBodyWheel(detailsScroll.content, scrollBox)
@@ -1391,8 +1355,8 @@ function Module:Fill(run)
     return
   end
   local options = Data.db.global.timer
-  local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
-  local behind = options.behindColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+  local ahead = options.aheadColor or Constants.colors.ahead
+  local behind = options.behindColor or Constants.colors.behind
   self.showingRun = run ~= nil
   if not run then
     window:SetTitle("Run")
@@ -1425,8 +1389,8 @@ function Module:Render()
       name = addon.name .. "Run",
       storage = windows.Run,
       title = "Run",
-      width = (BODY_WIDTH * 2) + DIVIDER_WIDTH,
-      height = 200,
+      width = (Constants.sizes.run.body * 2) + Constants.sizes.run.divider,
+      height = Constants.sizes.run.window,
       onShow = function()
         Module:Render()
       end,
@@ -1477,24 +1441,24 @@ function Module:Render()
     self.timelineColumn = timelineColumn
     local content = detailsScroll.content
     local summaryColumns = {
-      { id = "label", headerText = "Summary", width = LABEL_WIDTH, align = "LEFT" },
-      { id = "value", headerText = "", width = VALUE_WIDTH, align = "RIGHT" },
+      { id = "label", headerText = "Summary", width = Constants.sizes.run.label, align = "LEFT" },
+      { id = "value", headerText = "", width = Constants.sizes.run.value, align = "RIGHT" },
     }
     local stageColumns = {
-      { id = "stage", headerText = "Splits", width = STAGE_WIDTH, align = "LEFT" },
-      { id = "delta", headerText = "Delta", width = NUMBER_WIDTH, align = "RIGHT" },
-      { id = "time", headerText = "Time", width = NUMBER_WIDTH, align = "RIGHT" },
-      { id = "best", headerText = "Best", width = NUMBER_WIDTH, align = "RIGHT" },
+      { id = "stage", headerText = "Splits", width = Constants.sizes.run.stage, align = "LEFT" },
+      { id = "delta", headerText = "Delta", width = Constants.sizes.run.number, align = "RIGHT" },
+      { id = "time", headerText = "Time", width = Constants.sizes.run.number, align = "RIGHT" },
+      { id = "best", headerText = "Best", width = Constants.sizes.run.number, align = "RIGHT" },
     }
     local boonColumns = {
-      { id = "stat", headerText = "", width = BOON_LABEL_WIDTH, align = "LEFT" },
-      { id = "value", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
-      { id = "statRight", headerText = "", width = BOON_LABEL_WIDTH, align = "LEFT" },
-      { id = "valueRight", headerText = "", width = BOON_VALUE_WIDTH, align = "RIGHT" },
+      { id = "stat", headerText = "", width = Constants.sizes.run.boonLabel, align = "LEFT" },
+      { id = "value", headerText = "", width = Constants.sizes.run.boonValue, align = "RIGHT" },
+      { id = "statRight", headerText = "", width = Constants.sizes.run.boonLabel, align = "LEFT" },
+      { id = "valueRight", headerText = "", width = Constants.sizes.run.boonValue, align = "RIGHT" },
     }
     local rewardColumns = {
-      { id = "name", headerText = "Rewards", width = REWARD_NAME_WIDTH, align = "LEFT" },
-      { id = "amount", headerText = "", width = REWARD_AMOUNT_WIDTH, align = "RIGHT" },
+      { id = "name", headerText = "Rewards", width = Constants.sizes.run.rewardName, align = "LEFT" },
+      { id = "amount", headerText = "", width = Constants.sizes.run.rewardAmount, align = "RIGHT" },
     }
     local summary = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunSummary", summaryColumns, true, 0.35, false))
     summary:SetParent(content)
@@ -1512,8 +1476,8 @@ function Module:Render()
     rewards:SetParent(rewardsColumn)
     self.rewards = rewards
     local timelineColumns = {
-      { id = "name", headerText = "Timeline", width = TIMELINE_NAME_WIDTH, align = "LEFT" },
-      { id = "time", headerText = "Time", width = TIMELINE_TIME_WIDTH, align = "RIGHT" },
+      { id = "name", headerText = "Timeline", width = Constants.sizes.run.timelineName, align = "LEFT" },
+      { id = "time", headerText = "Time", width = Constants.sizes.run.timelineTime, align = "RIGHT" },
     }
     local timeline = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunTimeline", timelineColumns, true, 0.35, true, true))
     timeline:SetParent(timelineColumn)

@@ -10,54 +10,6 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local Capture = addon.Capture
 
-local HEADER_HEIGHT = 40
-local HEADER_PAD = 10
-local ICON_SIZE = 20
-local ICON_GAP = 4
-local SPELL_GAP = 12
-local STAGES_WIDTH = 180
-local DELTA_WIDTH = 75
-local TIME_WIDTH = 75
-local BEST_WIDTH = 75
-local TABLE_WIDTH = STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH + BEST_WIDTH
-local COLUMN_X = {
-  0,
-  STAGES_WIDTH,
-  STAGES_WIDTH + DELTA_WIDTH,
-  STAGES_WIDTH + DELTA_WIDTH + TIME_WIDTH,
-}
-local COLUMN_WIDTH = {
-  STAGES_WIDTH,
-  DELTA_WIDTH,
-  TIME_WIDTH,
-  BEST_WIDTH,
-}
-local CELL_PADDING = 8
-local ROW_HEIGHT = 28
-local LINE_HEIGHT = 16
-local DETAIL_PAD = 4
-local NODE_INDENT = 8
-local LINE_INDENT = 26
-local MARK_ICON = 14
-local MARK_NUB = "ui-questtracker-objective-nub"
-local MARK_CHECK = "ui-questtracker-tracker-check"
----@type ColorRGBAData
-local NODE_COLOR = { r = 1, g = 0.82, b = 0, a = 1 }
----@type ColorRGBAData
-local LINE_COLOR = { r = 0.75, g = 0.85, b = 1, a = 1 }
----@type ColorRGBAData
-local LINE_DONE_COLOR = { r = 0.65, g = 0.85, b = 0.65, a = 1 }
-local CLOCK_HEIGHT = 36
-local TITLE_SIZE = 16
-local META_SIZE = 14
-local CLOCK_SIZE = 22
-local PHRASE_SIZE = 14
-local NUMBER_FONT = "Fonts\\ARIALN.TTF"
-local SKULL_ATLAS = "DungeonSkull"
-local HEART_ATLAS = "delves-scenario-heart-icon"
----@type ColorRGBAData
-local ACTIVE_ROW_COLOR = { r = 0.12, g = 0.32, b = 0.72, a = 0.7 }
-
 ---@param icon Texture
 ---@param text FontString
 ---@param atlas string
@@ -69,7 +21,7 @@ local ACTIVE_ROW_COLOR = { r = 0.12, g = 0.32, b = 0.72, a = 0.7 }
 ---@return string
 ---@return number
 local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
-  text:SetFont(NUMBER_FONT, META_SIZE, "")
+  text:SetFont(Constants.media.NumberFont, Constants.sizes.timer.metaFont, "")
   icon:ClearAllPoints()
   text:ClearAllPoints()
   if count == nil then
@@ -82,8 +34,8 @@ local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
   text:SetText(tostring(count))
   text:Show()
   icon:SetPoint("RIGHT", anchor, point, offsetX, 0)
-  text:SetPoint("RIGHT", icon, "LEFT", -ICON_GAP, 0)
-  return text, "LEFT", -ICON_GAP
+  text:SetPoint("RIGHT", icon, "LEFT", -Constants.sizes.timer.iconGap, 0)
+  return text, "LEFT", -Constants.sizes.timer.iconGap
 end
 
 ---@param color ColorRGBAData
@@ -135,7 +87,6 @@ local function showColorPicker(color, apply)
   ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
 end
 
-local PAINT_INTERVAL = 0.1
 local paintRemaining = 0
 
 ---@param _frame Frame
@@ -145,7 +96,7 @@ local function onPaintUpdate(_frame, elapsed)
   if paintRemaining > 0 then
     return
   end
-  paintRemaining = PAINT_INTERVAL
+  paintRemaining = Constants.timing.paint
   Timer:Render()
 end
 
@@ -321,16 +272,16 @@ end
 ---@param column integer
 ---@param align "LEFT"|"RIGHT"
 local function placeColumn(fontString, parent, column, align)
-  local x = COLUMN_X[column] or 0
-  local width = COLUMN_WIDTH[column] or 0
+  local x = Constants.sizes.timer.columnX[column] or 0
+  local width = Constants.sizes.timer.columnWidth[column] or 0
   fontString:ClearAllPoints()
-  fontString:SetWidth(width - CELL_PADDING * 2)
+  fontString:SetWidth(width - Constants.sizes.timer.padding * 2)
   fontString:SetJustifyH(align)
   fontString:SetWordWrap(false)
   if align == "RIGHT" then
-    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - CELL_PADDING, -ROW_HEIGHT / 2)
+    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - Constants.sizes.timer.padding, -Constants.sizes.timer.row / 2)
   else
-    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + CELL_PADDING, -ROW_HEIGHT / 2)
+    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + Constants.sizes.timer.padding, -Constants.sizes.timer.row / 2)
   end
 end
 
@@ -347,7 +298,7 @@ local function createSplitRow(rows, index, parent)
   local bar = CreateFrame("Frame", nil, frame)
   bar:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
   bar:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-  bar:SetHeight(ROW_HEIGHT)
+  bar:SetHeight(Constants.sizes.timer.row)
   local background = bar:CreateTexture(nil, "BACKGROUND")
   background:SetAllPoints()
   local name = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -363,7 +314,7 @@ local function createSplitRow(rows, index, parent)
   detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
   local detailBackground = detail:CreateTexture(nil, "BACKGROUND")
   detailBackground:SetAllPoints()
-  detailBackground:SetColorTexture(0, 0, 0, 0.35)
+  detailBackground:SetColorTexture(Constants.colors.wash.r, Constants.colors.wash.g, Constants.colors.wash.b, Constants.colors.wash.a)
   ---@type LDT_TimerDetailLine[]
   local lines = {}
   ---@type LDT_TimerSplitRow
@@ -392,7 +343,7 @@ local function createDetailLine(row, index)
   end
   local frame = CreateFrame("Frame", nil, row.detail)
   local icon = frame:CreateTexture(nil, "OVERLAY")
-  icon:SetSize(MARK_ICON, MARK_ICON)
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
   local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   local time = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   ---@type LDT_TimerDetailLine
@@ -419,28 +370,28 @@ local function paintNode(line, detail, label, title, offsetY)
   frame:ClearAllPoints()
   frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
   frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
-  frame:SetHeight(LINE_HEIGHT)
+  frame:SetHeight(Constants.sizes.timer.line)
   local icon = line.icon
   icon:ClearAllPoints()
-  icon:SetSize(MARK_ICON, MARK_ICON)
-  icon:SetPoint("LEFT", frame, "LEFT", NODE_INDENT, 0)
-  icon:SetAtlas(MARK_NUB)
-  icon:SetVertexColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b)
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
+  icon:SetPoint("LEFT", frame, "LEFT", Constants.sizes.timer.nodeIndent, 0)
+  icon:SetAtlas(Constants.media.MarkNub)
+  icon:SetVertexColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
   icon:Show()
-  local textLeft = NODE_INDENT + MARK_ICON + 4
+  local textLeft = Constants.sizes.timer.nodeIndent + Constants.sizes.timer.mark + Constants.sizes.timer.markGap
   local shown = label
   if title and title ~= "" then
     shown = format("%s: %s", label, WHITE_FONT_COLOR:WrapTextInColorCode(title))
   end
   local text = line.text
   text:SetFontObject("GameFontNormal")
-  text:SetTextColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b)
+  text:SetTextColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
   text:SetWordWrap(false)
   text:SetJustifyH("LEFT")
   text:SetJustifyV("MIDDLE")
   text:ClearAllPoints()
   text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
-  text:SetWidth(TABLE_WIDTH - textLeft - CELL_PADDING)
+  text:SetWidth(Constants.sizes.timer.width - textLeft - Constants.sizes.timer.padding)
   text:SetText(shown)
   line.time:Hide()
   frame:Show()
@@ -457,13 +408,13 @@ local function paintLine(line, detail, entry, offsetY, indent)
   frame:ClearAllPoints()
   frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
   frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
-  local textLeft = indent + MARK_ICON + 4
-  local textWidth = TABLE_WIDTH - textLeft - CELL_PADDING
-  local color = LINE_COLOR
-  local atlas = MARK_NUB
+  local textLeft = indent + Constants.sizes.timer.mark + Constants.sizes.timer.markGap
+  local textWidth = Constants.sizes.timer.width - textLeft - Constants.sizes.timer.padding
+  local color = Constants.colors.objective
+  local atlas = Constants.media.MarkNub
   if entry.completed then
-    color = LINE_DONE_COLOR
-    atlas = MARK_CHECK
+    color = Constants.colors.objectiveDone
+    atlas = Constants.media.MarkCheck
   end
   local text = line.text
   text:SetFontObject("GameFontHighlightSmall")
@@ -477,25 +428,25 @@ local function paintLine(line, detail, entry, offsetY, indent)
   text:SetWordWrap(true)
   local textHeight = text:GetStringHeight()
   if oneLine < 1 then
-    oneLine = LINE_HEIGHT
+    oneLine = Constants.sizes.timer.line
   end
   if textHeight < oneLine then
     textHeight = oneLine
   end
   local wrapped = textHeight > oneLine + 1
-  local rowHeight = LINE_HEIGHT
+  local rowHeight = Constants.sizes.timer.line
   if wrapped and textHeight > rowHeight then
     rowHeight = textHeight
   end
   frame:SetHeight(rowHeight)
   local icon = line.icon
   icon:ClearAllPoints()
-  icon:SetSize(MARK_ICON, MARK_ICON)
+  icon:SetSize(Constants.sizes.timer.mark, Constants.sizes.timer.mark)
   icon:SetAtlas(atlas)
   icon:SetVertexColor(color.r, color.g, color.b)
   icon:Show()
   if wrapped then
-    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -LINE_HEIGHT / 2)
+    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -Constants.sizes.timer.line / 2)
     text:SetJustifyV("TOP")
     text:SetPoint("TOPLEFT", frame, "TOPLEFT", textLeft, 0)
     text:SetHeight(textHeight)
@@ -503,7 +454,7 @@ local function paintLine(line, detail, entry, offsetY, indent)
     icon:SetPoint("LEFT", frame, "LEFT", indent, 0)
     text:SetJustifyV("MIDDLE")
     text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
-    text:SetHeight(LINE_HEIGHT)
+    text:SetHeight(Constants.sizes.timer.line)
   end
   line.time:Hide()
   local plain = entry.text
@@ -549,7 +500,7 @@ end
 local function paintDetail(row, model, showSteps)
   local detail = row.detail
   local used = 0
-  local offsetY = DETAIL_PAD
+  local offsetY = Constants.sizes.timer.detailPad
   local nodes = model.nodes
   if showSteps and model.current and nodes and #nodes > 0 then
     for index = 1, #nodes do
@@ -557,13 +508,13 @@ local function paintDetail(row, model, showSteps)
       used = used + 1
       local line = createDetailLine(row, used)
       paintNode(line, detail, node.name, node.title, offsetY)
-      offsetY = offsetY + LINE_HEIGHT
+      offsetY = offsetY + Constants.sizes.timer.line
       if node.current then
-        used, offsetY = paintLines(row, detail, node.lines, LINE_INDENT, used, offsetY)
+        used, offsetY = paintLines(row, detail, node.lines, Constants.sizes.timer.lineIndent, used, offsetY)
       end
     end
   elseif showSteps and model.current then
-    used, offsetY = paintLines(row, detail, model.lines, NODE_INDENT, used, offsetY)
+    used, offsetY = paintLines(row, detail, model.lines, Constants.sizes.timer.nodeIndent, used, offsetY)
   end
   for index = used + 1, #row.lines do
     row.lines[index].frame:Hide()
@@ -572,7 +523,7 @@ local function paintDetail(row, model, showSteps)
     detail:Hide()
     return 0
   end
-  offsetY = offsetY + DETAIL_PAD
+  offsetY = offsetY + Constants.sizes.timer.detailPad
   detail:SetHeight(offsetY)
   detail:Show()
   return offsetY
@@ -616,14 +567,14 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     row.time:SetText(timeText)
     row.best:SetText(bestText)
     if model.current then
-      row.background:SetColorTexture(ACTIVE_ROW_COLOR.r, ACTIVE_ROW_COLOR.g, ACTIVE_ROW_COLOR.b, ACTIVE_ROW_COLOR.a)
+      row.background:SetColorTexture(Constants.colors.activeRow.r, Constants.colors.activeRow.g, Constants.colors.activeRow.b, Constants.colors.activeRow.a)
     elseif stripeIndex % 2 == 1 then
-      row.background:SetColorTexture(1, 1, 1, 0.08)
+      row.background:SetColorTexture(Constants.colors.stripe.r, Constants.colors.stripe.g, Constants.colors.stripe.b, Constants.colors.stripe.a)
     else
-      row.background:SetColorTexture(0, 0, 0, 0)
+      row.background:SetColorTexture(Constants.colors.clear.r, Constants.colors.clear.g, Constants.colors.clear.b, Constants.colors.clear.a)
     end
     local detailHeight = paintDetail(row, model, showSteps)
-    local height = ROW_HEIGHT + detailHeight
+    local height = Constants.sizes.timer.row + detailHeight
     row.frame:ClearAllPoints()
     row.frame:SetPoint("TOPLEFT", splits, "TOPLEFT", 0, -offsetY)
     row.frame:SetPoint("TOPRIGHT", splits, "TOPRIGHT", 0, -offsetY)
@@ -682,7 +633,7 @@ function Timer:Render()
     local options = Data.db.global.timer
     ---@type LDT_TimerFrame
     local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
-    frame:SetSize(TABLE_WIDTH, HEADER_HEIGHT)
+    frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.header)
     frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
@@ -692,11 +643,11 @@ function Timer:Render()
     local header = CreateFrame("Frame", nil, frame)
     header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
-    header:SetHeight(HEADER_HEIGHT)
+    header:SetHeight(Constants.sizes.timer.header)
     local headerBackground = header:CreateTexture(nil, "BACKGROUND")
-    headerBackground:SetPoint("TOPLEFT", header, "TOPLEFT", 1, -1)
-    headerBackground:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -1, 0)
-    headerBackground:SetColorTexture(0, 0, 0, 1)
+    headerBackground:SetPoint("TOPLEFT", header, "TOPLEFT", Constants.sizes.timer.border, -Constants.sizes.timer.border)
+    headerBackground:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -Constants.sizes.timer.border, 0)
+    headerBackground:SetColorTexture(Constants.colors.header.r, Constants.colors.header.g, Constants.colors.header.b, Constants.colors.header.a)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
@@ -714,7 +665,7 @@ function Timer:Render()
     self.header = header
 
     local livesIcon = header:CreateTexture(nil, "ARTWORK")
-    livesIcon:SetSize(ICON_SIZE, ICON_SIZE)
+    livesIcon:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
     self.livesIcon = livesIcon
 
     local lives = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -723,7 +674,7 @@ function Timer:Render()
     self.lives = lives
 
     local deathsIcon = header:CreateTexture(nil, "ARTWORK")
-    deathsIcon:SetSize(ICON_SIZE, ICON_SIZE)
+    deathsIcon:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
     self.deathsIcon = deathsIcon
 
     local deaths = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -732,14 +683,14 @@ function Timer:Render()
     self.deaths = deaths
 
     local spells = CreateFrame("Frame", nil, header)
-    spells:SetHeight(ICON_SIZE)
+    spells:SetHeight(Constants.sizes.timer.icon)
     self.spells = spells
     ---@type LDT_TimerSpell[]
     self.spellButtons = {}
 
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    title:SetPoint("LEFT", header, "LEFT", HEADER_PAD, 0)
-    title:SetPoint("RIGHT", spells, "LEFT", -HEADER_PAD, 0)
+    title:SetPoint("LEFT", header, "LEFT", Constants.sizes.timer.headerPad, 0)
+    title:SetPoint("RIGHT", spells, "LEFT", -Constants.sizes.timer.headerPad, 0)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
     self.title = title
@@ -747,7 +698,7 @@ function Timer:Render()
     local columns = CreateFrame("Frame", nil, frame)
     columns:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     columns:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
-    columns:SetHeight(ROW_HEIGHT)
+    columns:SetHeight(Constants.sizes.timer.row)
     local headerSplits = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     headerSplits:SetText("Splits")
     placeColumn(headerSplits, columns, 1, "LEFT")
@@ -772,24 +723,24 @@ function Timer:Render()
     local clockFrame = CreateFrame("Frame", nil, frame)
     clockFrame:SetPoint("TOPLEFT", splits, "BOTTOMLEFT", 0, 0)
     clockFrame:SetPoint("TOPRIGHT", splits, "BOTTOMRIGHT", 0, 0)
-    clockFrame:SetHeight(CLOCK_HEIGHT)
+    clockFrame:SetHeight(Constants.sizes.timer.clock)
     self.clockFrame = clockFrame
 
     local clock = clockFrame:CreateFontString(nil, "OVERLAY")
-    clock:SetPoint("RIGHT", clockFrame, "RIGHT", -HEADER_PAD, 0)
+    clock:SetPoint("RIGHT", clockFrame, "RIGHT", -Constants.sizes.timer.headerPad, 0)
     clock:SetJustifyH("RIGHT")
     clock:SetWordWrap(false)
     self.clock = clock
 
     local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
-    phrase:SetPoint("RIGHT", clock, "LEFT", -12, 0)
+    phrase:SetPoint("RIGHT", clock, "LEFT", -Constants.sizes.timer.phraseGap, 0)
     phrase:SetJustifyH("RIGHT")
     phrase:SetWordWrap(false)
     self.phrase = phrase
 
     local cue = clockFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    cue:SetPoint("LEFT", clockFrame, "LEFT", HEADER_PAD, 0)
-    cue:SetPoint("RIGHT", phrase, "LEFT", -8, 0)
+    cue:SetPoint("LEFT", clockFrame, "LEFT", Constants.sizes.timer.headerPad, 0)
+    cue:SetPoint("RIGHT", phrase, "LEFT", -Constants.sizes.timer.cueGap, 0)
     cue:SetJustifyH("LEFT")
     cue:SetWordWrap(false)
     self.cue = cue
@@ -847,15 +798,15 @@ function Timer:Render()
   local options = Data.db.global.timer
   local inside = Capture:IsInside() or Capture:IsInInstance()
   local activeRun = inside and Data:FindActiveRun() or nil
-  local background = options.backgroundColor or { r = 0, g = 0, b = 0, a = 0.9 }
-  local border = options.borderColor or { r = 0, g = 0, b = 0, a = 0 }
-  local ahead = options.aheadColor or { r = 0.2, g = 1, b = 0.2, a = 1 }
-  local behind = options.behindColor or { r = 1, g = 0.2, b = 0.2, a = 1 }
+  local background = options.backgroundColor or Constants.colors.background
+  local border = options.borderColor or Constants.colors.border
+  local ahead = options.aheadColor or Constants.colors.ahead
+  local behind = options.behindColor or Constants.colors.behind
 
   frame:SetBackdrop({
-    bgFile = "Interface/Buttons/WHITE8X8",
-    edgeFile = "Interface/Buttons/WHITE8X8",
-    edgeSize = 1,
+    bgFile = Constants.media.WhiteSquare,
+    edgeFile = Constants.media.WhiteSquare,
+    edgeSize = Constants.sizes.timer.border,
   })
   frame:SetBackdropColor(background.r, background.g, background.b, background.a)
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
@@ -870,8 +821,8 @@ function Timer:Render()
   else
     title = "The Shadow Enclave (Tier 11)"
   end
-  titleText:SetFont(NUMBER_FONT, TITLE_SIZE, "")
-  titleText:SetTextColor(1, 1, 1)
+  titleText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.titleFont, "")
+  titleText:SetTextColor(Constants.colors.title.r, Constants.colors.title.g, Constants.colors.title.b, Constants.colors.title.a)
   titleText:SetText(title)
   local deathsCount
   local livesCount
@@ -885,8 +836,8 @@ function Timer:Render()
     deathsCount = 1
     livesCount = 4
   end
-  local countAnchor, countPoint, countOffset = placeCount(livesIcon, livesText, HEART_ATLAS, livesCount, header, "RIGHT", -HEADER_PAD)
-  countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, SKULL_ATLAS, deathsCount, countAnchor, countPoint, countOffset)
+  local countAnchor, countPoint, countOffset = placeCount(livesIcon, livesText, Constants.media.Heart, livesCount, header, "RIGHT", -Constants.sizes.timer.headerPad)
+  countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, Constants.media.Skull, deathsCount, countAnchor, countPoint, countOffset)
 
   local spellIDs = {}
   if headerInfo and #headerInfo.spellIDs > 0 then
@@ -906,10 +857,10 @@ function Timer:Render()
         local spell = spellButtons[spellCount]
         if not spell then
           local button = CreateFrame("Button", nil, spells)
-          button:SetSize(ICON_SIZE, ICON_SIZE)
+          button:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
           local icon = button:CreateTexture(nil, "ARTWORK")
-          icon:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
-          icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+          icon:SetPoint("TOPLEFT", button, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
+          icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
           local mask = button:CreateMaskTexture()
           mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
           mask:SetAllPoints(icon)
@@ -936,7 +887,7 @@ function Timer:Render()
         spell.spellID = spellID
         spell.icon:SetTexture(texture)
         spell.button:ClearAllPoints()
-        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (ICON_SIZE + ICON_GAP), 0)
+        spell.button:SetPoint("LEFT", spells, "LEFT", (spellCount - 1) * (Constants.sizes.timer.icon + Constants.sizes.timer.iconGap), 0)
         spell.button:Show()
       end
     end
@@ -946,11 +897,11 @@ function Timer:Render()
   end
   local spellWidth = 0
   if spellCount > 0 then
-    spellWidth = spellCount * ICON_SIZE + (spellCount - 1) * ICON_GAP
+    spellWidth = spellCount * Constants.sizes.timer.icon + (spellCount - 1) * Constants.sizes.timer.iconGap
   end
   local spellOffset = countOffset
   if spellWidth > 0 and (deathsCount ~= nil or livesCount ~= nil) then
-    spellOffset = -SPELL_GAP
+    spellOffset = -Constants.sizes.timer.spellGap
   end
   spells:SetWidth(spellWidth)
   spells:ClearAllPoints()
@@ -994,8 +945,8 @@ function Timer:Render()
       phraseText = Helpers.FormatDelta(Helpers.RoundShownDelta(SAMPLE_CLOCK, compare))
     end
   end
-  clockString:SetFont(NUMBER_FONT, CLOCK_SIZE, "")
-  phrase:SetFont(NUMBER_FONT, PHRASE_SIZE, "")
+  clockString:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockFont, "")
+  phrase:SetFont(Constants.media.NumberFont, Constants.sizes.timer.phraseFont, "")
   if clockValue then
     clockString:SetText(Helpers.FormatElapsed(clockValue))
   else
@@ -1008,7 +959,7 @@ function Timer:Render()
     cueText = Data:FormatClockPrompt(activeRun) or ""
   end
   cue:SetFontObject("GameFontNormal")
-  cue:SetTextColor(NODE_COLOR.r, NODE_COLOR.g, NODE_COLOR.b, NODE_COLOR.a)
+  cue:SetTextColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b, Constants.colors.step.a)
   cue:SetText(cueText)
 
   local splitsHeight = paintSplits(
@@ -1021,8 +972,8 @@ function Timer:Render()
     options.showObjectiveCounts == true
   )
   splits:SetHeight(splitsHeight)
-  clockFrame:SetHeight(CLOCK_HEIGHT)
-  frame:SetSize(TABLE_WIDTH, HEADER_HEIGHT + ROW_HEIGHT + splitsHeight + CLOCK_HEIGHT)
+  clockFrame:SetHeight(Constants.sizes.timer.clock)
+  frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.header + Constants.sizes.timer.row + splitsHeight + Constants.sizes.timer.clock)
 end
 
 function Timer:ShowRun()
