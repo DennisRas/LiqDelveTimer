@@ -8,9 +8,14 @@ addon.Module_History = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local FindDuration = Helpers.FindDuration
+local FormatDate = Helpers.FormatDate
+local FindTier = Helpers.FindTier
+local FormatResult = Helpers.FormatResult
+local FindResultColor = Helpers.FindResultColor
+local FormatElapsed = Helpers.FormatElapsed
 local LiqUI = addon.libs.LiqUI
-
-local HISTORY_MAX_BODY = 420
+local layoutSizes = LiqUI.Constants.layout.sizes
 
 ---@param text string
 ---@param red number
@@ -18,11 +23,7 @@ local HISTORY_MAX_BODY = 420
 ---@param blue number
 ---@return string
 local function colorText(text, red, green, blue)
-  local colored = format("|cff%02x%02x%02x%s|r", math.floor(red * 255 + 0.5), math.floor(green * 255 + 0.5), math.floor(blue * 255 + 0.5), text)
-  if colored then
-    return colored
-  end
-  return text
+  return CreateColor(red, green, blue):WrapTextInColorCode(text)
 end
 
 ---@param rowA LDT_HistoryTableRow
@@ -90,13 +91,12 @@ function Module:Render()
       end,
     }
     self.window = LiqUI:NewElement("Window", windowOptions)
-    local sizes = LiqUI.Constants.layout.sizes
     ---@type LiqUI_TableOptions
     local buildTableOptions = {
       name = addon.name .. "History",
       storage = Data.db.global.liqui.tables.History,
-      header = { enabled = true, sticky = true, height = sizes.header },
-      rowStyle = { height = sizes.row, striped = true },
+      header = { enabled = true, sticky = true, height = layoutSizes.header },
+      rowStyle = { height = layoutSizes.row, striped = true },
       columns = {
         {
           id = "tier",
@@ -181,8 +181,8 @@ function Module:Render()
       end
     end
     local inProgress = run.endedAt == nil
-    local duration = Helpers.FindDuration(run) or 0
-    local whenText = Helpers.FormatDate(run.startedAt, Constants.dateLength.Medium)
+    local duration = FindDuration(run) or 0
+    local whenText = FormatDate(run.startedAt, Constants.dateLength.Medium)
     local characterName = ""
     local characterText = ""
     local character = run.character
@@ -197,17 +197,17 @@ function Module:Render()
         end
       end
     end
-    local tier = Helpers.FindTier(run) or 0
+    local tier = FindTier(run) or 0
     local tierText = "-"
     if tier > 0 then
       tierText = tostring(tier)
     end
-    local label = Helpers.FormatResult(run.result)
-    local red, green, blue = Helpers.FindResultColor(run.result)
+    local label = FormatResult(run.result)
+    local red, green, blue = FindResultColor(run.result)
     local resultText = colorText(label, red, green, blue)
     local durationText = "-"
     if not inProgress then
-      durationText = Helpers.FormatElapsed(duration)
+      durationText = FormatElapsed(duration)
     end
     ---@type LDT_HistoryTableRow
     local row = {
@@ -246,9 +246,9 @@ function Module:Render()
     tableWidth = 682
   end
   local bodyHeight = tableHeight
-  if bodyHeight > HISTORY_MAX_BODY then
-    bodyHeight = HISTORY_MAX_BODY
-    tableWidth = tableWidth + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  if bodyHeight > Constants.sizes.history.body then
+    bodyHeight = Constants.sizes.history.body
+    tableWidth = tableWidth + layoutSizes.scrollbar.thickness
   end
   self.window:SetBodySize(tableWidth, bodyHeight)
 end

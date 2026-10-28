@@ -171,6 +171,9 @@ Constants.sizes = {
     atlas = 14,
     window = 200,
   },
+  history = {
+    body = 420,
+  },
 }
 
 Constants.timing = {

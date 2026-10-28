@@ -8,7 +8,24 @@ addon.Module_Run = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local FindTier = Helpers.FindTier
+local RoundShownDelta = Helpers.RoundShownDelta
+local FindDeltaColor = Helpers.FindDeltaColor
+local FormatDelta = Helpers.FormatDelta
+local FormatElapsed = Helpers.FormatElapsed
+local FormatDate = Helpers.FormatDate
+local FindResultColor = Helpers.FindResultColor
+local FormatResult = Helpers.FormatResult
+local FindBestDuration = Helpers.FindBestDuration
+local FindDuration = Helpers.FindDuration
+local ParseBoonAmount = Helpers.ParseBoonAmount
+local FormatBoonAmount = Helpers.FormatBoonAmount
+local FormatMoney = Helpers.FormatMoney
+local IsCurrencyListed = Helpers.IsCurrencyListed
+local IsItemHidden = Helpers.IsItemHidden
+local RoundIcon = Helpers.RoundIcon
 local LiqUI = addon.libs.LiqUI
+local layoutSizes = LiqUI.Constants.layout.sizes
 local BindScrollBoxMouseWheel = LiqUI.Utils.BindScrollBoxMouseWheel
 local CreateScrollArea = LiqUI.Utils.CreateScrollArea
 local SetBackgroundColor = LiqUI.Utils.SetBackgroundColor
@@ -92,7 +109,7 @@ local function formatWindowTitle(run)
   if type(variant) == "string" and variant ~= "" and variant ~= name then
     title = format("%s - %s", name, variant) or name
   end
-  local tier = Helpers.FindTier(run)
+  local tier = FindTier(run)
   if tier then
     title = format("%s (Tier %d)", title, tier) or title
   end
@@ -110,13 +127,10 @@ local function formatDeltaText(elapsed, bestElapsed, ahead, behind)
   end
   local delta = 0
   if bestElapsed then
-    delta = Helpers.RoundShownDelta(elapsed, bestElapsed)
+    delta = RoundShownDelta(elapsed, bestElapsed)
   end
-  local color = ahead
-  if delta > 0 then
-    color = behind
-  end
-  return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(Helpers.FormatDelta(delta))
+  local color = FindDeltaColor(delta, ahead, behind)
+  return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(FormatDelta(delta))
 end
 
 ---@param name string
@@ -150,11 +164,11 @@ end
 local function buildStageRow(name, elapsed, bestElapsed, ahead, behind)
   local timeText = ""
   if elapsed then
-    timeText = Helpers.FormatElapsed(elapsed) or ""
+    timeText = FormatElapsed(elapsed) or ""
   end
   local bestText = "-"
   if bestElapsed then
-    bestText = Helpers.FormatElapsed(bestElapsed) or ""
+    bestText = FormatElapsed(bestElapsed) or ""
   end
   ---@type LiqUI_TableDataRowExtended
   local row = {
@@ -216,14 +230,11 @@ end
 ---@param behind ColorRGBAData
 ---@return string
 local function formatComparedTime(elapsed, bestElapsed, ahead, behind)
-  local text = Helpers.FormatElapsed(elapsed) or "-"
+  local text = FormatElapsed(elapsed) or "-"
   if not bestElapsed then
     return text
   end
-  local color = ahead
-  if Helpers.RoundShownDelta(elapsed, bestElapsed) > 0 then
-    color = behind
-  end
+  local color = FindDeltaColor(RoundShownDelta(elapsed, bestElapsed), ahead, behind)
   return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(text)
 end
 
@@ -320,18 +331,18 @@ local function buildSummary(run, ahead, behind)
     characterRow.onLeave = GameTooltip_Hide
   end
   data[#data + 1] = characterRow
-  data[#data + 1] = buildValueRow("Started", Helpers.FormatDate(run.startedAt, Constants.dateLength.Full))
+  data[#data + 1] = buildValueRow("Started", FormatDate(run.startedAt, Constants.dateLength.Full))
   local endedText = "-"
   if run.endedAt then
-    endedText = Helpers.FormatDate(run.endedAt, Constants.dateLength.Full)
+    endedText = FormatDate(run.endedAt, Constants.dateLength.Full)
   end
   data[#data + 1] = buildValueRow("Ended", endedText)
-  local red, green, blue = Helpers.FindResultColor(run.result)
-  data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(Helpers.FormatResult(run.result)))
-  local bestTime = Helpers.FindBestDuration(run)
+  local red, green, blue = FindResultColor(run.result)
+  data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(FormatResult(run.result)))
+  local bestTime = FindBestDuration(run)
   local timeText = "-"
   if run.endedAt then
-    local duration = Helpers.FindDuration(run)
+    local duration = FindDuration(run)
     if duration then
       timeText = formatComparedTime(duration, bestTime, ahead, behind)
     end
@@ -339,7 +350,7 @@ local function buildSummary(run, ahead, behind)
   data[#data + 1] = buildValueRow("Time", timeText)
   local bestText = "-"
   if bestTime then
-    bestText = Helpers.FormatElapsed(bestTime) or "-"
+    bestText = FormatElapsed(bestTime) or "-"
   end
   data[#data + 1] = buildValueRow("Best", bestText)
   local deathsMarkup = formatWithAtlas("DungeonSkull", tostring(run.deaths or 0))
@@ -420,9 +431,9 @@ local function appendBoonStats(text, stats)
   for line in text:gmatch("[^\r\n]+") do
     local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
     if label and label ~= "" and value and value ~= "" then
-      local amount = Helpers.ParseBoonAmount(value)
+      local amount = ParseBoonAmount(value)
       if amount then
-        value = Helpers.FormatBoonAmount(amount)
+        value = FormatBoonAmount(amount)
       else
         value = value:gsub("%s+$", ""):gsub("%.$", "")
       end
@@ -452,7 +463,7 @@ local function buildBoons(run)
   for index = 1, #boons do
     local boon = boons[index]
     if boon.label and boon.amount then
-      stats[#stats + 1] = { label = boon.label, value = Helpers.FormatBoonAmount(boon.amount) }
+      stats[#stats + 1] = { label = boon.label, value = FormatBoonAmount(boon.amount) }
     elseif boon.text and boon.text ~= "" then
       appendBoonStats(boon.text, stats)
     end
@@ -492,7 +503,7 @@ end
 local function showGold(copper, cellFrame)
   GameTooltip:SetOwner(cellFrame, "ANCHOR_RIGHT")
   GameTooltip:SetText("Gold", 1, 0.82, 0)
-  GameTooltip:AddLine(Helpers.FormatMoney(copper), 1, 1, 1)
+  GameTooltip:AddLine(FormatMoney(copper), 1, 1, 1)
   GameTooltip:Show()
 end
 
@@ -585,7 +596,7 @@ local function buildRewards(run)
     local row = {
       data = {
         "Gold",
-        Helpers.FormatMoney(copper),
+        FormatMoney(copper),
       },
       onEnter = showGoldRow,
       onLeave = GameTooltip_Hide,
@@ -596,7 +607,7 @@ local function buildRewards(run)
     local change = rewards[index]
     local currencyID = change.id
     local total = change.amount
-    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and Helpers.IsCurrencyListed(currencyID) then
+    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and IsCurrencyListed(currencyID) then
       local name = tostring(currencyID)
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.name and info.name ~= "" then
@@ -631,7 +642,7 @@ local function buildRewards(run)
   local items = {}
   for index = 1, #rewards do
     local item = rewards[index]
-    if item.type == Constants.rewardType.Loot and not Helpers.IsItemHidden(item.id) then
+    if item.type == Constants.rewardType.Loot and not IsItemHidden(item.id) then
       items[#items + 1] = {
         itemID = item.id,
         itemLink = item.itemLink,
@@ -743,24 +754,6 @@ local function findRoleAtlas(companion)
   return companion.roleAtlas
 end
 
----@param texture Texture
-local function roundTexture(texture)
-  local parent = texture:GetParent()
-  if not parent then
-    return
-  end
-  texture:ClearAllPoints()
-  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
-  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
-  local mask = parent:CreateMaskTexture()
-  mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  mask:SetAllPoints(texture)
-  texture:AddMaskTexture(mask)
-  local ring = parent:CreateTexture(nil, "OVERLAY")
-  ring:SetAllPoints(parent)
-  ring:SetAtlas(Constants.media.AffixRing)
-end
-
 ---@param parent Frame
 ---@param anchor Frame|Texture
 ---@param relativePoint string
@@ -775,7 +768,7 @@ local function createIconButton(parent, anchor, relativePoint, x, round)
   local icon = button:CreateTexture(nil, "ARTWORK")
   icon:SetAllPoints()
   if round then
-    roundTexture(icon)
+    RoundIcon(icon)
   end
   button.icon = icon
   button:SetScript("OnLeave", GameTooltip_Hide)
@@ -1080,7 +1073,7 @@ local function paintSummaryAffixes(summary, spellIDs, buttons)
   local anchor = valueCell
   ---@type FramePoint
   local relativePoint = "RIGHT"
-  local offsetX = -LiqUI.Constants.layout.sizes.padding
+  local offsetX = -layoutSizes.padding
   for index = #spellIDs, 1, -1 do
     local spellID = spellIDs[index]
     local texture = C_Spell.GetSpellTexture(spellID)
@@ -1092,7 +1085,7 @@ local function paintSummaryAffixes(summary, spellIDs, buttons)
         button:SetSize(Constants.sizes.run.icon, Constants.sizes.run.icon)
         local icon = button:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
-        roundTexture(icon)
+        RoundIcon(icon)
         button.icon = icon
         button:SetScript("OnLeave", GameTooltip_Hide)
         ---@param affixButton LDT_RunIconButton
@@ -1205,7 +1198,7 @@ local function buildTimelineData(run)
     end
     local timeText = ""
     if line.elapsed ~= nil then
-      timeText = colorText(Helpers.FormatElapsed(line.elapsed), timeColor)
+      timeText = colorText(FormatElapsed(line.elapsed), timeColor)
     end
     ---@type LiqUI_TableDataRowExtended
     local row = {
@@ -1246,9 +1239,9 @@ local function layoutScrollingTable(tableFrame, parent, data, viewHeight)
   tableFrame:SetSize(Constants.sizes.run.body, viewHeight)
   tableFrame:SetData(data)
   local _, contentHeight = tableFrame:GetSize()
-  if contentHeight > viewHeight + LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance then
-    tableFrame:SetSize(Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness, viewHeight)
-    return Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  if contentHeight > viewHeight + layoutSizes.scrollbar.overflowTolerance then
+    tableFrame:SetSize(Constants.sizes.run.body + layoutSizes.scrollbar.thickness, viewHeight)
+    return Constants.sizes.run.body + layoutSizes.scrollbar.thickness
   end
   return Constants.sizes.run.body
 end
@@ -1281,7 +1274,7 @@ function Module:Layout()
   if scale <= 0 then
     scale = 1
   end
-  local maxBody = (UIParent:GetHeight() - Constants.sizes.run.screenMargin) / scale - LiqUI.Constants.layout.sizes.titlebar.height
+  local maxBody = (UIParent:GetHeight() - Constants.sizes.run.screenMargin) / scale - layoutSizes.titlebar.height
   if maxBody < Constants.sizes.run.blockHeader then
     maxBody = Constants.sizes.run.blockHeader
   end
@@ -1290,8 +1283,8 @@ function Module:Layout()
     bodyHeight = maxBody
   end
   local detailsWidth = Constants.sizes.run.body
-  if detailsHeight > bodyHeight + LiqUI.Constants.layout.sizes.scrollbar.overflowTolerance then
-    detailsWidth = Constants.sizes.run.body + LiqUI.Constants.layout.sizes.scrollbar.thickness
+  if detailsHeight > bodyHeight + layoutSizes.scrollbar.overflowTolerance then
+    detailsWidth = Constants.sizes.run.body + layoutSizes.scrollbar.thickness
   end
   local rewardsWidth = layoutScrollingTable(self.rewards, self.rewardsColumn, self.rewardsData or {}, bodyHeight)
   local timelineWidth = layoutScrollingTable(self.timeline, self.timelineColumn, self.timelineData or {}, bodyHeight)
@@ -1432,7 +1425,7 @@ function Module:Render()
       name = addon.name .. "RunDetailsColumnScroll",
       vertical = true,
       horizontal = false,
-      wheelPanExtent = LiqUI.Constants.layout.sizes.row,
+      wheelPanExtent = layoutSizes.row,
     })
     self.detailsScroll = detailsScroll
     local rewardsColumn = createColumn(body, "RunRewardsColumn")

@@ -11,6 +11,11 @@ local TableForEach = LiqUI.Utils.TableForEach
 local TableGet = LiqUI.Utils.TableGet
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local ReadPlainNumber = Helpers.ReadPlainNumber
+local ReadPlainString = Helpers.ReadPlainString
+local ReadPlainBoolean = Helpers.ReadPlainBoolean
+local FindTier = Helpers.FindTier
+local FindBestRun = Helpers.FindBestRun
 
 Data.dbVersion = 1
 
@@ -140,33 +145,6 @@ function Data:CreateRun(startedAt)
   return run
 end
 
----@param value string|nil
----@return string|nil
-local function readString(value)
-  if type(value) ~= "string" or issecretvalue(value) or value == "" then
-    return nil
-  end
-  return value
-end
-
----@param value number|nil
----@return number|nil
-local function readNumber(value)
-  if type(value) ~= "number" or issecretvalue(value) then
-    return nil
-  end
-  return value
-end
-
----@param value boolean|nil
----@return boolean|nil
-local function readBoolean(value)
-  if type(value) ~= "boolean" or issecretvalue(value) then
-    return nil
-  end
-  return value
-end
-
 ---@param criteria LDT_CriteriaSnap[]
 ---@return LDT_Criteria[]
 local function readCriteria(criteria)
@@ -174,17 +152,17 @@ local function readCriteria(criteria)
   local rows = {}
   for index = 1, #criteria do
     local info = criteria[index]
-    local criteriaID = readNumber(info.criteriaID)
+    local criteriaID = ReadPlainNumber(info.criteriaID)
     if criteriaID ~= nil then
       ---@type LDT_Criteria
       local row = {
         criteriaID = criteriaID,
-        description = readString(info.description),
-        totalQuantity = readNumber(info.totalQuantity),
-        criteriaType = readNumber(info.criteriaType),
-        flags = readNumber(info.flags),
-        assetID = readNumber(info.assetID),
-        isWeightedProgress = readBoolean(info.isWeightedProgress),
+        description = ReadPlainString(info.description),
+        totalQuantity = ReadPlainNumber(info.totalQuantity),
+        criteriaType = ReadPlainNumber(info.criteriaType),
+        flags = ReadPlainNumber(info.flags),
+        assetID = ReadPlainNumber(info.assetID),
+        isWeightedProgress = ReadPlainBoolean(info.isWeightedProgress),
       }
       rows[#rows + 1] = row
     end
@@ -240,20 +218,20 @@ function Data:StoreScenario(run, scenario)
   if not info or not step then
     return
   end
-  local scenarioID = readNumber(info.scenarioID)
-  local stepID = readNumber(step.stepID)
+  local scenarioID = ReadPlainNumber(info.scenarioID)
+  local stepID = ReadPlainNumber(step.stepID)
   if not scenarioID or not stepID then
     return
   end
-  local stage = readNumber(info.currentStage)
-  local numStages = readNumber(info.numStages)
+  local stage = ReadPlainNumber(info.currentStage)
+  local numStages = ReadPlainNumber(info.numStages)
   local knownScenario = TableGet(self.scenarios, "scenarioID", scenarioID)
   local knownStep = TableGet(self.steps, "stepID", stepID)
   if not knownScenario then
     local scenarios = self.db.global.scenarios
     local record = scenarios[scenarioID]
-    local scenarioTitle = readString(info.name)
-    local flags = readNumber(info.flags)
+    local scenarioTitle = ReadPlainString(info.name)
+    local flags = ReadPlainNumber(info.flags)
     local instance = run.instance
     local mapID = instance and instance.mapID
     local instanceID = instance and instance.instanceID
@@ -275,8 +253,8 @@ function Data:StoreScenario(run, scenario)
     end
   end
   local criteriaRows = readCriteria(scenario.criteria)
-  local title = readString(step.title)
-  local description = readString(step.description)
+  local title = ReadPlainString(step.title)
+  local description = ReadPlainString(step.description)
   local learnTitle = title and not knownStep
   local learnDescription = description and (not knownStep or not knownStep.description or knownStep.description == "")
   local learnStage = stage and not knownStep
@@ -360,7 +338,7 @@ end
 
 ---@param run LDT_Run
 function Data:SetBest(run)
-  if run.best or not Helpers.FindTier(run) then
+  if run.best or not FindTier(run) then
     return
   end
   if run.mode ~= Constants.runMode.Lab then
@@ -369,7 +347,7 @@ function Data:SetBest(run)
       return
     end
   end
-  run.best = copyBest(Helpers.FindBestRun(run))
+  run.best = copyBest(FindBestRun(run))
 end
 
 local CHAMBER_SPLIT_LIMIT = 9
@@ -913,7 +891,7 @@ local function buildLabSplits(run)
       rows[openChamber].nodes = nested
     end
   end
-  local tier = Helpers.FindTier(run)
+  local tier = FindTier(run)
   if not tier or tier < NEMESIS_TIER then
     return rows
   end

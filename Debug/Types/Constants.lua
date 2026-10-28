@@ -91,10 +91,14 @@
 ---@field atlas number
 ---@field window number
 
+---@class LDT_ConstantsSizesHistory
+---@field body number
+
 ---@class LDT_ConstantsSizes
 ---@field iconInset number
 ---@field timer LDT_ConstantsSizesTimer
 ---@field run LDT_ConstantsSizesRun
+---@field history LDT_ConstantsSizesHistory
 
 ---@class LDT_ConstantsTiming
 ---@field paint number

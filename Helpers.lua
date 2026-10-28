@@ -5,6 +5,64 @@ local addon = select(2, ...)
 local Helpers = {}
 addon.Helpers = Helpers
 
+local Constants = addon.Constants
+
+---@param value string|nil
+---@return string|nil
+function Helpers.ReadPlainString(value)
+  if type(value) ~= "string" or issecretvalue(value) or value == "" then
+    return nil
+  end
+  return value
+end
+
+---@param value number|nil
+---@return number|nil
+function Helpers.ReadPlainNumber(value)
+  if type(value) ~= "number" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param value boolean|nil
+---@return boolean|nil
+function Helpers.ReadPlainBoolean(value)
+  if type(value) ~= "boolean" or issecretvalue(value) then
+    return nil
+  end
+  return value
+end
+
+---@param delta number
+---@param ahead ColorRGBAData
+---@param behind ColorRGBAData
+---@return ColorRGBAData
+function Helpers.FindDeltaColor(delta, ahead, behind)
+  if delta > 0 then
+    return behind
+  end
+  return ahead
+end
+
+---@param texture Texture
+function Helpers.RoundIcon(texture)
+  local parent = texture:GetParent()
+  if not parent then
+    return
+  end
+  texture:ClearAllPoints()
+  texture:SetPoint("TOPLEFT", parent, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
+  texture:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
+  local mask = parent:CreateMaskTexture()
+  mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+  mask:SetAllPoints(texture)
+  texture:AddMaskTexture(mask)
+  local ring = parent:CreateTexture(nil, "OVERLAY")
+  ring:SetAllPoints(parent)
+  ring:SetAtlas(Constants.media.AffixRing)
+end
+
 ---@param value string
 ---@return number|nil, boolean
 function Helpers.ParseBoonAmount(value)

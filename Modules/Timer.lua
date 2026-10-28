@@ -8,6 +8,14 @@ addon.Module_Timer = Timer
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local FormatElapsed = Helpers.FormatElapsed
+local RoundShownDelta = Helpers.RoundShownDelta
+local FindDeltaColor = Helpers.FindDeltaColor
+local FormatDelta = Helpers.FormatDelta
+local FindTier = Helpers.FindTier
+local RoundIcon = Helpers.RoundIcon
+local FindDuration = Helpers.FindDuration
+local FindBestDuration = Helpers.FindBestDuration
 local Capture = addon.Capture
 
 ---@param icon Texture
@@ -202,6 +210,9 @@ function Timer:ApplyFrameShown(shown, fromGame)
   frame:Hide()
 end
 
+local SAMPLE_TITLE = "The Shadow Enclave (Tier 11)"
+local SAMPLE_DEATHS = 1
+local SAMPLE_LIVES = 4
 local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
 local SAMPLE_CLOCK = 154000
 
@@ -547,20 +558,17 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     local timeText = ""
     local deltaText = ""
     if model.elapsed then
-      timeText = Helpers.FormatElapsed(model.elapsed) or ""
+      timeText = FormatElapsed(model.elapsed) or ""
       local delta = 0
       if model.best then
-        delta = Helpers.RoundShownDelta(model.elapsed, model.best)
+        delta = RoundShownDelta(model.elapsed, model.best)
       end
-      local deltaColor = ahead
-      if delta > 0 then
-        deltaColor = behind
-      end
-      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(Helpers.FormatDelta(delta))
+      local deltaColor = FindDeltaColor(delta, ahead, behind)
+      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta))
     end
     local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
     if model.best then
-      bestText = Helpers.FormatElapsed(model.best) or ""
+      bestText = FormatElapsed(model.best) or ""
     end
     row.name:SetText(formatSplitLabel(model.name, model.done, model.total, showCounts))
     row.delta:SetText(deltaText)
@@ -817,9 +825,9 @@ function Timer:Render()
     if not Capture:IsEnded(activeRun) then
       headerInfo = Capture:SetDelveHeader(activeRun)
     end
-    title = formatRunTitle(activeRun, Helpers.FindTier(activeRun))
+    title = formatRunTitle(activeRun, FindTier(activeRun))
   else
-    title = "The Shadow Enclave (Tier 11)"
+    title = SAMPLE_TITLE
   end
   titleText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.titleFont, "")
   titleText:SetTextColor(Constants.colors.title.r, Constants.colors.title.g, Constants.colors.title.b, Constants.colors.title.a)
@@ -833,8 +841,8 @@ function Timer:Render()
     end
     livesCount = activeRun.lives
   else
-    deathsCount = 1
-    livesCount = 4
+    deathsCount = SAMPLE_DEATHS
+    livesCount = SAMPLE_LIVES
   end
   local countAnchor, countPoint, countOffset = placeCount(livesIcon, livesText, Constants.media.Heart, livesCount, header, "RIGHT", -Constants.sizes.timer.headerPad)
   countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, Constants.media.Skull, deathsCount, countAnchor, countPoint, countOffset)
@@ -859,15 +867,7 @@ function Timer:Render()
           local button = CreateFrame("Button", nil, spells)
           button:SetSize(Constants.sizes.timer.icon, Constants.sizes.timer.icon)
           local icon = button:CreateTexture(nil, "ARTWORK")
-          icon:SetPoint("TOPLEFT", button, "TOPLEFT", Constants.sizes.iconInset, -Constants.sizes.iconInset)
-          icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -Constants.sizes.iconInset, Constants.sizes.iconInset)
-          local mask = button:CreateMaskTexture()
-          mask:SetTexture(Constants.media.CircleMask, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-          mask:SetAllPoints(icon)
-          icon:AddMaskTexture(mask)
-          local ring = button:CreateTexture(nil, "OVERLAY")
-          ring:SetAllPoints(button)
-          ring:SetAtlas(Constants.media.AffixRing)
+          RoundIcon(icon)
           ---@type LDT_TimerSpell
           spell = { button = button, icon = icon }
           do
@@ -919,7 +919,7 @@ function Timer:Render()
   local phraseText
   local phraseColor = ahead
   if activeRun and Capture.clockReady then
-    local frozen = Helpers.FindDuration(activeRun)
+    local frozen = FindDuration(activeRun)
     if frozen then
       clockValue = frozen
     else
@@ -927,28 +927,26 @@ function Timer:Render()
     end
     local compare
     if frozen then
-      compare = Helpers.FindBestDuration(activeRun)
+      compare = FindBestDuration(activeRun)
     else
       compare = findCurrentBest(nodes)
     end
     if clockValue and compare then
-      local delta = Helpers.RoundShownDelta(clockValue, compare)
-      phraseText = Helpers.FormatDelta(delta)
-      if delta > 0 then
-        phraseColor = behind
-      end
+      local delta = RoundShownDelta(clockValue, compare)
+      phraseText = FormatDelta(delta)
+      phraseColor = FindDeltaColor(delta, ahead, behind)
     end
   elseif not activeRun then
     clockValue = SAMPLE_CLOCK
     local compare = findCurrentBest(nodes)
     if compare then
-      phraseText = Helpers.FormatDelta(Helpers.RoundShownDelta(SAMPLE_CLOCK, compare))
+      phraseText = FormatDelta(RoundShownDelta(SAMPLE_CLOCK, compare))
     end
   end
   clockString:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockFont, "")
   phrase:SetFont(Constants.media.NumberFont, Constants.sizes.timer.phraseFont, "")
   if clockValue then
-    clockString:SetText(Helpers.FormatElapsed(clockValue))
+    clockString:SetText(FormatElapsed(clockValue))
   else
     clockString:SetText("0:00.00")
   end

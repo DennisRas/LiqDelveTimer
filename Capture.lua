@@ -8,6 +8,15 @@ addon.Capture = Capture
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
+local ReadPlainString = Helpers.ReadPlainString
+local ReadPlainNumber = Helpers.ReadPlainNumber
+local ReadPlainBoolean = Helpers.ReadPlainBoolean
+local FindBestDuration = Helpers.FindBestDuration
+local RoundShown = Helpers.RoundShown
+local ParseBoonAmount = Helpers.ParseBoonAmount
+local FormatBoonAmount = Helpers.FormatBoonAmount
+local IsCurrencyListed = Helpers.IsCurrencyListed
+local IsItemHidden = Helpers.IsItemHidden
 local LiqUI = addon.libs.LiqUI
 local Events = LiqUI.Events
 local TableCopy = LiqUI.Utils.TableCopy
@@ -436,18 +445,9 @@ local LIVES_SPELL_ID = 458103
 local LIVES_ICON_FILE = 6013778
 
 ---@param text string|nil
----@return string|nil
-local function readText(text)
-  if not text or text == "" or issecretvalue(text) then
-    return nil
-  end
-  return text
-end
-
----@param text string|nil
 ---@return number|nil
 local function parseFirstCount(text)
-  local plain = readText(text)
+  local plain = ReadPlainString(text)
   if not plain then
     return nil
   end
@@ -461,7 +461,7 @@ end
 ---@param tooltip string|nil
 ---@return number|nil
 local function parseDeathCount(tooltip)
-  local plain = readText(tooltip)
+  local plain = ReadPlainString(tooltip)
   if not plain then
     return nil
   end
@@ -483,7 +483,7 @@ local function isLivesCurrency(currency)
   if iconFileID and not issecretvalue(iconFileID) and iconFileID == LIVES_ICON_FILE then
     return true
   end
-  local tooltip = readText(currency.tooltip)
+  local tooltip = ReadPlainString(currency.tooltip)
   if tooltip and tooltip:find("spell:" .. LIVES_SPELL_ID, 1, true) then
     return true
   end
@@ -703,31 +703,13 @@ function Capture:SetPlace(run, instance)
   setDelveMode(run, instance)
 end
 
----@param value number|nil
----@return number|nil
-local function readNumber(value)
-  if type(value) ~= "number" or issecretvalue(value) then
-    return nil
-  end
-  return value
-end
-
----@param value boolean|nil
----@return boolean|nil
-local function readBoolean(value)
-  if type(value) ~= "boolean" or issecretvalue(value) then
-    return nil
-  end
-  return value
-end
-
 ---@param stored LDT_RunCriteria[]
 ---@param incoming LDT_CriteriaSnap[]
 ---@param elapsed number
 local function writeCriteria(stored, incoming, elapsed)
   for index = 1, #incoming do
     local info = incoming[index]
-    local criteriaID = readNumber(info.criteriaID)
+    local criteriaID = ReadPlainNumber(info.criteriaID)
     if criteriaID ~= nil then
       local match
       if criteriaID ~= 0 then
@@ -740,9 +722,9 @@ local function writeCriteria(stored, incoming, elapsed)
       elseif stored[index] and stored[index].criteriaID == 0 then
         match = stored[index]
       end
-      local quantity = readNumber(info.quantity)
-      local completed = readBoolean(info.completed)
-      local failed = readBoolean(info.failed)
+      local quantity = ReadPlainNumber(info.quantity)
+      local completed = ReadPlainBoolean(info.completed)
+      local failed = ReadPlainBoolean(info.failed)
       if not match then
         ---@type LDT_RunCriteria
         local row = {
@@ -782,7 +764,7 @@ local function recordScenario(run, scenario, elapsed)
   if not info then
     return
   end
-  local scenarioID = readNumber(info.scenarioID)
+  local scenarioID = ReadPlainNumber(info.scenarioID)
   if not scenarioID or scenarioID <= 0 then
     return
   end
@@ -814,7 +796,7 @@ local function recordScenario(run, scenario, elapsed)
       Capture:SetRunFinished(run)
     end
   end
-  local complete = readBoolean(info.isComplete)
+  local complete = ReadPlainBoolean(info.isComplete)
   if complete and not current.completedElapsed then
     current.completedElapsed = elapsed
   end
@@ -822,7 +804,7 @@ local function recordScenario(run, scenario, elapsed)
     Capture:SetRunFinished(run)
   end
   local step = scenario.step
-  local stepID = step and readNumber(step.stepID)
+  local stepID = step and ReadPlainNumber(step.stepID)
   if not stepID or stepID <= 0 then
     return
   end
@@ -832,7 +814,7 @@ local function recordScenario(run, scenario, elapsed)
     if runStep and not runStep.completedElapsed then
       runStep.completedElapsed = elapsed
     end
-    local stage = readNumber(info.currentStage)
+    local stage = ReadPlainNumber(info.currentStage)
     ---@type LDT_RunStep
     local created = {
       stepID = stepID,
@@ -914,8 +896,8 @@ local function finishKinduru(run, scenario)
   end
   for index = 1, #scenario.criteria do
     local info = scenario.criteria[index]
-    local criteriaID = readNumber(info.criteriaID)
-    local completed = readBoolean(info.completed)
+    local criteriaID = ReadPlainNumber(info.criteriaID)
+    local completed = ReadPlainBoolean(info.completed)
     if criteriaID == kinduruCriteriaID and completed then
       Capture:SetRunFinished(run)
       return
@@ -959,8 +941,8 @@ function Capture:Stop(run, elapsed, abandoned)
   if abandoned then
     run.result = Constants.runResult.Abandoned
   else
-    local bestTime = Helpers.FindBestDuration(run)
-    if not bestTime or Helpers.RoundShown(elapsed) < Helpers.RoundShown(bestTime) then
+    local bestTime = FindBestDuration(run)
+    if not bestTime or RoundShown(elapsed) < RoundShown(bestTime) then
       run.result = Constants.runResult.PersonalBest
     else
       run.result = Constants.runResult.Completed
@@ -986,7 +968,7 @@ function Capture:OnScenarioCompleted()
   end
   self:SetClock(run)
   local info = C_ScenarioInfo.GetScenarioInfo()
-  local scenarioID = info and readNumber(info.scenarioID)
+  local scenarioID = info and ReadPlainNumber(info.scenarioID)
   local role = findRole(scenarioID)
   if role == Constants.scenarioRole.Stages or role == Constants.scenarioRole.Boss then
     self:SetRunFinished(run)
@@ -1064,14 +1046,14 @@ function Capture:SetBoons(run)
         for line in leftText:gmatch("[^\r\n]+") do
           local label, value = line:match("^%s*(.-)%s*:%s*(.-)%s*$")
           if label and label ~= "" and value and value ~= "" then
-            local amount, percent = Helpers.ParseBoonAmount(value)
+            local amount, percent = ParseBoonAmount(value)
             if amount then
               ---@type LDT_BoonStat
               local stat = {
                 label = label,
                 amount = amount,
                 percent = percent,
-                text = format("%s: %s", label, Helpers.FormatBoonAmount(amount)),
+                text = format("%s: %s", label, FormatBoonAmount(amount)),
               }
               lines[#lines + 1] = stat
             end
@@ -1197,7 +1179,7 @@ function Capture:OnCurrency(currencyType, _quantity, quantityChange)
   if not run or not currencyType or not quantityChange or quantityChange == 0 then
     return
   end
-  if not Helpers.IsCurrencyListed(currencyType) then
+  if not IsCurrencyListed(currencyType) then
     return
   end
   self:SetClock(run)
@@ -1224,7 +1206,7 @@ function Capture:OnLoot(message, guid)
   end
   self:SetClock(run)
   local itemID = tonumber(itemLink:match("item:(%d+)"))
-  if Helpers.IsItemHidden(itemID) then
+  if IsItemHidden(itemID) then
     return
   end
   local count = tonumber(message:match("x(%d+)")) or 1
