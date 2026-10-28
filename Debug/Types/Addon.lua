@@ -42,6 +42,7 @@
 ---@field frame LDT_TimerFrame|nil
 ---@field header LDT_TimerHeader|nil
 ---@field title FontString|nil
+---@field tier FontString|nil
 ---@field deaths FontString|nil
 ---@field deathsIcon Texture|nil
 ---@field lives FontString|nil
@@ -50,9 +51,8 @@
 ---@field spellButtons LDT_TimerSpell[]|nil
 ---@field splits Frame|nil
 ---@field splitRows LDT_TimerSplitRow[]|nil
----@field clockFrame Frame|nil
----@field clock FontString|nil
----@field cue FontString|nil
+---@field clockFrame LDT_TimerClock|nil
+---@field clockText FontString|nil
 ---@field phrase FontString|nil
 
 ---@class LDT_Module_Run : AceModule

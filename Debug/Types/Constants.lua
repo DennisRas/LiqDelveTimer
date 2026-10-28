@@ -7,19 +7,20 @@
 ---@class LDT_ConstantsColors
 ---@field ahead ColorRGBAData
 ---@field behind ColorRGBAData
----@field background ColorRGBAData
+---@field windowBackground ColorRGBAData
 ---@field border ColorRGBAData
 ---@field step ColorRGBAData
 ---@field objective ColorRGBAData
 ---@field objectiveDone ColorRGBAData
 ---@field wash ColorRGBAData
 ---@field stripe ColorRGBAData
----@field header ColorRGBAData
+---@field headerBackground ColorRGBAData
+---@field clockBackground ColorRGBAData
 ---@field clear ColorRGBAData
----@field title ColorRGBAData
+---@field titleText ColorRGBAData
 ---@field activeRow ColorRGBAData
 ---@field divider ColorRGBAData
----@field block ColorRGBAData
+---@field blockText ColorRGBAData
 ---@field nestedTime ColorRGBAData
 ---@field gain ColorRGBAData
 ---@field bar ColorRGBAData
@@ -38,22 +39,20 @@
 ---@field Heart string
 
 ---@class LDT_ConstantsSizesTimer
----@field header number
----@field headerPad number
----@field icon number
+---@field headerHeight number
+---@field iconSize number
 ---@field iconGap number
 ---@field spellGap number
----@field row number
----@field line number
+---@field rowHeight number
+---@field lineHeight number
 ---@field detailPad number
 ---@field nodeIndent number
 ---@field lineIndent number
----@field mark number
+---@field markSize number
 ---@field markGap number
----@field border number
+---@field borderSize number
 ---@field phraseGap number
----@field cueGap number
----@field clock number
+---@field clockHeight number
 ---@field titleFont number
 ---@field metaFont number
 ---@field clockFont number
@@ -64,35 +63,35 @@
 ---@field columnWidth number[]
 
 ---@class LDT_ConstantsSizesRun
----@field stage number
----@field number number
----@field body number
----@field label number
----@field value number
----@field rewardAmount number
----@field rewardName number
----@field boonValue number
----@field boonLabel number
----@field timelineTime number
----@field timelineName number
+---@field stageWidth number
+---@field numberWidth number
+---@field bodyWidth number
+---@field labelWidth number
+---@field valueWidth number
+---@field rewardAmountWidth number
+---@field rewardNameWidth number
+---@field boonValueWidth number
+---@field boonLabelWidth number
+---@field timelineTimeWidth number
+---@field timelineNameWidth number
 ---@field padding number
----@field stageText number
+---@field stageTextWidth number
 ---@field companionPad number
----@field icon number
----@field bar number
----@field blockHeader number
+---@field iconSize number
+---@field barHeight number
+---@field blockHeaderHeight number
 ---@field screenMargin number
----@field divider number
+---@field dividerWidth number
 ---@field indent number
----@field companionLine number
+---@field companionLineHeight number
 ---@field companionGap number
 ---@field barTextPad number
 ---@field iconGap number
----@field atlas number
----@field window number
+---@field atlasSize number
+---@field windowHeight number
 
 ---@class LDT_ConstantsSizesHistory
----@field body number
+---@field bodyHeight number
 
 ---@class LDT_ConstantsSizes
 ---@field iconInset number

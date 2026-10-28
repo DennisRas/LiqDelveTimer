@@ -17,7 +17,7 @@ local ReadPlainBoolean = Helpers.ReadPlainBoolean
 local FindTier = Helpers.FindTier
 local FindBestRun = Helpers.FindBestRun
 
-Data.dbVersion = 2
+Data.dbVersion = 3
 
 ---@type table
 Data.defaultDB = {
@@ -49,9 +49,10 @@ Data.defaultDB = {
       autoOpenChambers = true,
       aheadColor = Constants.colors.ahead,
       behindColor = Constants.colors.behind,
-      backgroundColor = Constants.colors.background,
+      windowBackgroundColor = Constants.colors.windowBackground,
       borderColor = Constants.colors.border,
-      headerColor = Constants.colors.header,
+      headerBackgroundColor = Constants.colors.headerBackground,
+      clockBackgroundColor = Constants.colors.clockBackground,
       stripeColor = Constants.colors.stripe,
       activeRowColor = Constants.colors.activeRow,
       scale = 100,
@@ -97,6 +98,36 @@ function Data:MigrateDB()
         timer.relativePoint = nil
         timer.x = nil
         timer.y = nil
+      end
+    end
+    if self.db.global.dbVersion == 2 then
+      local timer = self.db.global.timer
+      if timer.backgroundColor ~= nil then
+        timer.windowBackgroundColor = timer.backgroundColor
+        timer.backgroundColor = nil
+      end
+      if timer.windowBackgroundColor.r == nil then
+        timer.windowBackgroundColor.r = Constants.colors.windowBackground.r
+        timer.windowBackgroundColor.g = Constants.colors.windowBackground.g
+        timer.windowBackgroundColor.b = Constants.colors.windowBackground.b
+      end
+      if timer.headerColor ~= nil then
+        timer.headerBackgroundColor = timer.headerColor
+        timer.headerColor = nil
+      end
+      if timer.headerBackgroundColor.r == nil then
+        timer.headerBackgroundColor.r = Constants.colors.headerBackground.r
+        timer.headerBackgroundColor.g = Constants.colors.headerBackground.g
+        timer.headerBackgroundColor.b = Constants.colors.headerBackground.b
+      end
+      if timer.clockColor ~= nil then
+        timer.clockBackgroundColor = timer.clockColor
+        timer.clockColor = nil
+      end
+      if timer.clockBackgroundColor.r == nil then
+        timer.clockBackgroundColor.r = Constants.colors.clockBackground.r
+        timer.clockBackgroundColor.g = Constants.colors.clockBackground.g
+        timer.clockBackgroundColor.b = Constants.colors.clockBackground.b
       end
     end
     self.db.global.dbVersion = self.db.global.dbVersion + 1
@@ -417,56 +448,6 @@ local function resolveRole(scenarioID, storedRole)
     return storedRole
   end
   return catalogRole
-end
-
----@param scenario LDT_RunScenario
----@param pathCriteriaID number
----@return boolean
-local function isPathOpen(scenario, pathCriteriaID)
-  local steps = scenario.steps
-  for stepIndex = 1, #steps do
-    local criteria = steps[stepIndex].criteria
-    if criteria then
-      for index = 1, #criteria do
-        local row = criteria[index]
-        if row.criteriaID == pathCriteriaID and not row.completed then
-          return true
-        end
-      end
-    end
-  end
-  return false
-end
-
----@param run LDT_Run
----@return string|nil
-function Data:FormatClockPrompt(run)
-  if run.mode ~= Constants.runMode.Lab then
-    return nil
-  end
-  local delve = Data:FindDelve(run.instance)
-  local pathCriteriaID = delve and delve.pathCriteriaID
-  if not pathCriteriaID then
-    return nil
-  end
-  local openScenario
-  for index = #run.scenarios, 1, -1 do
-    local scenario = run.scenarios[index]
-    if not scenario.completedElapsed then
-      openScenario = scenario
-      break
-    end
-  end
-  if not openScenario then
-    return nil
-  end
-  if resolveRole(openScenario.scenarioID, openScenario.role) ~= Constants.scenarioRole.Hub then
-    return nil
-  end
-  if not isPathOpen(openScenario, pathCriteriaID) then
-    return nil
-  end
-  return "Pick the next chamber"
 end
 
 ---@param scenarioID number

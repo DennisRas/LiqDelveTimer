@@ -44,9 +44,10 @@
 ---@field autoOpenChambers boolean
 ---@field aheadColor ColorRGBAData
 ---@field behindColor ColorRGBAData
----@field backgroundColor ColorRGBAData
+---@field windowBackgroundColor ColorRGBAData
 ---@field borderColor ColorRGBAData
----@field headerColor ColorRGBAData
+---@field headerBackgroundColor ColorRGBAData
+---@field clockBackgroundColor ColorRGBAData
 ---@field stripeColor ColorRGBAData
 ---@field activeRowColor ColorRGBAData
 ---@field scale number

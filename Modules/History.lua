@@ -246,8 +246,8 @@ function Module:Render()
     tableWidth = 682
   end
   local bodyHeight = tableHeight
-  if bodyHeight > Constants.sizes.history.body then
-    bodyHeight = Constants.sizes.history.body
+  if bodyHeight > Constants.sizes.history.bodyHeight then
+    bodyHeight = Constants.sizes.history.bodyHeight
     tableWidth = tableWidth + layoutSizes.scrollbar.thickness
   end
   self.window:SetBodySize(tableWidth, bodyHeight)

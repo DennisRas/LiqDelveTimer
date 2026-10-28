@@ -7,6 +7,9 @@
 ---@field whileDead number
 ---@field hideOnEscape number
 
+---@class LDT_TimerClock : Frame
+---@field background Texture
+
 ---@class LDT_TimerDetailLine
 ---@field frame Frame
 ---@field icon Texture
