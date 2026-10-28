@@ -180,6 +180,12 @@ Constants.timing = {
   paint = 0.1,
 }
 
+Constants.timerScale = {
+  min = 80,
+  max = 200,
+  step = 10,
+}
+
 Constants.media = {
   Icon = "Interface/Icons/INV_Misc_PocketWatch_01",
   -- Icon = format("Interface/AddOns/%s/Media/Icon.blp", addon.name),

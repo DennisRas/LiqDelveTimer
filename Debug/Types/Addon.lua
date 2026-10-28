@@ -40,7 +40,7 @@
 
 ---@class LDT_Module_Timer : AceModule
 ---@field frame LDT_TimerFrame|nil
----@field header Frame|nil
+---@field header LDT_TimerHeader|nil
 ---@field title FontString|nil
 ---@field deaths FontString|nil
 ---@field deathsIcon Texture|nil

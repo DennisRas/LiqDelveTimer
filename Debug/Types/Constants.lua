@@ -103,6 +103,11 @@
 ---@class LDT_ConstantsTiming
 ---@field paint number
 
+---@class LDT_ConstantsTimerScale
+---@field min number
+---@field max number
+---@field step number
+
 ---@class LDT_Constants
 ---@field prefix string
 ---@field runMode table<string, LDT_RunModeId>
@@ -114,4 +119,5 @@
 ---@field colors LDT_ConstantsColors
 ---@field sizes LDT_ConstantsSizes
 ---@field timing LDT_ConstantsTiming
+---@field timerScale LDT_ConstantsTimerScale
 ---@field media LDT_ConstantsMedia

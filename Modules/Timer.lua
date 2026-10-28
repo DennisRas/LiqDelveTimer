@@ -96,6 +96,35 @@ local function showColorPicker(color, apply)
 end
 
 local paintRemaining = 0
+local placedOnTracker = false
+
+---@return number|nil
+---@return number|nil
+local function trackerCorner()
+  local tracker = _G.ObjectiveTrackerFrame
+  if not tracker then
+    return nil, nil
+  end
+  local right = tracker:GetRight()
+  local top = tracker:GetTop()
+  if not right or not top then
+    return nil, nil
+  end
+  return right, top
+end
+
+---@param percent number
+---@return boolean
+local function timerScaleIsSelected(percent)
+  return (Data.db.global.timer.scale or 100) == percent
+end
+
+---@param percent number
+local function selectTimerScale(percent)
+  Data.db.global.timer.scale = percent
+  Timer:Place()
+  Timer:Render()
+end
 
 ---@param _frame Frame
 ---@param elapsed number
@@ -105,7 +134,19 @@ local function onPaintUpdate(_frame, elapsed)
     return
   end
   paintRemaining = Constants.timing.paint
+  if not placedOnTracker and not Data.db.global.timer.point then
+    Timer:Place()
+  end
   Timer:Render()
+end
+
+---@param owner Frame
+local function showHeaderTooltip(owner)
+  GameTooltip:SetOwner(owner, "ANCHOR_TOP")
+  GameTooltip:SetText("Timer", 1, 1, 1)
+  GameTooltip:AddLine("|cff00ff00Right click|r to open settings.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+  GameTooltip:AddLine("|cff00ff00Left click|r to drag.", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+  GameTooltip:Show()
 end
 
 ---@param rootMenu RootMenuDescriptionProxy
@@ -117,6 +158,47 @@ local function addColorSwatch(rootMenu, text, color)
       Timer:Render()
     end)
   end, color)
+end
+
+---@param color ColorRGBAData
+---@param default ColorRGBAData
+local function restoreColor(color, default)
+  color.r = default.r
+  color.g = default.g
+  color.b = default.b
+  color.a = default.a
+end
+
+local function resetTimerColors()
+  local options = Data.db.global.timer
+  restoreColor(options.aheadColor, Constants.colors.ahead)
+  restoreColor(options.behindColor, Constants.colors.behind)
+  restoreColor(options.backgroundColor, Constants.colors.background)
+  restoreColor(options.borderColor, Constants.colors.border)
+  restoreColor(options.headerColor, Constants.colors.header)
+  restoreColor(options.stripeColor, Constants.colors.stripe)
+  restoreColor(options.activeRowColor, Constants.colors.activeRow)
+  Timer:Render()
+end
+
+local resetColorsDialog = addon.name:upper() .. "_RESET_COLORS"
+
+do
+  ---@type LDT_ResetColorsStaticPopupDialog
+  local dialog = {
+    text = "Reset colors?",
+    button1 = YES,
+    button2 = CANCEL,
+    OnAccept = resetTimerColors,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+  }
+  StaticPopupDialogs[resetColorsDialog] = dialog
+end
+
+local function confirmResetTimerColors()
+  StaticPopup_Show(resetColorsDialog)
 end
 
 ---@param owner Frame
@@ -151,6 +233,14 @@ function Timer:OpenMenu(owner)
     addColorSwatch(rootMenu, "Slower than best", options.behindColor)
     addColorSwatch(rootMenu, "Background", options.backgroundColor)
     addColorSwatch(rootMenu, "Border", options.borderColor)
+    addColorSwatch(rootMenu, "Header background", options.headerColor)
+    addColorSwatch(rootMenu, "Stripe", options.stripeColor)
+    addColorSwatch(rootMenu, "Active step", options.activeRowColor)
+    local timerScale = rootMenu:CreateButton("Scaling")
+    for scalePercent = Constants.timerScale.min, Constants.timerScale.max, Constants.timerScale.step do
+      timerScale:CreateRadio(scalePercent .. "%", timerScaleIsSelected, selectTimerScale, scalePercent)
+    end
+    rootMenu:CreateButton("Reset colors", confirmResetTimerColors)
   end)
 end
 
@@ -164,11 +254,26 @@ function Timer:SaveScreenPoint()
   if not right or not top then
     return
   end
+  local scale = frame:GetScale()
+  if not scale or scale == 0 then
+    scale = 1
+  end
+  local storedX = right * scale - UIParent:GetWidth()
+  local storedY = top * scale - UIParent:GetHeight()
   local options = Data.db.global.timer
-  options.point = "TOPRIGHT"
-  options.relativePoint = "TOPRIGHT"
-  options.x = right - UIParent:GetRight()
-  options.y = top - UIParent:GetTop()
+  ---@type LiqUI_WindowPointPersisted
+  local savedPoint = { "TOPRIGHT", "TOPRIGHT", storedX, storedY }
+  options.point = savedPoint
+  options.scale = math.floor(scale * 100 + 0.5)
+  frame:ClearAllPoints()
+  frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", storedX / scale, storedY / scale)
+end
+
+---@param frame Frame
+local function updateTimerClampInsets(frame)
+  local width = frame:GetWidth()
+  local height = frame:GetHeight()
+  frame:SetClampRectInsets(width / 2, -width / 2, 0, height / 2)
 end
 
 function Timer:Place()
@@ -177,8 +282,31 @@ function Timer:Place()
     return
   end
   local options = Data.db.global.timer
+  local scale = (options.scale or 100) / 100
+  if scale <= 0 then
+    scale = 1
+  end
+  local savedPoint = options.point
+  local offsetX
+  local offsetY
+  if savedPoint and type(savedPoint[3]) == "number" and type(savedPoint[4]) == "number" then
+    offsetX = savedPoint[3] / scale
+    offsetY = savedPoint[4] / scale
+  else
+    if frame:IsDragging() then
+      return
+    end
+    local trackerRight, trackerTop = trackerCorner()
+    if not trackerRight or not trackerTop then
+      return
+    end
+    offsetX = trackerRight - UIParent:GetWidth() / scale
+    offsetY = trackerTop - UIParent:GetHeight() / scale
+    placedOnTracker = true
+  end
+  frame:SetScale(scale)
   frame:ClearAllPoints()
-  frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
+  frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", offsetX, offsetY)
 end
 
 ---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
@@ -312,6 +440,9 @@ local function createSplitRow(rows, index, parent)
   bar:SetHeight(Constants.sizes.timer.row)
   local background = bar:CreateTexture(nil, "BACKGROUND")
   background:SetAllPoints()
+  local highlight = bar:CreateTexture(nil, "ARTWORK")
+  highlight:SetAllPoints()
+  highlight:Hide()
   local name = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   local delta = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   local time = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -323,9 +454,6 @@ local function createSplitRow(rows, index, parent)
   local detail = CreateFrame("Frame", nil, frame)
   detail:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
-  local detailBackground = detail:CreateTexture(nil, "BACKGROUND")
-  detailBackground:SetAllPoints()
-  detailBackground:SetColorTexture(Constants.colors.wash.r, Constants.colors.wash.g, Constants.colors.wash.b, Constants.colors.wash.a)
   ---@type LDT_TimerDetailLine[]
   local lines = {}
   ---@type LDT_TimerSplitRow
@@ -333,6 +461,7 @@ local function createSplitRow(rows, index, parent)
     frame = frame,
     bar = bar,
     background = background,
+    highlight = highlight,
     name = name,
     delta = delta,
     time = time,
@@ -547,8 +676,10 @@ end
 ---@param behind ColorRGBAData
 ---@param showSteps boolean
 ---@param showCounts boolean
+---@param stripe ColorRGBAData
+---@param activeRow ColorRGBAData
 ---@return number
-local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts)
+local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts, stripe, activeRow)
   local offsetY = 0
   local stripeIndex = 0
   for index = 1, #nodes do
@@ -574,12 +705,16 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     row.delta:SetText(deltaText)
     row.time:SetText(timeText)
     row.best:SetText(bestText)
-    if model.current then
-      row.background:SetColorTexture(Constants.colors.activeRow.r, Constants.colors.activeRow.g, Constants.colors.activeRow.b, Constants.colors.activeRow.a)
-    elseif stripeIndex % 2 == 1 then
-      row.background:SetColorTexture(Constants.colors.stripe.r, Constants.colors.stripe.g, Constants.colors.stripe.b, Constants.colors.stripe.a)
+    if stripeIndex % 2 == 1 then
+      row.background:SetColorTexture(stripe.r, stripe.g, stripe.b, stripe.a)
     else
       row.background:SetColorTexture(Constants.colors.clear.r, Constants.colors.clear.g, Constants.colors.clear.b, Constants.colors.clear.a)
+    end
+    if model.current then
+      row.highlight:SetColorTexture(activeRow.r, activeRow.g, activeRow.b, activeRow.a)
+      row.highlight:Show()
+    else
+      row.highlight:Hide()
     end
     local detailHeight = paintDetail(row, model, showSteps)
     local height = Constants.sizes.timer.row + detailHeight
@@ -642,12 +777,16 @@ function Timer:Render()
     ---@type LDT_TimerFrame
     local frame = CreateFrame("Frame", addon.name .. "Timer", UIParent, "BackdropTemplate")
     frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.header)
-    frame:SetPoint(options.point, UIParent, options.relativePoint, options.x, options.y)
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
+    frame:SetScript("OnSizeChanged", function(sizedFrame)
+      updateTimerClampInsets(sizedFrame)
+    end)
+    updateTimerClampInsets(frame)
     frame:SetFrameStrata("HIGH")
     self.frame = frame
 
+    ---@type LDT_TimerHeader
     local header = CreateFrame("Frame", nil, frame)
     header:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
     header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
@@ -655,10 +794,14 @@ function Timer:Render()
     local headerBackground = header:CreateTexture(nil, "BACKGROUND")
     headerBackground:SetPoint("TOPLEFT", header, "TOPLEFT", Constants.sizes.timer.border, -Constants.sizes.timer.border)
     headerBackground:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -Constants.sizes.timer.border, 0)
-    headerBackground:SetColorTexture(Constants.colors.header.r, Constants.colors.header.g, Constants.colors.header.b, Constants.colors.header.a)
+    headerBackground:SetColorTexture(options.headerColor.r, options.headerColor.g, options.headerColor.b, options.headerColor.a)
+    header.background = headerBackground
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
+    header:SetScript("OnEnter", showHeaderTooltip)
+    header:SetScript("OnLeave", GameTooltip_Hide)
     header:SetScript("OnDragStart", function()
+      GameTooltip:Hide()
       frame:StartMoving()
     end)
     header:SetScript("OnDragStop", function()
@@ -667,6 +810,7 @@ function Timer:Render()
     end)
     header:SetScript("OnMouseUp", function(_, button)
       if button == "RightButton" then
+        GameTooltip:Hide()
         Timer:OpenMenu(header)
       end
     end)
@@ -763,6 +907,7 @@ function Timer:Render()
     frame:SetScript("OnHide", function(hiddenFrame)
       hiddenFrame:SetScript("OnUpdate", nil)
     end)
+    Timer:Place()
   end
 
   local frame = self.frame
@@ -810,6 +955,10 @@ function Timer:Render()
   local border = options.borderColor or Constants.colors.border
   local ahead = options.aheadColor or Constants.colors.ahead
   local behind = options.behindColor or Constants.colors.behind
+  local headerColor = options.headerColor or Constants.colors.header
+  local stripe = options.stripeColor or Constants.colors.stripe
+  local activeRow = options.activeRowColor or Constants.colors.activeRow
+  header.background:SetColorTexture(headerColor.r, headerColor.g, headerColor.b, headerColor.a)
 
   frame:SetBackdrop({
     bgFile = Constants.media.WhiteSquare,
@@ -967,7 +1116,9 @@ function Timer:Render()
     ahead,
     behind,
     options.showObjectives ~= false,
-    options.showObjectiveCounts == true
+    options.showObjectiveCounts == true,
+    stripe,
+    activeRow
   )
   splits:SetHeight(splitsHeight)
   clockFrame:SetHeight(Constants.sizes.timer.clock)

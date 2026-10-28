@@ -1,3 +1,12 @@
+---@class LDT_ResetColorsStaticPopupDialog
+---@field text string
+---@field button1 string
+---@field button2 string
+---@field OnAccept fun()
+---@field timeout number
+---@field whileDead number
+---@field hideOnEscape number
+
 ---@class LDT_TimerDetailLine
 ---@field frame Frame
 ---@field icon Texture
@@ -5,6 +14,9 @@
 ---@field time FontString
 
 ---@class LDT_TimerFrame : Frame, BackdropTemplate
+
+---@class LDT_TimerHeader : Frame
+---@field background Texture
 
 ---@class LDT_TimerLine
 ---@field text string
@@ -30,6 +42,7 @@
 ---@field frame Frame
 ---@field bar Frame
 ---@field background Texture
+---@field highlight Texture
 ---@field name FontString
 ---@field delta FontString
 ---@field time FontString

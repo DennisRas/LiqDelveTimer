@@ -38,10 +38,6 @@
 ---@field criteria LDT_Criteria[]|nil
 
 ---@class LDT_TimerOptions
----@field point string
----@field relativePoint string
----@field x number
----@field y number
 ---@field replaceTracker boolean
 ---@field showObjectives boolean
 ---@field showObjectiveCounts boolean
@@ -50,6 +46,11 @@
 ---@field behindColor ColorRGBAData
 ---@field backgroundColor ColorRGBAData
 ---@field borderColor ColorRGBAData
+---@field headerColor ColorRGBAData
+---@field stripeColor ColorRGBAData
+---@field activeRowColor ColorRGBAData
+---@field scale number
+---@field point LiqUI_WindowPointPersisted?
 
 ---@class LDT_UiMap
 ---@field uiMapID number
