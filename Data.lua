@@ -17,13 +17,12 @@ local ReadPlainBoolean = Helpers.ReadPlainBoolean
 local FindTier = Helpers.FindTier
 local FindBestRun = Helpers.FindBestRun
 
-Data.dbVersion = 1
+Data.dbVersion = 2
 
 ---@type table
 Data.defaultDB = {
   ---@type LDT_Global
   global = {
-    dbVersion = 1,
     minimap = {
       minimapPos = 220,
       hide = false,
@@ -44,10 +43,6 @@ Data.defaultDB = {
       autoShow = false,
     },
     timer = {
-      point = "TOPRIGHT",
-      relativePoint = "TOPRIGHT",
-      x = -24,
-      y = -180,
       replaceTracker = true,
       showObjectives = true,
       showObjectiveCounts = false,
@@ -56,6 +51,10 @@ Data.defaultDB = {
       behindColor = Constants.colors.behind,
       backgroundColor = Constants.colors.background,
       borderColor = Constants.colors.border,
+      headerColor = Constants.colors.header,
+      stripeColor = Constants.colors.stripe,
+      activeRowColor = Constants.colors.activeRow,
+      scale = 100,
     },
     scenarios = {},
     steps = {},
@@ -69,6 +68,41 @@ function Data:Initialize()
   ---@type LDT_AceDB
   local db = LibAceDB:New("LiqDelveTimerDB", self.defaultDB, true)
   self.db = db
+  self:MigrateDB()
+end
+
+---Run database migrations when dbVersion changes
+function Data:MigrateDB()
+  ---@diagnostic disable: undefined-field, inject-field
+  if type(self.db.global.dbVersion) ~= "number" then
+    self.db.global.dbVersion = self.dbVersion
+  end
+  if self.db.global.dbVersion < self.dbVersion then
+    if self.db.global.dbVersion == 1 then
+      local timer = self.db.global.timer
+      if type(timer.point) == "string" then
+        local offsetX = timer.x
+        local offsetY = timer.y
+        local scale = timer.scale
+        if type(scale) ~= "number" or scale == 0 then
+          scale = 100
+        end
+        if type(offsetX) == "number" and type(offsetY) == "number" then
+          ---@type LiqUI_WindowPointPersisted
+          local savedPoint = { "TOPRIGHT", "TOPRIGHT", offsetX * scale / 100, offsetY * scale / 100 }
+          timer.point = savedPoint
+        else
+          timer.point = nil
+        end
+        timer.relativePoint = nil
+        timer.x = nil
+        timer.y = nil
+      end
+    end
+    self.db.global.dbVersion = self.db.global.dbVersion + 1
+    self:MigrateDB()
+  end
+  ---@diagnostic enable: undefined-field, inject-field
 end
 
 ---@return LDT_Run|nil
@@ -723,7 +757,7 @@ local function formatSplitName(scenario, role, chamberNumber)
     return format("Chamber %d", chamberNumber)
   end
   if role == Constants.scenarioRole.Boss then
-    return "Boss"
+    return NEMESIS_LABEL
   end
   local name = findScenarioName(scenario.scenarioID)
   if name then
