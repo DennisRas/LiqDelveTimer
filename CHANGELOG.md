@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.2 - 2026-10-28
+
+- Added shift click on the timer header to open the run details.
+- Added an option for the clock background color.
+- Updated the timer header so the name stays on the left, the tier stays on the right, and lives, deaths, and affixes sit on the clock row.
+- Removed the prompt to pick the next chamber.
+
 ## v1.0.1 - 2026-10-28
 
 - Added options to change the colors: header background, stripe, and active step.

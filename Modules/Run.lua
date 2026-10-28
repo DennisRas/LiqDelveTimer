@@ -136,7 +136,7 @@ end
 ---@param name string
 ---@return LiqUI_TableDataCellValue
 local function buildStageCell(name)
-  local shown, trimmed = fitText(name, Constants.sizes.run.stageText)
+  local shown, trimmed = fitText(name, Constants.sizes.run.stageTextWidth)
   if not trimmed then
     return shown
   end
@@ -242,7 +242,7 @@ end
 ---@param value string
 ---@return string
 local function formatWithAtlas(atlas, value)
-  local icon = CreateAtlasMarkup(atlas, Constants.sizes.run.atlas, Constants.sizes.run.atlas) or ""
+  local icon = CreateAtlasMarkup(atlas, Constants.sizes.run.atlasSize, Constants.sizes.run.atlasSize) or ""
   return format("%s %s", icon, value)
 end
 
@@ -763,7 +763,7 @@ end
 local function createIconButton(parent, anchor, relativePoint, x, round)
   ---@type LDT_RunIconButton
   local button = CreateFrame("Button", nil, parent)
-  button:SetSize(Constants.sizes.run.icon, Constants.sizes.run.icon)
+  button:SetSize(Constants.sizes.run.iconSize, Constants.sizes.run.iconSize)
   button:SetPoint("RIGHT", anchor, relativePoint, x, 0)
   local icon = button:CreateTexture(nil, "ARTWORK")
   icon:SetAllPoints()
@@ -803,7 +803,7 @@ local function createCompanion(parent)
   local row = CreateFrame("Frame", nil, frame)
   row:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -Constants.sizes.run.companionGap)
   row:SetPoint("RIGHT", frame, "RIGHT", -Constants.sizes.run.companionPad, 0)
-  row:SetHeight(Constants.sizes.run.bar)
+  row:SetHeight(Constants.sizes.run.barHeight)
   frame.row = row
   local icons = CreateFrame("Frame", nil, row)
   icons:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0)
@@ -833,7 +833,7 @@ local function createCompanion(parent)
       return
     end
     GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-    GameTooltip:SetText(tip, Constants.colors.block.r, Constants.colors.block.g, Constants.colors.block.b)
+    GameTooltip:SetText(tip, Constants.colors.blockText.r, Constants.colors.blockText.g, Constants.colors.blockText.b)
     GameTooltip:Show()
   end
   role:SetScript("OnEnter", showRole)
@@ -876,7 +876,7 @@ local function paintCompanion(frame, run)
     end
     if run then
       frame.empty:Show()
-      frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLine)
+      frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLineHeight)
     else
       frame.empty:Hide()
       frame:SetHeight(0)
@@ -969,13 +969,13 @@ local function paintCompanion(frame, run)
   frame.bar:SetPoint("TOPLEFT", frame.row, "TOPLEFT", 0, 0)
   if iconCount > 0 then
     frame.icons:Show()
-    frame.icons:SetWidth(iconCount * Constants.sizes.run.icon + (iconCount - 1) * Constants.sizes.run.iconGap)
+    frame.icons:SetWidth(iconCount * Constants.sizes.run.iconSize + (iconCount - 1) * Constants.sizes.run.iconGap)
     frame.bar:SetPoint("BOTTOMRIGHT", frame.icons, "BOTTOMLEFT", -Constants.sizes.run.companionGap, 0)
   else
     frame.icons:Hide()
     frame.bar:SetPoint("BOTTOMRIGHT", frame.row, "BOTTOMRIGHT", 0, 0)
   end
-  frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLine + Constants.sizes.run.companionGap + Constants.sizes.run.bar)
+  frame:SetHeight((Constants.sizes.run.companionPad * 2) + Constants.sizes.run.companionLineHeight + Constants.sizes.run.companionGap + Constants.sizes.run.barHeight)
 end
 
 ---@param parent Frame
@@ -984,7 +984,7 @@ end
 local function createBlockHeader(parent, text)
   ---@type LDT_RunBlockHeader
   local header = CreateFrame("Frame", nil, parent)
-  header:SetHeight(Constants.sizes.run.blockHeader)
+  header:SetHeight(Constants.sizes.run.blockHeaderHeight)
   local background = header:CreateTexture(nil, "BACKGROUND")
   background:SetAllPoints()
   background:SetColorTexture(Constants.colors.wash.r, Constants.colors.wash.g, Constants.colors.wash.b, Constants.colors.wash.a)
@@ -1011,8 +1011,8 @@ local function placeHeader(header, y, shown)
   header:Show()
   header:ClearAllPoints()
   header:SetPoint("TOPLEFT", header:GetParent(), "TOPLEFT", 0, y)
-  header:SetWidth(Constants.sizes.run.body)
-  return y - Constants.sizes.run.blockHeader
+  header:SetWidth(Constants.sizes.run.bodyWidth)
+  return y - Constants.sizes.run.blockHeaderHeight
 end
 
 ---@param name string
@@ -1029,7 +1029,7 @@ local function buildTableOptions(name, columns, showHeader, headerAlpha, sticky,
     header = {
       enabled = showHeader,
       sticky = sticky == true,
-      height = Constants.sizes.run.blockHeader,
+      height = Constants.sizes.run.blockHeaderHeight,
       backgroundAlpha = headerAlpha or 0,
     },
     rowStyle = {
@@ -1082,7 +1082,7 @@ local function paintSummaryAffixes(summary, spellIDs, buttons)
       if not button then
         ---@type LDT_RunIconButton
         button = CreateFrame("Button", nil, valueCell)
-        button:SetSize(Constants.sizes.run.icon, Constants.sizes.run.icon)
+        button:SetSize(Constants.sizes.run.iconSize, Constants.sizes.run.iconSize)
         local icon = button:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
         RoundIcon(icon)
@@ -1142,7 +1142,7 @@ end
 ---@return ColorRGBAData
 local function findTimelineColor(line)
   if line.depth == 0 then
-    return Constants.colors.block
+    return Constants.colors.blockText
   end
   if line.done ~= nil then
     if line.done then
@@ -1194,7 +1194,7 @@ local function buildTimelineData(run)
     local labelColor = findTimelineColor(line)
     local timeColor = Constants.colors.nestedTime
     if line.depth == 0 then
-      timeColor = Constants.colors.block
+      timeColor = Constants.colors.blockText
     end
     local timeText = ""
     if line.elapsed ~= nil then
@@ -1219,7 +1219,7 @@ local function createColumn(parent, name)
   ---@type LDT_RunColumn
   local column = CreateFrame("Frame", addon.name .. name, parent)
   local divider = CreateFrame("Frame", nil, column)
-  divider:SetWidth(Constants.sizes.run.divider)
+  divider:SetWidth(Constants.sizes.run.dividerWidth)
   SetBackgroundColor(divider, Constants.colors.divider)
   divider:Hide()
   column.divider = divider
@@ -1236,14 +1236,14 @@ local function layoutScrollingTable(tableFrame, parent, data, viewHeight)
   tableFrame:SetParent(parent)
   tableFrame:ClearAllPoints()
   tableFrame:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
-  tableFrame:SetSize(Constants.sizes.run.body, viewHeight)
+  tableFrame:SetSize(Constants.sizes.run.bodyWidth, viewHeight)
   tableFrame:SetData(data)
   local _, contentHeight = tableFrame:GetSize()
   if contentHeight > viewHeight + layoutSizes.scrollbar.overflowTolerance then
-    tableFrame:SetSize(Constants.sizes.run.body + layoutSizes.scrollbar.thickness, viewHeight)
-    return Constants.sizes.run.body + layoutSizes.scrollbar.thickness
+    tableFrame:SetSize(Constants.sizes.run.bodyWidth + layoutSizes.scrollbar.thickness, viewHeight)
+    return Constants.sizes.run.bodyWidth + layoutSizes.scrollbar.thickness
   end
-  return Constants.sizes.run.body
+  return Constants.sizes.run.bodyWidth
 end
 
 function Module:Layout()
@@ -1265,26 +1265,26 @@ function Module:Layout()
   y = placeHeader(self.companionHeader, y, shown)
   self.companion:ClearAllPoints()
   self.companion:SetPoint("TOPLEFT", self.companion:GetParent(), "TOPLEFT", 0, y)
-  self.companion:SetWidth(Constants.sizes.run.body)
+  self.companion:SetWidth(Constants.sizes.run.bodyWidth)
   y = y - self.companion:GetHeight()
   y = placeHeader(self.boonsHeader, y, shown)
   y = placeTable(self.boons, self.boonsData or {}, y)
-  local detailsHeight = math.max(Constants.sizes.run.blockHeader, -y)
+  local detailsHeight = math.max(Constants.sizes.run.blockHeaderHeight, -y)
   local scale = window:GetWindowScale() / 100
   if scale <= 0 then
     scale = 1
   end
   local maxBody = (UIParent:GetHeight() - Constants.sizes.run.screenMargin) / scale - layoutSizes.titlebar.height
-  if maxBody < Constants.sizes.run.blockHeader then
-    maxBody = Constants.sizes.run.blockHeader
+  if maxBody < Constants.sizes.run.blockHeaderHeight then
+    maxBody = Constants.sizes.run.blockHeaderHeight
   end
   local bodyHeight = detailsHeight
   if bodyHeight > maxBody then
     bodyHeight = maxBody
   end
-  local detailsWidth = Constants.sizes.run.body
+  local detailsWidth = Constants.sizes.run.bodyWidth
   if detailsHeight > bodyHeight + layoutSizes.scrollbar.overflowTolerance then
-    detailsWidth = Constants.sizes.run.body + layoutSizes.scrollbar.thickness
+    detailsWidth = Constants.sizes.run.bodyWidth + layoutSizes.scrollbar.thickness
   end
   local rewardsWidth = layoutScrollingTable(self.rewards, self.rewardsColumn, self.rewardsData or {}, bodyHeight)
   local timelineWidth = layoutScrollingTable(self.timeline, self.timelineColumn, self.timelineData or {}, bodyHeight)
@@ -1320,9 +1320,9 @@ function Module:Layout()
       divider:ClearAllPoints()
       divider:SetPoint("TOPLEFT", column, "TOPRIGHT", 0, 0)
       divider:SetPoint("BOTTOMLEFT", column, "BOTTOMRIGHT", 0, 0)
-      divider:SetWidth(Constants.sizes.run.divider)
+      divider:SetWidth(Constants.sizes.run.dividerWidth)
       divider:Show()
-      x = x + width + Constants.sizes.run.divider
+      x = x + width + Constants.sizes.run.dividerWidth
     else
       divider:Hide()
       x = x + width
@@ -1333,7 +1333,7 @@ function Module:Layout()
   container:ClearAllPoints()
   container:SetPoint("TOPLEFT", self.detailsColumn, "TOPLEFT", 0, 0)
   container:SetSize(detailsWidth, bodyHeight)
-  detailsScroll:UpdateLayout(Constants.sizes.run.body, detailsHeight)
+  detailsScroll:UpdateLayout(Constants.sizes.run.bodyWidth, detailsHeight)
   local scrollBox = detailsScroll:GetWheelScrollBox()
   if scrollBox then
     bindBodyWheel(detailsScroll.content, scrollBox)
@@ -1352,7 +1352,7 @@ function Module:Fill(run)
   local behind = options.behindColor or Constants.colors.behind
   self.showingRun = run ~= nil
   if not run then
-    window:SetTitle("Run")
+    window:SetTitle("Run details")
     self.summaryData = {}
     self.affixSpells = {}
     self.stagesData = {}
@@ -1381,9 +1381,9 @@ function Module:Render()
     local windowOptions = {
       name = addon.name .. "Run",
       storage = windows.Run,
-      title = "Run",
-      width = (Constants.sizes.run.body * 2) + Constants.sizes.run.divider,
-      height = Constants.sizes.run.window,
+      title = "Run details",
+      width = (Constants.sizes.run.bodyWidth * 2) + Constants.sizes.run.dividerWidth,
+      height = Constants.sizes.run.windowHeight,
       onShow = function()
         Module:Render()
       end,
@@ -1436,24 +1436,24 @@ function Module:Render()
     self.timelineColumn = timelineColumn
     local content = detailsScroll.content
     local summaryColumns = {
-      { id = "label", headerText = "Summary", width = Constants.sizes.run.label, align = "LEFT" },
-      { id = "value", headerText = "", width = Constants.sizes.run.value, align = "RIGHT" },
+      { id = "label", headerText = "Summary", width = Constants.sizes.run.labelWidth, align = "LEFT" },
+      { id = "value", headerText = "", width = Constants.sizes.run.valueWidth, align = "RIGHT" },
     }
     local stageColumns = {
-      { id = "stage", headerText = "Splits", width = Constants.sizes.run.stage, align = "LEFT" },
-      { id = "delta", headerText = "Delta", width = Constants.sizes.run.number, align = "RIGHT" },
-      { id = "time", headerText = "Time", width = Constants.sizes.run.number, align = "RIGHT" },
-      { id = "best", headerText = "Best", width = Constants.sizes.run.number, align = "RIGHT" },
+      { id = "stage", headerText = "Splits", width = Constants.sizes.run.stageWidth, align = "LEFT" },
+      { id = "delta", headerText = "Delta", width = Constants.sizes.run.numberWidth, align = "RIGHT" },
+      { id = "time", headerText = "Time", width = Constants.sizes.run.numberWidth, align = "RIGHT" },
+      { id = "best", headerText = "Best", width = Constants.sizes.run.numberWidth, align = "RIGHT" },
     }
     local boonColumns = {
-      { id = "stat", headerText = "", width = Constants.sizes.run.boonLabel, align = "LEFT" },
-      { id = "value", headerText = "", width = Constants.sizes.run.boonValue, align = "RIGHT" },
-      { id = "statRight", headerText = "", width = Constants.sizes.run.boonLabel, align = "LEFT" },
-      { id = "valueRight", headerText = "", width = Constants.sizes.run.boonValue, align = "RIGHT" },
+      { id = "stat", headerText = "", width = Constants.sizes.run.boonLabelWidth, align = "LEFT" },
+      { id = "value", headerText = "", width = Constants.sizes.run.boonValueWidth, align = "RIGHT" },
+      { id = "statRight", headerText = "", width = Constants.sizes.run.boonLabelWidth, align = "LEFT" },
+      { id = "valueRight", headerText = "", width = Constants.sizes.run.boonValueWidth, align = "RIGHT" },
     }
     local rewardColumns = {
-      { id = "name", headerText = "Rewards", width = Constants.sizes.run.rewardName, align = "LEFT" },
-      { id = "amount", headerText = "", width = Constants.sizes.run.rewardAmount, align = "RIGHT" },
+      { id = "name", headerText = "Rewards", width = Constants.sizes.run.rewardNameWidth, align = "LEFT" },
+      { id = "amount", headerText = "", width = Constants.sizes.run.rewardAmountWidth, align = "RIGHT" },
     }
     local summary = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunSummary", summaryColumns, true, 0.35, false))
     summary:SetParent(content)
@@ -1471,8 +1471,8 @@ function Module:Render()
     rewards:SetParent(rewardsColumn)
     self.rewards = rewards
     local timelineColumns = {
-      { id = "name", headerText = "Timeline", width = Constants.sizes.run.timelineName, align = "LEFT" },
-      { id = "time", headerText = "Time", width = Constants.sizes.run.timelineTime, align = "RIGHT" },
+      { id = "name", headerText = "Timeline", width = Constants.sizes.run.timelineNameWidth, align = "LEFT" },
+      { id = "time", headerText = "Time", width = Constants.sizes.run.timelineTimeWidth, align = "RIGHT" },
     }
     local timeline = LiqUI:NewElement("Table", buildTableOptions(addon.name .. "RunTimeline", timelineColumns, true, 0.35, true, true))
     timeline:SetParent(timelineColumn)
