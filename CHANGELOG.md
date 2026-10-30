@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.3 - TBD
+
+- Fixed a run starting when you teleport to your house, which then counted as abandoned when you left.
+
 ## v1.0.2 - 2026-10-28
 
 - Added shift click on the timer header to open the run details.

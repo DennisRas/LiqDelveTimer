@@ -956,7 +956,7 @@ function Timer:Render()
   end
 
   local options = Data.db.global.timer
-  local inside = Capture:IsInside() or Capture:IsInInstance()
+  local inside = Capture:IsInside()
   local activeRun = inside and Data:FindActiveRun() or nil
   local windowBackground = options.windowBackgroundColor or Constants.colors.windowBackground
   local border = options.borderColor or Constants.colors.border

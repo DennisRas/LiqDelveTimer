@@ -155,17 +155,10 @@ end
 
 ---@return boolean
 function Capture:IsInside()
-  local _, instanceType = GetInstanceInfo()
-  if not instanceType or instanceType == "" or instanceType == "none" then
-    return false
-  end
   if C_PartyInfo.IsDelveInProgress() then
     return true
   end
-  if C_ScenarioInfo.IsTieredEntranceScenario() then
-    return true
-  end
-  if C_DelvesUI.HasActiveDelve() then
+  if C_PartyInfo.IsDelveComplete() then
     return true
   end
   return false
@@ -1295,12 +1288,6 @@ function Capture:Finish()
   end
 end
 
----@return boolean
-function Capture:IsInInstance()
-  local _, instanceType = GetInstanceInfo()
-  return instanceType ~= nil and instanceType ~= "" and instanceType ~= "none"
-end
-
 function Capture:Sync()
   local picker = _G.DelvesDifficultyPickerFrame
   if picker and not pickerHooked then
@@ -1332,8 +1319,7 @@ function Capture:Sync()
     return
   end
   local inDelve = self:IsInside()
-  local inInstance = self:IsInInstance()
-  if inInstance then
+  if inDelve then
     self.zoneKnown = true
   end
   local hideTracker = false
@@ -1351,17 +1337,9 @@ function Capture:Sync()
     self.trackerHidden = false
     tracker:Show()
   end
-  if inDelve or inInstance then
+  if inDelve then
     self.entranceNoted = false
-    if inDelve then
-      self:BeginRun()
-    else
-      local active = Data:FindActiveRun()
-      if active then
-        self:SetClock(active)
-        self:UpdateRun(active)
-      end
-    end
+    self:BeginRun()
   elseif self.zoneKnown and Data:FindActiveRun() then
     self:Finish()
   end
