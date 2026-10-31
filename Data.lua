@@ -14,7 +14,7 @@ local Helpers = addon.Helpers
 local ReadPlainNumber = Helpers.ReadPlainNumber
 local ReadPlainString = Helpers.ReadPlainString
 local ReadPlainBoolean = Helpers.ReadPlainBoolean
-local FindTier = Helpers.FindTier
+local FindRunTier = Helpers.FindRunTier
 local FindBestRun = Helpers.FindBestRun
 
 Data.dbVersion = 3
@@ -55,6 +55,18 @@ Data.defaultDB = {
       clockBackgroundColor = Constants.colors.clockBackground,
       stripeColor = Constants.colors.stripe,
       activeRowColor = Constants.colors.activeRow,
+      headerTextColor = Constants.colors.titleText,
+      headerFontSize = Constants.sizes.timer.titleFont,
+      columnTextColor = Constants.colors.columnText,
+      splitTextColor = Constants.colors.splitText,
+      splitFontSize = Constants.sizes.timer.splitFont,
+      stepTextColor = Constants.colors.step,
+      stepFontSize = Constants.sizes.timer.stepFont,
+      objectiveTextColor = Constants.colors.objective,
+      objectiveDoneTextColor = Constants.colors.objectiveDone,
+      objectiveFontSize = Constants.sizes.timer.objectiveFont,
+      clockTextColor = Constants.colors.clockText,
+      clockFontSize = Constants.sizes.timer.clockFont,
       scale = 100,
     },
     scenarios = {},
@@ -347,7 +359,6 @@ function Data:StoreScenario(run, scenario)
       storedStep.criteria = mergeCriteria(storedStep.criteria, criteriaRows)
     end
   end
-  self:SetBest(run)
 end
 
 ---@param callback fun(run: LDT_Run)
@@ -402,8 +413,8 @@ local function copyBest(source)
 end
 
 ---@param run LDT_Run
-function Data:SetBest(run)
-  if run.best or not FindTier(run) then
+function Data:SetRunBest(run)
+  if run.best or not FindRunTier(run) then
     return
   end
   if run.mode ~= Constants.runMode.Lab then
@@ -906,7 +917,7 @@ local function buildLabSplits(run)
       rows[openChamber].nodes = nested
     end
   end
-  local tier = FindTier(run)
+  local tier = FindRunTier(run)
   if not tier or tier < NEMESIS_TIER then
     return rows
   end

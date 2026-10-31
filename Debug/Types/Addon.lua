@@ -24,7 +24,6 @@
 ---@field Debug LDT_Debug|nil
 
 ---@class LDT_CaptureState
----@field gold number|nil
 ---@field level number|nil
 ---@field experience number|nil
 ---@field experienceMax number|nil
@@ -49,6 +48,7 @@
 ---@field livesIcon Texture|nil
 ---@field spells Frame|nil
 ---@field spellButtons LDT_TimerSpell[]|nil
+---@field columns LDT_TimerColumns|nil
 ---@field splits Frame|nil
 ---@field splitRows LDT_TimerSplitRow[]|nil
 ---@field clockFrame LDT_TimerClock|nil
@@ -89,7 +89,6 @@
 ---@field ready boolean
 ---@field clockReady boolean
 ---@field clockOrigin number
----@field zoneKnown boolean
 ---@field entranceNoted boolean
 ---@field timerFromGame boolean|nil
 ---@field timerContext "run"|nil

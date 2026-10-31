@@ -7,6 +7,12 @@
 ---@field whileDead number
 ---@field hideOnEscape number
 
+---@class LDT_TimerColumns : Frame
+---@field splits FontString
+---@field delta FontString
+---@field time FontString
+---@field best FontString
+
 ---@class LDT_TimerClock : Frame
 ---@field background Texture
 

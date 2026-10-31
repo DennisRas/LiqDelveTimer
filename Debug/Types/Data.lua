@@ -50,6 +50,18 @@
 ---@field clockBackgroundColor ColorRGBAData
 ---@field stripeColor ColorRGBAData
 ---@field activeRowColor ColorRGBAData
+---@field headerTextColor ColorRGBAData
+---@field headerFontSize number
+---@field columnTextColor ColorRGBAData
+---@field splitTextColor ColorRGBAData
+---@field splitFontSize number
+---@field stepTextColor ColorRGBAData
+---@field stepFontSize number
+---@field objectiveTextColor ColorRGBAData
+---@field objectiveDoneTextColor ColorRGBAData
+---@field objectiveFontSize number
+---@field clockTextColor ColorRGBAData
+---@field clockFontSize number
 ---@field scale number
 ---@field point LiqUI_WindowPointPersisted?
 

@@ -2,7 +2,12 @@
 
 ## v1.0.3 - TBD
 
-- Fixed a run starting when you teleport to your house, which then counted as abandoned when you left.
+- Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.
+- Updated the Timer window so it doesn't sit on top of the entire UI.
+- Fixed a run starting or staying in progress outside a delve, including a teleport to your house.
+- Fixed the timer, the objective tracker, and run capture so the Labyrinth starts and continues the same way a delve does.
+- Fixed gold on a run so a vendor sale is not counted.
+- Fixed item loot so the item link is recorded in every language.
 
 ## v1.0.2 - 2026-10-28
 

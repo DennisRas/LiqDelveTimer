@@ -6,6 +6,8 @@ local Constants = {}
 addon.Constants = Constants
 
 Constants.prefix = format("<%s> ", addon.name)
+Constants.delveDifficultyID = 208
+Constants.labyrinthInstanceID = 3043
 
 ---@enum LDT_RunModeId
 Constants.runMode = {
@@ -89,6 +91,9 @@ Constants.colors = {
   clockBackground = { r = 0, g = 0, b = 0, a = 0.3 },
   clear = { r = 0, g = 0, b = 0, a = 0 },
   titleText = { r = 1, g = 1, b = 1, a = 1 },
+  splitText = { r = 1, g = 1, b = 1, a = 1 },
+  columnText = { r = 1, g = 0.82, b = 0, a = 1 },
+  clockText = { r = 1, g = 1, b = 1, a = 1 },
   activeRow = { r = 0.12, g = 0.32, b = 0.72, a = 0.3 },
   divider = { r = 0, g = 0, b = 0, a = 0.5 },
   blockText = { r = 1, g = 1, b = 1, a = 1 },
@@ -124,6 +129,9 @@ Constants.sizes = {
     phraseGap = 12,
     clockHeight = 36,
     titleFont = 15,
+    splitFont = 12,
+    stepFont = 13,
+    objectiveFont = 12,
     metaFont = 14,
     clockFont = 22,
     phraseFont = 14,

@@ -630,8 +630,8 @@ local function addCapture(lines)
     end
   end
   lines[#lines + 1] = format(
-    "capture inside=%s run=%s result=%s entranceTitle=%s entranceHeader=%s scenarioID=%s stepID=%s",
-    formatValue(Capture:IsInside()),
+    "capture insideDelveOrLabyrinth=%s run=%s result=%s entranceTitle=%s entranceHeader=%s scenarioID=%s stepID=%s",
+    formatValue(Capture:IsInsideDelveOrLabyrinth()),
     runID,
     result,
     title,

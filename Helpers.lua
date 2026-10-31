@@ -164,26 +164,26 @@ end
 
 ---@param result string|nil
 ---@return boolean
-function Helpers.IsCleared(result)
+function Helpers.IsRunResultCleared(result)
   return result == addon.Constants.runResult.Completed or result == addon.Constants.runResult.PersonalBest or result == "complete"
 end
 
 ---@param result string|nil
 ---@return boolean
-function Helpers.IsAbandoned(result)
+function Helpers.IsRunResultAbandoned(result)
   return result == addon.Constants.runResult.Abandoned or result == "left"
 end
 
 ---@param result string|nil
 ---@return string
-function Helpers.FormatResult(result)
+function Helpers.FormatRunResult(result)
   if result == addon.Constants.runResult.PersonalBest then
     return "Personal Best"
   end
-  if Helpers.IsCleared(result) then
+  if Helpers.IsRunResultCleared(result) then
     return "Completed"
   end
-  if Helpers.IsAbandoned(result) then
+  if Helpers.IsRunResultAbandoned(result) then
     return "Abandoned"
   end
   if result == addon.Constants.runResult.Active then
@@ -194,7 +194,7 @@ end
 
 ---@param result string|nil
 ---@return number, number, number
-function Helpers.FindResultColor(result)
+function Helpers.FindRunResultColor(result)
   if result == addon.Constants.runResult.PersonalBest then
     local timer = addon.Data.db and addon.Data.db.global.timer
     local color = timer and timer.aheadColor
@@ -203,7 +203,7 @@ function Helpers.FindResultColor(result)
     end
     return 0.35, 0.9, 0.5
   end
-  if Helpers.IsAbandoned(result) then
+  if Helpers.IsRunResultAbandoned(result) then
     return 1, 0.35, 0.35
   end
   return 0.95, 0.95, 0.95
@@ -211,7 +211,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.FindTier(run)
+function Helpers.FindRunTier(run)
   local tier = run.entrance and run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     return tier
@@ -221,7 +221,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.FindDuration(run)
+function Helpers.FindRunDuration(run)
   if not run.endedAt then
     return nil
   end
@@ -246,7 +246,7 @@ end
 ---@param run LDT_Run
 ---@return LDT_Run|nil
 function Helpers.FindBestRun(run)
-  local tier = Helpers.FindTier(run)
+  local tier = Helpers.FindRunTier(run)
   if not tier then
     return nil
   end
@@ -262,10 +262,10 @@ function Helpers.FindBestRun(run)
   local best
   local bestTime
   addon.Data:ForEachRun(function(saved)
-    if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
+    if saved == run or not Helpers.IsRunResultCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.FindTier(saved) ~= tier or saved.mode ~= mode then
+    if Helpers.FindRunTier(saved) ~= tier or saved.mode ~= mode then
       return
     end
     if scenarioID then
@@ -274,7 +274,7 @@ function Helpers.FindBestRun(run)
         return
       end
     end
-    local time = Helpers.FindDuration(saved)
+    local time = Helpers.FindRunDuration(saved)
     if not time then
       return
     end

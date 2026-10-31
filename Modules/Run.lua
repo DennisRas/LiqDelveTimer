@@ -8,16 +8,16 @@ addon.Module_Run = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local FindTier = Helpers.FindTier
+local FindRunTier = Helpers.FindRunTier
 local RoundShownDelta = Helpers.RoundShownDelta
 local FindDeltaColor = Helpers.FindDeltaColor
 local FormatDelta = Helpers.FormatDelta
 local FormatElapsed = Helpers.FormatElapsed
 local FormatDate = Helpers.FormatDate
-local FindResultColor = Helpers.FindResultColor
-local FormatResult = Helpers.FormatResult
+local FindRunResultColor = Helpers.FindRunResultColor
+local FormatRunResult = Helpers.FormatRunResult
 local FindBestDuration = Helpers.FindBestDuration
-local FindDuration = Helpers.FindDuration
+local FindRunDuration = Helpers.FindRunDuration
 local ParseBoonAmount = Helpers.ParseBoonAmount
 local FormatBoonAmount = Helpers.FormatBoonAmount
 local FormatMoney = Helpers.FormatMoney
@@ -109,7 +109,7 @@ local function formatWindowTitle(run)
   if type(variant) == "string" and variant ~= "" and variant ~= name then
     title = format("%s - %s", name, variant) or name
   end
-  local tier = FindTier(run)
+  local tier = FindRunTier(run)
   if tier then
     title = format("%s (Tier %d)", title, tier) or title
   end
@@ -337,12 +337,12 @@ local function buildSummary(run, ahead, behind)
     endedText = FormatDate(run.endedAt, Constants.dateLength.Full)
   end
   data[#data + 1] = buildValueRow("Ended", endedText)
-  local red, green, blue = FindResultColor(run.result)
-  data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(FormatResult(run.result)))
+  local red, green, blue = FindRunResultColor(run.result)
+  data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(FormatRunResult(run.result)))
   local bestTime = FindBestDuration(run)
   local timeText = "-"
   if run.endedAt then
-    local duration = FindDuration(run)
+    local duration = FindRunDuration(run)
     if duration then
       timeText = formatComparedTime(duration, bestTime, ahead, behind)
     end
@@ -1362,7 +1362,7 @@ function Module:Fill(run)
     paintCompanion(self.companion, nil)
     return
   end
-  Data:SetBest(run)
+  Data:SetRunBest(run)
   window:SetTitle(formatWindowTitle(run))
   local summaryRows, affixSpells = buildSummary(run, ahead, behind)
   self.summaryData = summaryRows

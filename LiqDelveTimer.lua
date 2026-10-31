@@ -75,7 +75,7 @@ function Core:OnEnable()
   if not Events then
     return
   end
-  Capture:Register()
+  Capture:RegisterCaptureEvents()
   if addon.Log then
     addon.Log:Enable()
   end

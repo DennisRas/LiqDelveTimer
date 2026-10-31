@@ -8,11 +8,11 @@ addon.Module_History = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local FindDuration = Helpers.FindDuration
+local FindRunDuration = Helpers.FindRunDuration
 local FormatDate = Helpers.FormatDate
-local FindTier = Helpers.FindTier
-local FormatResult = Helpers.FormatResult
-local FindResultColor = Helpers.FindResultColor
+local FindRunTier = Helpers.FindRunTier
+local FormatRunResult = Helpers.FormatRunResult
+local FindRunResultColor = Helpers.FindRunResultColor
 local FormatElapsed = Helpers.FormatElapsed
 local LiqUI = addon.libs.LiqUI
 local layoutSizes = LiqUI.Constants.layout.sizes
@@ -181,7 +181,7 @@ function Module:Render()
       end
     end
     local inProgress = run.endedAt == nil
-    local duration = FindDuration(run) or 0
+    local duration = FindRunDuration(run) or 0
     local whenText = FormatDate(run.startedAt, Constants.dateLength.Medium)
     local characterName = ""
     local characterText = ""
@@ -197,13 +197,13 @@ function Module:Render()
         end
       end
     end
-    local tier = FindTier(run) or 0
+    local tier = FindRunTier(run) or 0
     local tierText = "-"
     if tier > 0 then
       tierText = tostring(tier)
     end
-    local label = FormatResult(run.result)
-    local red, green, blue = FindResultColor(run.result)
+    local label = FormatRunResult(run.result)
+    local red, green, blue = FindRunResultColor(run.result)
     local resultText = colorText(label, red, green, blue)
     local durationText = "-"
     if not inProgress then
