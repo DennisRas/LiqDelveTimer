@@ -17,7 +17,7 @@ It saves each visit so you can compare it with your best. Good luck!
 
 - **/liqdelvetimer** - show or hide the timer
 - **/liqdelvetimer history** - open History
-- **/liqdelvetimer log** - open the log
+- **/liqdelvetimer log** - open the log of run events
 
 ## Bugs and feedback
 

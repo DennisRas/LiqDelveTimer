@@ -79,9 +79,6 @@ function Core:OnEnable()
   if addon.Log then
     addon.Log:Enable()
   end
-  if addon.logger and addon.Log then
-    addon.logger:Show()
-  end
 end
 
 ---@param input string|nil

@@ -835,7 +835,8 @@ end
 
 function Log:Enable()
   local LiqUI = addon.libs.LiqUI
-  if not LiqUI or not addon.logger then
+  local logger = addon.logger
+  if not LiqUI or not Data.db or not logger then
     return
   end
   local Events = LiqUI.Events
@@ -884,4 +885,5 @@ function Log:Enable()
   hookPicker()
   self:Log("log", "ready")
   self:LogState()
+  logger:Show()
 end

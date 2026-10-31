@@ -1361,7 +1361,6 @@ function Module:Fill(run)
     paintCompanion(self.companion, nil)
     return
   end
-  Data:SetBest(run)
   window:SetTitle(formatWindowTitle(run))
   local summaryRows, affixSpells = buildSummary(run, ahead, behind)
   self.summaryData = summaryRows

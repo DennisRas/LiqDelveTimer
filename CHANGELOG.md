@@ -3,6 +3,7 @@
 ## v1.0.3 - TBD
 
 - Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.
+- Added a log of run events. Open it with /liqdelvetimer log.
 - Updated the Timer window so it doesn't sit on top of the entire UI.
 - Fixed a run starting or staying in progress outside a delve, including a teleport to your house.
 - Fixed the timer, the objective tracker, and run capture so the Labyrinth starts and continues the same way a delve does.

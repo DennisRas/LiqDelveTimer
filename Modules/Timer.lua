@@ -1135,13 +1135,9 @@ function Timer:Render()
   frame:SetBackdropColor(windowBackground.r, windowBackground.g, windowBackground.b, windowBackground.a)
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
-  local headerInfo
   local title = "Delve"
   local tier
   if activeRun then
-    if not Capture:IsEnded(activeRun) then
-      headerInfo = Capture:SetDelveHeader(activeRun)
-    end
     title = formatName(activeRun)
     tier = GetTier(activeRun)
   else
@@ -1183,9 +1179,7 @@ function Timer:Render()
   countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, Constants.media.Skull, deathsCount, countAnchor, countPoint, countOffset)
 
   local spellIDs = {}
-  if headerInfo and #headerInfo.spellIDs > 0 then
-    spellIDs = headerInfo.spellIDs
-  elseif activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
+  if activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
     spellIDs = activeRun.entrance.activeSpellIDs
   elseif not activeRun then
     spellIDs = SAMPLE_SPELLS
