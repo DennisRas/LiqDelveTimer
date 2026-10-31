@@ -1399,12 +1399,27 @@ local function setZone(run)
   end
 end
 
+local function endRunIfOutside()
+  if not Data.db or isDelveRun() then
+    return
+  end
+  local run = Data:FindActiveRun()
+  if not run then
+    return
+  end
+  Capture:EndRun(run, true)
+  local timer = addon.Module_Timer
+  if timer then
+    timer:Render()
+  end
+end
+
 local function onZoneChangedNewArea()
   if not Data.db then
     return
   end
-  local run = Data:FindActiveRun()
   if isDelveRun() then
+    local run = Data:FindActiveRun()
     if not run then
       Capture:CreateRun()
       local timer = addon.Module_Timer
@@ -1416,17 +1431,14 @@ local function onZoneChangedNewArea()
     setZone(run)
     return
   end
-  if not run then
-    return
-  end
-  Capture:EndRun(run, true)
-  local timer = addon.Module_Timer
-  if timer then
-    timer:Render()
-  end
+  endRunIfOutside()
 end
 
 local function onZone()
+  if not isDelveRun() then
+    endRunIfOutside()
+    return
+  end
   local run = Data:FindActiveRun()
   if not run then
     return
@@ -1449,6 +1461,10 @@ end
 
 local function onScenario()
   if not Data.db then
+    return
+  end
+  if not isDelveRun() then
+    endRunIfOutside()
     return
   end
   local run = Data:FindActiveRun()
@@ -1492,6 +1508,10 @@ end
 
 local function onActiveDelveData()
   if not Data.db then
+    return
+  end
+  if not isDelveRun() then
+    endRunIfOutside()
     return
   end
   local run = Data:FindActiveRun()

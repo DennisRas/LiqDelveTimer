@@ -54,7 +54,7 @@
 ---@field markSize number
 ---@field markGap number
 ---@field borderSize number
----@field phraseGap number
+---@field clockDeltaGap number
 ---@field clockHeight number
 ---@field titleFont number
 ---@field splitFont number
@@ -62,7 +62,7 @@
 ---@field objectiveFont number
 ---@field metaFont number
 ---@field clockFont number
----@field phraseFont number
+---@field clockDeltaFont number
 ---@field padding number
 ---@field width number
 ---@field columnX number[]

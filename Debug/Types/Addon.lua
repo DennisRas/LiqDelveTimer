@@ -55,7 +55,8 @@
 ---@field splitRows LDT_TimerSplitRow[]|nil
 ---@field clockFrame LDT_TimerClock|nil
 ---@field clockText FontString|nil
----@field phrase FontString|nil
+---@field clockDelta FontString|nil
+---@field openDelta FontString|nil
 
 ---@class LDT_Module_Run : AceModule
 ---@field window LiqUI_WindowInstance|nil

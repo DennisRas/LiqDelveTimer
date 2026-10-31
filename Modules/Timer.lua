@@ -9,6 +9,7 @@ local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 local FormatElapsed = Helpers.FormatElapsed
+local RoundShown = Helpers.RoundShown
 local RoundShownDelta = Helpers.RoundShownDelta
 local GetDeltaColor = Helpers.GetDeltaColor
 local FormatDelta = Helpers.FormatDelta
@@ -98,6 +99,11 @@ end
 
 local paintRemaining = 0
 local placedOnTracker = false
+local layoutStamp = ""
+local clockFinish ---@type number|nil
+local clockSplitBest ---@type number|nil
+local paintedClock ---@type number|nil
+local clockPainted = false
 
 ---@return number|nil
 ---@return number|nil
@@ -138,7 +144,12 @@ local function onPaintUpdate(_frame, elapsed)
   if not placedOnTracker and not Data.db.global.timer.point then
     Timer:Place()
   end
-  Timer:Render()
+  local stamp = Timer:GetLayoutStamp(Data:FindActiveRun())
+  if stamp ~= layoutStamp then
+    Timer:Render()
+    return
+  end
+  Timer:PaintClocks()
 end
 
 ---@param fontString FontString
@@ -444,18 +455,6 @@ local SAMPLE_DEATHS = 1
 local SAMPLE_LIVES = 4
 local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
 local SAMPLE_CLOCK = 154000
-
----@param nodes LDT_TimerNode[]
----@return number|nil
-local function findCurrentBest(nodes)
-  for index = 1, #nodes do
-    local node = nodes[index]
-    if node.current then
-      return node.best
-    end
-  end
-  return nil
-end
 
 ---@return LDT_TimerNode[]
 local function buildSampleRows()
@@ -777,6 +776,7 @@ end
 ---@param splits Frame
 ---@param splitRows LDT_TimerSplitRow[]
 ---@param nodes LDT_TimerNode[]
+---@param clock number|nil
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@param showSteps boolean
@@ -784,7 +784,7 @@ end
 ---@param stripe ColorRGBAData
 ---@param activeRow ColorRGBAData
 ---@return number
-local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts, stripe, activeRow)
+local function paintSplits(splits, splitRows, nodes, clock, ahead, behind, showSteps, showCounts, stripe, activeRow)
   local offsetY = 0
   local stripeIndex = 0
   for index = 1, #nodes do
@@ -793,14 +793,20 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     local row = createSplitRow(splitRows, index, splits)
     local timeText = ""
     local deltaText = ""
+    local deltaElapsed = model.elapsed
+    if deltaElapsed == nil and model.current then
+      deltaElapsed = clock
+    end
     if model.elapsed then
       timeText = FormatElapsed(model.elapsed) or ""
-      local delta = 0
-      if model.best then
-        delta = RoundShownDelta(model.elapsed, model.best)
-      end
+    end
+    if deltaElapsed ~= nil and model.best ~= nil then
+      local delta = RoundShownDelta(deltaElapsed, model.best)
       local deltaColor = GetDeltaColor(delta, ahead, behind)
       deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta))
+    elseif model.elapsed then
+      local deltaColor = GetDeltaColor(0, ahead, behind)
+      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(0))
     end
     local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
     if model.best then
@@ -882,6 +888,154 @@ local function formatName(run)
     return "Delve"
   end
   return title
+end
+
+---@param parts string[]
+---@param value string|number|boolean|nil
+local function pushStamp(parts, value)
+  if value == nil then
+    parts[#parts + 1] = ""
+    return
+  end
+  parts[#parts + 1] = tostring(value)
+end
+
+---@param run LDT_Run|nil
+---@return string
+function Timer:GetLayoutStamp(run)
+  if not run then
+    return "sample"
+  end
+  ---@type string[]
+  local parts = {}
+  pushStamp(parts, run.id)
+  pushStamp(parts, run.endedAt)
+  pushStamp(parts, run.deaths)
+  pushStamp(parts, run.lives)
+  pushStamp(parts, GetTier(run))
+  pushStamp(parts, formatName(run))
+  local spells = run.entrance and run.entrance.activeSpellIDs
+  if spells then
+    for index = 1, #spells do
+      pushStamp(parts, spells[index])
+    end
+  end
+  local best = run.best
+  pushStamp(parts, best and best.startedAt)
+  pushStamp(parts, best and best.endedAt)
+  if best then
+    for index = 1, #best.scenarios do
+      local scenario = best.scenarios[index]
+      pushStamp(parts, scenario.scenarioID)
+      pushStamp(parts, scenario.completedElapsed)
+      for stepIndex = 1, #scenario.steps do
+        pushStamp(parts, scenario.steps[stepIndex].completedElapsed)
+      end
+    end
+  end
+  for index = 1, #run.scenarios do
+    local scenario = run.scenarios[index]
+    pushStamp(parts, scenario.scenarioID)
+    pushStamp(parts, scenario.role)
+    pushStamp(parts, scenario.completedElapsed)
+    for stepIndex = 1, #scenario.steps do
+      local step = scenario.steps[stepIndex]
+      pushStamp(parts, step.stepID)
+      pushStamp(parts, step.completedElapsed)
+      for criteriaIndex = 1, #step.criteria do
+        local criteria = step.criteria[criteriaIndex]
+        pushStamp(parts, criteria.criteriaID)
+        pushStamp(parts, criteria.quantity)
+        pushStamp(parts, criteria.completed)
+        pushStamp(parts, criteria.failed)
+      end
+    end
+  end
+  return table.concat(parts, "|")
+end
+
+---@param run LDT_Run|nil
+---@return number|nil
+local function currentClock(run)
+  if run and Capture.clockOriginSet then
+    local frozen = GetDuration(run)
+    if frozen then
+      return frozen
+    end
+    return Capture:GetElapsed(run)
+  end
+  if not run then
+    return SAMPLE_CLOCK
+  end
+  return nil
+end
+
+---@param nodes LDT_TimerNode[]
+---@param run LDT_Run|nil
+local function rememberClocks(nodes, run)
+  Timer.openDelta = nil
+  clockSplitBest = nil
+  clockFinish = nil
+  if run then
+    clockFinish = GetDuration(run.best)
+  elseif #nodes > 0 then
+    clockFinish = nodes[#nodes].best
+  end
+  local rows = Timer.splitRows
+  if not rows then
+    return
+  end
+  for index = 1, #nodes do
+    local node = nodes[index]
+    if node.current and node.elapsed == nil then
+      local row = rows[index]
+      Timer.openDelta = row and row.delta
+      clockSplitBest = node.best
+      return
+    end
+  end
+end
+
+function Timer:PaintClocks()
+  local clockText = Timer.clockText
+  local clockDelta = Timer.clockDelta
+  if not Data.db or not clockText or not clockDelta then
+    return
+  end
+  local run = Data:FindActiveRun()
+  local clockValue = currentClock(run)
+  local shown = -1
+  if clockValue then
+    shown = RoundShown(clockValue)
+  end
+  if clockPainted and paintedClock == shown then
+    return
+  end
+  clockPainted = true
+  paintedClock = shown
+  local options = Data.db.global.timer
+  local ahead = options.aheadColor or Constants.colors.ahead
+  local behind = options.behindColor or Constants.colors.behind
+  local clockDeltaText = ""
+  local clockDeltaColor = ahead
+  if clockValue ~= nil and clockFinish ~= nil then
+    local delta = RoundShownDelta(clockValue, clockFinish)
+    clockDeltaText = FormatDelta(delta)
+    clockDeltaColor = GetDeltaColor(delta, ahead, behind)
+  end
+  if clockValue ~= nil then
+    clockText:SetText(FormatElapsed(clockValue))
+  else
+    clockText:SetText("0:00.00")
+  end
+  clockDelta:SetText(clockDeltaText)
+  clockDelta:SetTextColor(clockDeltaColor.r, clockDeltaColor.g, clockDeltaColor.b, clockDeltaColor.a)
+  local openDelta = Timer.openDelta
+  if openDelta and clockValue ~= nil and clockSplitBest ~= nil then
+    local delta = RoundShownDelta(clockValue, clockSplitBest)
+    local deltaColor = GetDeltaColor(delta, ahead, behind)
+    openDelta:SetText(CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta)))
+  end
 end
 
 local function setObjectiveTracker()
@@ -1045,11 +1199,11 @@ function Timer:Render()
     clockText:SetWordWrap(false)
     self.clockText = clockText
 
-    local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
-    phrase:SetPoint("RIGHT", clockText, "LEFT", -Constants.sizes.timer.phraseGap, 0)
-    phrase:SetJustifyH("RIGHT")
-    phrase:SetWordWrap(false)
-    self.phrase = phrase
+    local clockDelta = clockFrame:CreateFontString(nil, "OVERLAY")
+    clockDelta:SetPoint("RIGHT", clockText, "LEFT", -Constants.sizes.timer.clockDeltaGap, 0)
+    clockDelta:SetJustifyH("RIGHT")
+    clockDelta:SetWordWrap(false)
+    self.clockDelta = clockDelta
 
     frame:Hide()
     frame:SetScript("OnShow", function(shownFrame)
@@ -1097,7 +1251,7 @@ function Timer:Render()
   local columns = self.columns
   local clockFrame = self.clockFrame
   local clockText = self.clockText
-  local phrase = self.phrase
+  local clockDelta = self.clockDelta
   if
     not header
     or not titleText
@@ -1113,7 +1267,7 @@ function Timer:Render()
     or not columns
     or not clockFrame
     or not clockText
-    or not phrase
+    or not clockDelta
   then
     return
   end
@@ -1248,49 +1402,16 @@ function Timer:Render()
     nodes = buildSampleRows()
   end
 
-  local clockValue
-  local phraseText
-  local phraseColor = ahead
-  if activeRun and Capture.clockOriginSet then
-    local frozen = GetDuration(activeRun)
-    if frozen then
-      clockValue = frozen
-    else
-      clockValue = Capture:GetElapsed(activeRun)
-    end
-    local compare
-    if frozen then
-      compare = GetDuration(activeRun.best)
-    else
-      compare = findCurrentBest(nodes)
-    end
-    if clockValue and compare then
-      local delta = RoundShownDelta(clockValue, compare)
-      phraseText = FormatDelta(delta)
-      phraseColor = GetDeltaColor(delta, ahead, behind)
-    end
-  elseif not activeRun then
-    clockValue = SAMPLE_CLOCK
-    local compare = findCurrentBest(nodes)
-    if compare then
-      phraseText = FormatDelta(RoundShownDelta(SAMPLE_CLOCK, compare))
-    end
-  end
+  local clockValue = currentClock(activeRun)
   clockText:SetFont(Constants.media.NumberFont, options.clockFontSize, "")
   clockText:SetTextColor(options.clockTextColor.r, options.clockTextColor.g, options.clockTextColor.b, options.clockTextColor.a)
-  phrase:SetFont(Constants.media.NumberFont, Constants.sizes.timer.phraseFont, "")
-  if clockValue then
-    clockText:SetText(FormatElapsed(clockValue))
-  else
-    clockText:SetText("0:00.00")
-  end
-  phrase:SetText(phraseText or "")
-  phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
+  clockDelta:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockDeltaFont, "")
 
   local splitsHeight = paintSplits(
     splits,
     splitRows,
     nodes,
+    clockValue,
     ahead,
     behind,
     options.showObjectives ~= false,
@@ -1320,6 +1441,10 @@ function Timer:Render()
   end
   clockFrame:SetHeight(clockHeight)
   frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.headerHeight + columnHeight + splitsHeight + clockHeight)
+  rememberClocks(nodes, activeRun)
+  clockPainted = false
+  self:PaintClocks()
+  layoutStamp = self:GetLayoutStamp(activeRun)
 end
 
 function Timer:ToggleWindow()
