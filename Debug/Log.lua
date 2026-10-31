@@ -798,7 +798,7 @@ function Log:OnEvent(event, ...)
 end
 
 ---@param stepID number
-function Log:ReadStep(stepID)
+function Log:LogStep(stepID)
   rememberStep(stepID)
   ---@type string[]
   local lines = {}

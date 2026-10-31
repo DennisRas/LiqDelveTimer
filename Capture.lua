@@ -8,10 +8,10 @@ addon.Capture = Capture
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local ReadPlainString = Helpers.ReadPlainString
-local ReadPlainNumber = Helpers.ReadPlainNumber
-local ReadPlainBoolean = Helpers.ReadPlainBoolean
-local FindBestDuration = Helpers.FindBestDuration
+local PlainString = Helpers.PlainString
+local PlainNumber = Helpers.PlainNumber
+local PlainBoolean = Helpers.PlainBoolean
+local GetDuration = Helpers.GetDuration
 local RoundShown = Helpers.RoundShown
 local ParseBoonAmount = Helpers.ParseBoonAmount
 local FormatBoonAmount = Helpers.FormatBoonAmount
@@ -22,13 +22,11 @@ local Events = LiqUI.Events
 local TableCopy = LiqUI.Utils.TableCopy
 local TableGet = LiqUI.Utils.TableGet
 
-local trackerHooked
-
-local function readMonotonicTime()
+local function getTimeMilliseconds()
   return math.floor(GetTime() * 1000 + 0.5)
 end
 
-local function readServerTime()
+local function getServerTimeMilliseconds()
   return math.floor(GetServerTime() * 1000 + 0.5)
 end
 
@@ -128,11 +126,13 @@ end
 
 ---@param run LDT_Run
 ---@return number
-function Capture:ReadRunElapsed(run)
-  if not self.clockReady then
-    self:SetRunClock(run)
+function Capture:GetElapsed(run)
+  local elapsed
+  if self.clockReady then
+    elapsed = getTimeMilliseconds() - self.clockOrigin
+  else
+    elapsed = getServerTimeMilliseconds() - run.startedAt
   end
-  local elapsed = readMonotonicTime() - self.clockOrigin
   if elapsed < 0 then
     return 0
   end
@@ -140,20 +140,20 @@ function Capture:ReadRunElapsed(run)
 end
 
 ---@param run LDT_Run
-function Capture:SetRunClock(run)
+function Capture:SetClockOrigin(run)
   if not self.clockReady then
-    local already = readServerTime() - run.startedAt
+    local already = getServerTimeMilliseconds() - run.startedAt
     if already < 0 then
       already = 0
     end
-    self.clockOrigin = readMonotonicTime() - already
+    self.clockOrigin = getTimeMilliseconds() - already
     self.clockReady = true
   end
 end
 
 ---@return boolean
 function Capture:IsInstanceReported()
-  local instance = self:ReadInstance()
+  local instance = self:GetInstance()
   local name = instance.name
   if name and name ~= "" then
     return true
@@ -179,7 +179,7 @@ function Capture:IsInsideDelveOrLabyrinth()
 end
 
 ---@return LDT_Character
-function Capture:ReadCharacter()
+function Capture:GetCharacter()
   local name, realm = UnitName("player")
   local _, classFile, classID = UnitClass("player")
   local _, equippedItemLevel = GetAverageItemLevel()
@@ -251,7 +251,7 @@ end
 ---@param nodeID number|nil
 ---@param companionID number|nil
 ---@return string|nil, string|nil
-local function readRole(treeID, nodeID, companionID)
+local function getRole(treeID, nodeID, companionID)
   if not treeID or not nodeID or treeID <= 0 or nodeID <= 0 then
     return nil, nil
   end
@@ -295,7 +295,7 @@ local function readRole(treeID, nodeID, companionID)
 end
 
 ---@return LDT_Entrance
-function Capture:ReadEntrance()
+function Capture:GetEntrance()
   ---@type LDT_Entrance
   local entrance = {
     entranceType = C_DelvesUI.GetTieredEntranceType(),
@@ -320,7 +320,7 @@ end
 
 ---@param value number|nil
 ---@return number|nil
-local function readOptionalID(value)
+local function plainID(value)
   if value == nil or issecretvalue(value) or value <= 0 then
     return nil
   end
@@ -328,19 +328,19 @@ local function readOptionalID(value)
 end
 
 ---@return LDT_Companion
-function Capture:ReadCompanion()
-  local companionID = readOptionalID(C_DelvesUI.GetCompanionInfoForActivePlayer())
+function Capture:GetCompanion()
+  local companionID = plainID(C_DelvesUI.GetCompanionInfoForActivePlayer())
   ---@type LDT_Companion
   local companion = {
     companionID = companionID,
   }
-  local factionID = readOptionalID(C_DelvesUI.GetFactionForCompanion(companionID))
+  local factionID = plainID(C_DelvesUI.GetFactionForCompanion(companionID))
   if not factionID then
-    factionID = readOptionalID(C_DelvesUI.GetFactionForCompanion(nil))
+    factionID = plainID(C_DelvesUI.GetFactionForCompanion(nil))
   end
   companion.factionID = factionID
   if companionID then
-    companion.creatureDisplayInfoID = readOptionalID(C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID))
+    companion.creatureDisplayInfoID = plainID(C_DelvesUI.GetCreatureDisplayInfoForCompanion(companionID))
   end
   local flavorName = C_DelvesUI.GetFlavorNodeNameForCompanion(nil)
   if (not flavorName or issecretvalue(flavorName) or flavorName == "") and companionID then
@@ -349,13 +349,13 @@ function Capture:ReadCompanion()
   if flavorName and not issecretvalue(flavorName) and flavorName ~= "" then
     companion.flavorName = flavorName
   end
-  companion.flavorNodeID = readOptionalID(C_DelvesUI.GetFlavorNodeForCompanion(nil)) or readOptionalID(companionID and C_DelvesUI.GetFlavorNodeForCompanion(companionID))
-  companion.traitTreeID = readOptionalID(C_DelvesUI.GetTraitTreeForCompanion(nil)) or readOptionalID(companionID and C_DelvesUI.GetTraitTreeForCompanion(companionID))
-  companion.roleNodeID = readOptionalID(C_DelvesUI.GetRoleNodeForCompanion(nil)) or readOptionalID(companionID and C_DelvesUI.GetRoleNodeForCompanion(companionID))
-  companion.combatCurioNodeID = readOptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, nil))
-    or readOptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID))
-  companion.utilityCurioNodeID = readOptionalID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, nil))
-    or readOptionalID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID))
+  companion.flavorNodeID = plainID(C_DelvesUI.GetFlavorNodeForCompanion(nil)) or plainID(companionID and C_DelvesUI.GetFlavorNodeForCompanion(companionID))
+  companion.traitTreeID = plainID(C_DelvesUI.GetTraitTreeForCompanion(nil)) or plainID(companionID and C_DelvesUI.GetTraitTreeForCompanion(companionID))
+  companion.roleNodeID = plainID(C_DelvesUI.GetRoleNodeForCompanion(nil)) or plainID(companionID and C_DelvesUI.GetRoleNodeForCompanion(companionID))
+  companion.combatCurioNodeID = plainID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, nil))
+    or plainID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Combat, companionID))
+  companion.utilityCurioNodeID = plainID(C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, nil))
+    or plainID(companionID and C_DelvesUI.GetCurioNodeForCompanion(Enum.CurioType.Utility, companionID))
   if factionID then
     local faction = C_Reputation.GetFactionDataByID(factionID)
     if faction and faction.name and not issecretvalue(faction.name) and faction.name ~= "" then
@@ -377,7 +377,7 @@ function Capture:ReadCompanion()
     end
   end
   companion.roleName, companion.roleSpellID = findTraitName(companion.traitTreeID, companion.roleNodeID)
-  local subtreeName, roleAtlas = readRole(companion.traitTreeID, companion.roleNodeID, companionID)
+  local subtreeName, roleAtlas = getRole(companion.traitTreeID, companion.roleNodeID, companionID)
   if subtreeName and subtreeName ~= "" then
     companion.roleName = subtreeName
   end
@@ -395,7 +395,7 @@ function Capture:ReadCompanion()
 end
 
 ---@return LDT_Instance
-function Capture:ReadInstance()
+function Capture:GetInstance()
   local name, instanceType, difficultyID, difficultyName, maxPlayers, dynamicDifficulty, isDynamic, instanceID, instanceGroupSize, lfgDungeonID = GetInstanceInfo()
   local mapID = C_Map.GetBestMapForUnit("player")
   local mapName
@@ -426,7 +426,7 @@ function Capture:ReadInstance()
 end
 
 ---@return LDT_Scenario
-function Capture:ReadScenario()
+function Capture:GetScenario()
   ---@type LDT_Scenario
   local scenario = {
     criteria = {},
@@ -454,7 +454,7 @@ local LIVES_ICON_FILE = 6013778
 ---@param text string|nil
 ---@return number|nil
 local function parseFirstCount(text)
-  local plain = ReadPlainString(text)
+  local plain = PlainString(text)
   if not plain then
     return nil
   end
@@ -468,7 +468,7 @@ end
 ---@param tooltip string|nil
 ---@return number|nil
 local function parseDeathCount(tooltip)
-  local plain = ReadPlainString(tooltip)
+  local plain = PlainString(tooltip)
   if not plain then
     return nil
   end
@@ -490,7 +490,7 @@ local function isLivesCurrency(currency)
   if iconFileID and not issecretvalue(iconFileID) and iconFileID == LIVES_ICON_FILE then
     return true
   end
-  local tooltip = ReadPlainString(currency.tooltip)
+  local tooltip = PlainString(currency.tooltip)
   if tooltip and tooltip:find("spell:" .. LIVES_SPELL_ID, 1, true) then
     return true
   end
@@ -499,7 +499,7 @@ end
 
 ---@param widgetID number
 ---@return ScenarioHeaderDelvesWidgetVisualizationInfo|nil
-local function readHeaderWidget(widgetID)
+local function getHeaderWidget(widgetID)
   local ok, info = pcall(function()
     return C_UIWidgetManager.GetScenarioHeaderDelvesWidgetVisualizationInfo(widgetID)
   end)
@@ -511,7 +511,7 @@ end
 
 ---@param setID number|nil
 ---@return ScenarioHeaderDelvesWidgetVisualizationInfo|nil
-local function readHeaderSet(setID)
+local function getHeaderSet(setID)
   if not setID or issecretvalue(setID) or setID <= 0 then
     return nil
   end
@@ -525,7 +525,7 @@ local function readHeaderSet(setID)
     local widget = widgets[index]
     local widgetID = widget.widgetID
     if widgetID and not issecretvalue(widgetID) then
-      local info = readHeaderWidget(widgetID)
+      local info = getHeaderWidget(widgetID)
       if info and info.currencies and not issecretvalue(info.currencies) then
         local widgetType = widget.widgetType
         if widgetType and not issecretvalue(widgetType) and widgetType == Enum.UIWidgetVisualizationType.ScenarioHeaderDelves then
@@ -542,7 +542,7 @@ end
 
 ---@param info ScenarioHeaderDelvesWidgetVisualizationInfo|nil
 ---@return LDT_DelveHeader|nil
-local function readHeaderInfo(info)
+local function getHeaderInfo(info)
   if not info then
     return nil
   end
@@ -601,15 +601,15 @@ local function readHeaderInfo(info)
 end
 
 ---@return LDT_DelveHeader|nil
-function Capture:ReadDelveHeader()
+function Capture:GetDelveHeader()
   local step = C_ScenarioInfo.GetScenarioStepInfo()
   local stepSetID
   if step and step.widgetSetID and not issecretvalue(step.widgetSetID) then
     stepSetID = step.widgetSetID
   end
-  local header = readHeaderInfo(readHeaderSet(stepSetID))
+  local header = getHeaderInfo(getHeaderSet(stepSetID))
   local trackerSetID = C_UIWidgetManager.GetObjectiveTrackerWidgetSetID()
-  local tracker = readHeaderInfo(readHeaderSet(trackerSetID))
+  local tracker = getHeaderInfo(getHeaderSet(trackerSetID))
   if header and tracker and header.lives == nil and tracker.lives ~= nil then
     header.lives = tracker.lives
     header.deaths = tracker.deaths
@@ -620,39 +620,31 @@ end
 ---@param run LDT_Run
 ---@return LDT_DelveHeader|nil
 function Capture:SetDelveHeader(run)
-  local header = self:ReadDelveHeader()
-  if not header then
-    return nil
-  end
+  local header = self:GetDelveHeader()
   local entrance = run.entrance
-  if entrance and header.tier then
-    if not entrance.tierInfo then
-      local tierInfo = C_DelvesUI.GetActiveDelveTier()
-      if tierInfo then
-        entrance.tierInfo = TableCopy(tierInfo)
+  if header then
+    if entrance and header.tier then
+      if not entrance.tierInfo then
+        local tierInfo = C_DelvesUI.GetActiveDelveTier()
+        if tierInfo then
+          entrance.tierInfo = TableCopy(tierInfo)
+        end
+      end
+      local tierInfo = entrance.tierInfo
+      if tierInfo and (not tierInfo.tier or tierInfo.tier <= 0) then
+        tierInfo.tier = header.tier
       end
     end
-    local tierInfo = entrance.tierInfo
-    if tierInfo and (not tierInfo.tier or tierInfo.tier <= 0) then
-      tierInfo.tier = header.tier
+    if header.lives ~= nil then
+      run.lives = header.lives
+    end
+    if header.deaths ~= nil then
+      run.deaths = header.deaths
+    end
+    if entrance and #header.spellIDs > 0 then
+      entrance.activeSpellIDs = header.spellIDs
     end
   end
-  if header.lives ~= nil then
-    run.lives = header.lives
-  end
-  if header.deaths ~= nil then
-    run.deaths = header.deaths
-  end
-  if entrance and #header.spellIDs > 0 then
-    entrance.activeSpellIDs = header.spellIDs
-  end
-  return header
-end
-
----@param run LDT_Run
-function Capture:RefreshRunSnapshots(run)
-  self:SetDelveHeader(run)
-  local entrance = run.entrance
   if entrance and not entrance.tierInfo and C_DelvesUI.HasActiveDelve() then
     local tierInfo = C_DelvesUI.GetActiveDelveTier()
     if tierInfo and tierInfo.tier and tierInfo.tier > 0 then
@@ -661,7 +653,7 @@ function Capture:RefreshRunSnapshots(run)
   end
   local companion = run.companion
   if companion and not companion.name then
-    local latest = self:ReadCompanion()
+    local latest = self:GetCompanion()
     local gainedName = latest.name and latest.name ~= ""
     local gainedId = (not companion.companionID or companion.companionID <= 0) and latest.companionID and latest.companionID > 0
     if gainedName or gainedId then
@@ -670,29 +662,19 @@ function Capture:RefreshRunSnapshots(run)
   end
   local instance = run.instance
   if instance and (not instance.name or instance.name == "") then
-    run.instance = self:ReadInstance()
+    run.instance = self:GetInstance()
     setDelveMode(run, run.instance)
   end
-end
-
----@param run LDT_Run
----@param instance LDT_Instance
-function Capture:SetRunPlace(run, instance)
-  if state.zone == instance.zone and state.subzone == instance.subzone then
-    return
-  end
-  state.zone = instance.zone
-  state.subzone = instance.subzone
-  setDelveMode(run, instance)
+  return header
 end
 
 ---@param stored LDT_RunCriteria[]
 ---@param incoming LDT_CriteriaSnap[]
 ---@param elapsed number
-local function writeCriteria(stored, incoming, elapsed)
+local function setCriteria(stored, incoming, elapsed)
   for index = 1, #incoming do
     local info = incoming[index]
-    local criteriaID = ReadPlainNumber(info.criteriaID)
+    local criteriaID = PlainNumber(info.criteriaID)
     if criteriaID ~= nil then
       local match
       if criteriaID ~= 0 then
@@ -705,9 +687,9 @@ local function writeCriteria(stored, incoming, elapsed)
       elseif stored[index] and stored[index].criteriaID == 0 then
         match = stored[index]
       end
-      local quantity = ReadPlainNumber(info.quantity)
-      local completed = ReadPlainBoolean(info.completed)
-      local failed = ReadPlainBoolean(info.failed)
+      local quantity = PlainNumber(info.quantity)
+      local completed = PlainBoolean(info.completed)
+      local failed = PlainBoolean(info.failed)
       if not match then
         ---@type LDT_RunCriteria
         local row = {
@@ -742,12 +724,12 @@ end
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
 ---@param elapsed number
-local function recordScenario(run, scenario, elapsed)
+local function setScenario(run, scenario, elapsed)
   local info = scenario.info
   if not info then
     return
   end
-  local scenarioID = ReadPlainNumber(info.scenarioID)
+  local scenarioID = PlainNumber(info.scenarioID)
   if not scenarioID or scenarioID <= 0 then
     return
   end
@@ -776,12 +758,12 @@ local function recordScenario(run, scenario, elapsed)
     scenarios[#scenarios + 1] = row
     current = row
   end
-  local complete = ReadPlainBoolean(info.isComplete)
+  local complete = PlainBoolean(info.isComplete)
   if complete and not current.completedElapsed then
     current.completedElapsed = elapsed
   end
   local step = scenario.step
-  local stepID = step and ReadPlainNumber(step.stepID)
+  local stepID = step and PlainNumber(step.stepID)
   if not stepID or stepID <= 0 then
     return
   end
@@ -791,7 +773,7 @@ local function recordScenario(run, scenario, elapsed)
     if runStep and not runStep.completedElapsed then
       runStep.completedElapsed = elapsed
     end
-    local stage = ReadPlainNumber(info.currentStage)
+    local stage = PlainNumber(info.currentStage)
     ---@type LDT_RunStep
     local created = {
       stepID = stepID,
@@ -804,7 +786,7 @@ local function recordScenario(run, scenario, elapsed)
     steps[#steps + 1] = created
     runStep = created
   end
-  writeCriteria(runStep.criteria, scenario.criteria, elapsed)
+  setCriteria(runStep.criteria, scenario.criteria, elapsed)
   if complete and not runStep.completedElapsed then
     runStep.completedElapsed = elapsed
   end
@@ -812,7 +794,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-local function findLatestRunElapsed(run)
+local function findLatestElapsed(run)
   local latest = 0
   for index = 1, #run.scenarios do
     local scenario = run.scenarios[index]
@@ -874,19 +856,19 @@ function Capture:IsLabyrinthCompleted()
   if not info then
     return false
   end
-  local scenarioID = ReadPlainNumber(info.scenarioID)
+  local scenarioID = PlainNumber(info.scenarioID)
   local role = findScenarioRole(scenarioID)
   if role == Constants.scenarioRole.Reward then
     return true
   end
-  if role == Constants.scenarioRole.Boss and ReadPlainBoolean(info.isComplete) then
+  if role == Constants.scenarioRole.Boss and PlainBoolean(info.isComplete) then
     return true
   end
   local step = C_ScenarioInfo.GetScenarioStepInfo()
   if not step or not step.numCriteria then
     return false
   end
-  local delve = Data:FindDelve(self:ReadInstance())
+  local delve = Data:FindDelve(self:GetInstance())
   local kinduruCriteriaID = delve and delve.kinduruCriteriaID
   if not kinduruCriteriaID then
     return false
@@ -894,8 +876,8 @@ function Capture:IsLabyrinthCompleted()
   for index = 1, step.numCriteria do
     local criteriaInfo = C_ScenarioInfo.GetCriteriaInfo(index)
     if criteriaInfo then
-      local criteriaID = ReadPlainNumber(criteriaInfo.criteriaID)
-      local completed = ReadPlainBoolean(criteriaInfo.completed)
+      local criteriaID = PlainNumber(criteriaInfo.criteriaID)
+      local completed = PlainBoolean(criteriaInfo.completed)
       if criteriaID == kinduruCriteriaID and completed then
         return true
       end
@@ -917,9 +899,9 @@ end
 
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
-function Capture:UpdateScenario(run, scenario)
-  recordScenario(run, scenario, self:ReadRunElapsed(run))
-  Data:StoreScenario(run, scenario)
+function Capture:SetScenario(run, scenario)
+  setScenario(run, scenario, self:GetElapsed(run))
+  Data:SetScenario(run, scenario)
   if run.endedAt then
     return
   end
@@ -934,21 +916,21 @@ end
 
 ---@param run LDT_Run
 ---@return boolean
-function Capture:IsRunEnded(run)
+function Capture:IsEnded(run)
   return run.endedAt ~= nil
 end
 
 ---@param run LDT_Run
 ---@param abandoned boolean
-function Capture:SetRunEndedAt(run, abandoned)
+function Capture:SetEndedAt(run, abandoned)
   if run.endedAt then
     return
   end
   local resumed = not self.clockReady
-  self:SetRunClock(run)
-  local elapsed = self:ReadRunElapsed(run)
+  self:SetClockOrigin(run)
+  local elapsed = self:GetElapsed(run)
   if resumed then
-    local last = findLatestRunElapsed(run)
+    local last = findLatestElapsed(run)
     if last then
       elapsed = last
     end
@@ -957,45 +939,21 @@ function Capture:SetRunEndedAt(run, abandoned)
   if abandoned then
     run.result = Constants.runResult.Abandoned
   else
-    local bestTime = FindBestDuration(run)
+    local bestTime = GetDuration(run.best)
     if not bestTime or RoundShown(elapsed) < RoundShown(bestTime) then
       run.result = Constants.runResult.PersonalBest
     else
       run.result = Constants.runResult.Completed
     end
   end
-  if self.onRunStored then
-    self.onRunStored()
-  end
-end
-
-function Capture:WriteRunClock()
-  local run = Data:FindActiveRun()
-  if not run or run.endedAt or #run.scenarios == 0 then
-    return
-  end
-  if self:IsDelveOrLabyrinthCompleted() then
-    self:SetRunEndedAt(run, false)
-    return
-  end
-  local info = C_ScenarioInfo.GetScenarioInfo()
-  if not info then
-    return
-  end
-  local scenarioID = ReadPlainNumber(info.scenarioID)
-  local role = findScenarioRole(scenarioID)
-  if role == Constants.scenarioRole.Reward then
-    self:SetRunEndedAt(run, false)
-    return
-  end
-  if role == Constants.scenarioRole.Stages and ReadPlainBoolean(info.isComplete) then
-    self:SetRunEndedAt(run, false)
+  if self.onRunChanged then
+    self.onRunChanged()
   end
 end
 
 ---@param run LDT_Run
-function Capture:UpdateCompanion(run)
-  local latest = self:ReadCompanion()
+function Capture:SetCompanion(run)
+  local latest = self:GetCompanion()
   local companion = run.companion
   if not companion then
     if latest.level ~= nil then
@@ -1042,7 +1000,7 @@ function Capture:UpdateCompanion(run)
 end
 
 ---@param run LDT_Run
-function Capture:StoreRunBoons(run)
+function Capture:SetBoons(run)
   if not run.boons then
     return
   end
@@ -1090,7 +1048,7 @@ end
 ---@param factionID number|nil
 ---@param newLevel number|nil
 ---@param oldLevel number|nil
-function Capture:AddRunRenown(run, factionID, newLevel, oldLevel)
+function Capture:AddRenownReward(run, factionID, newLevel, oldLevel)
   if type(factionID) ~= "number" or type(newLevel) ~= "number" or type(oldLevel) ~= "number" then
     return
   end
@@ -1114,7 +1072,7 @@ end
 
 ---@param text string
 ---@return number|nil
-local function readLootedCopper(text)
+local function parseLootedCopper(text)
   if issecretvalue(text) then
     return nil
   end
@@ -1135,7 +1093,7 @@ end
 
 ---@param message string|nil
 ---@param guid WOWGUID|nil
-function Capture:RecordRunMoney(message, guid)
+function Capture:AddGoldReward(message, guid)
   local run = Data:FindActiveRun()
   if not run or not message or issecretvalue(message) then
     return
@@ -1144,15 +1102,14 @@ function Capture:RecordRunMoney(message, guid)
   if guid and playerGUID and not issecretvalue(guid) and guid ~= playerGUID then
     return
   end
-  local copper = readLootedCopper(message)
+  local copper = parseLootedCopper(message)
   if not copper then
     return
   end
-  self:SetRunClock(run)
   addReward(listRewards(run), Constants.rewardType.Gold, nil, copper)
 end
 
-function Capture:MarkRunSpecChanged()
+function Capture:SetSpecChanged()
   local run = Data:FindActiveRun()
   if not run or run.specChanged then
     return
@@ -1174,7 +1131,7 @@ function Capture:MarkRunSpecChanged()
   end
 end
 
-function Capture:StoreRunCharacter()
+function Capture:AddExperienceReward()
   local run = Data:FindActiveRun()
   if not run then
     return
@@ -1191,7 +1148,6 @@ function Capture:StoreRunCharacter()
     state.experienceMax = xpMax
     return
   end
-  self:SetRunClock(run)
   if level > state.level then
     local levels = level - state.level
     addReward(listRewards(run), Constants.rewardType.Level, nil, levels)
@@ -1221,7 +1177,7 @@ end
 ---@param currencyType number|nil
 ---@param _quantity number|nil
 ---@param quantityChange number|nil
-function Capture:RecordRunCurrency(currencyType, _quantity, quantityChange)
+function Capture:AddCurrencyReward(currencyType, _quantity, quantityChange)
   local run = Data:FindActiveRun()
   if not run or not currencyType or not quantityChange or quantityChange <= 0 then
     return
@@ -1232,13 +1188,12 @@ function Capture:RecordRunCurrency(currencyType, _quantity, quantityChange)
   if not IsCurrencyListed(currencyType) then
     return
   end
-  self:SetRunClock(run)
   addReward(listRewards(run), Constants.rewardType.Currency, currencyType, quantityChange)
 end
 
 ---@param message string|nil
 ---@param guid WOWGUID|nil
-function Capture:RecordRunLoot(message, guid)
+function Capture:AddLootReward(message, guid)
   local run = Data:FindActiveRun()
   if not run or not message or issecretvalue(message) then
     return
@@ -1251,13 +1206,12 @@ function Capture:RecordRunLoot(message, guid)
   if not itemLink then
     return
   end
-  self:SetRunClock(run)
   local itemID = tonumber(itemLink:match("item:(%d+)"))
   if IsItemHidden(itemID) then
     return
   end
   local count = tonumber(message:match("x(%d+)")) or 1
-  local elapsed = self:ReadRunElapsed(run)
+  local elapsed = self:GetElapsed(run)
   local row = findReward(listRewards(run), Constants.rewardType.Loot, nil, itemLink)
   local seen = state.loot[itemLink]
   if row and seen and elapsed - seen < 2000 then
@@ -1272,28 +1226,36 @@ function Capture:RecordRunLoot(message, guid)
   state.loot[itemLink] = elapsed
 end
 
-function Capture:RecordRunDeath()
+function Capture:AddDeath()
   local run = Data:FindActiveRun()
-  if not run or self:IsRunEnded(run) then
+  if not run or self:IsEnded(run) then
     return
   end
-  self:SetRunClock(run)
   run.deaths = (run.deaths or 0) + 1
 end
 
-function Capture:CreateActiveRun()
-  local run = Data:CreateRun(readServerTime())
-  if not run then
+function Capture:CreateRun()
+  if not Data.db then
     return
   end
-  self.clockOrigin = readMonotonicTime()
-  self.clockReady = true
-  run.character = self:ReadCharacter()
-  run.entrance = self:ReadEntrance()
-  run.companion = self:ReadCompanion()
-  run.instance = self:ReadInstance()
-  state.zone = run.instance.zone
-  state.subzone = run.instance.subzone
+  local runs = Data.db.global.runs
+  local nextRunID = Data.db.global.nextRunID
+  Data.db.global.nextRunID = nextRunID + 1
+  ---@type LDT_Run
+  local run = {
+    id = format("run-%d", nextRunID),
+    result = Constants.runResult.Active,
+    startedAt = getServerTimeMilliseconds(),
+    scenarios = {},
+    boons = {},
+    rewards = {},
+  }
+  runs[#runs + 1] = run
+  Data.db.global.activeRunID = run.id
+  run.character = self:GetCharacter()
+  run.entrance = self:GetEntrance()
+  run.companion = self:GetCompanion()
+  run.instance = self:GetInstance()
   setDelveMode(run, run.instance)
   local level = UnitLevel("player")
   local xp = UnitXP("player")
@@ -1303,95 +1265,12 @@ function Capture:CreateActiveRun()
     state.experience = xp
     state.experienceMax = xpMax
   end
-  self:RefreshRunSnapshots(run)
-  self:UpdateScenario(run, self:ReadScenario())
-  Data:SetRunBest(run)
-  self:WriteRunClock()
-  if self.onRunStored then
-    self.onRunStored()
+  self:SetClockOrigin(run)
+  self:SetScenario(run, self:GetScenario())
+  Data:SetBest(run)
+  if self.onRunChanged then
+    self.onRunChanged()
   end
-end
-
-function Capture:ApplyTracker()
-  local tracker = _G.ObjectiveTrackerFrame
-  if tracker and not trackerHooked then
-    trackerHooked = true
-    tracker:HookScript("OnShow", function(frame)
-      if not Data.db or not Data.db.global.timer.replaceTracker or not Capture:IsInsideDelveOrLabyrinth() then
-        return
-      end
-      frame:Hide()
-      Capture.trackerHidden = true
-    end)
-  end
-  if not tracker or not Data.db then
-    return
-  end
-  local hideTracker = Data.db.global.timer.replaceTracker and self:IsInsideDelveOrLabyrinth()
-  if hideTracker then
-    if tracker:IsShown() then
-      tracker:Hide()
-    end
-    self.trackerHidden = true
-    return
-  end
-  if self.trackerHidden then
-    self.trackerHidden = false
-    tracker:Show()
-  end
-end
-
----@param inside boolean
-local function showTimer(inside)
-  ---@type "run"|nil
-  local context = nil
-  if inside then
-    context = "run"
-  end
-  if context == Capture.timerContext then
-    return
-  end
-  Capture.timerContext = context
-  local timer = addon.Module_Timer
-  if not timer then
-    return
-  end
-  if context then
-    timer:ShowRun()
-    return
-  end
-  if Capture.timerFromGame then
-    Capture.timerFromGame = false
-    timer:HideRun()
-  end
-end
-
-function Capture:ApplyPlace()
-  if not self.ready or not self:IsInstanceReported() then
-    return
-  end
-  local inside = self:IsInsideDelveOrLabyrinth()
-  self:ApplyTracker()
-  if inside then
-    local run = Data:FindActiveRun()
-    if not run then
-      self:CreateActiveRun()
-    else
-      self:SetRunClock(run)
-      self:SetRunPlace(run, self:ReadInstance())
-    end
-    showTimer(true)
-    return
-  end
-  local run = Data:FindActiveRun()
-  if run then
-    self:SetRunEndedAt(run, true)
-    Data.db.global.activeRunID = nil
-    if self.onRunStored then
-      self.onRunStored()
-    end
-  end
-  showTimer(false)
 end
 
 local ENTER_CHAMBER_TEXT = "Enter Chamber"
@@ -1465,16 +1344,38 @@ local function hookPlayerChoiceFrame()
 end
 
 function Capture:RegisterCaptureEvents()
-  local function onPlayerEnteringWorld()
-    Capture.ready = true
-    Capture:ApplyPlace()
-  end
-
-  local function onPlace()
-    if not Capture.ready then
+  local function onZoneOrInstance()
+    if not Capture.ready or not Capture:IsInstanceReported() then
       return
     end
-    Capture:ApplyPlace()
+    if Capture:IsInsideDelveOrLabyrinth() then
+      local run = Data:FindActiveRun()
+      if not run then
+        Capture:CreateRun()
+        run = Data:FindActiveRun()
+      end
+      if run then
+        Capture:SetClockOrigin(run)
+        local instance = Capture:GetInstance()
+        if run.instance then
+          run.instance.zone = instance.zone
+          run.instance.subzone = instance.subzone
+        end
+      end
+    else
+      local run = Data:FindActiveRun()
+      if run then
+        Capture:SetEndedAt(run, true)
+        Data.db.global.activeRunID = nil
+        if Capture.onRunChanged then
+          Capture.onRunChanged()
+        end
+      end
+    end
+    local timer = addon.Module_Timer
+    if timer then
+      timer:Render()
+    end
   end
 
   local function onScenario()
@@ -1482,9 +1383,27 @@ function Capture:RegisterCaptureEvents()
     if not run then
       return
     end
-    Capture:SetRunClock(run)
-    Capture:UpdateScenario(run, Capture:ReadScenario())
-    Capture:WriteRunClock()
+    Capture:SetScenario(run, Capture:GetScenario())
+    if run.endedAt or #run.scenarios == 0 then
+      return
+    end
+    if Capture:IsDelveOrLabyrinthCompleted() then
+      Capture:SetEndedAt(run, false)
+      return
+    end
+    local info = C_ScenarioInfo.GetScenarioInfo()
+    if not info then
+      return
+    end
+    local scenarioID = PlainNumber(info.scenarioID)
+    local role = findScenarioRole(scenarioID)
+    if role == Constants.scenarioRole.Reward then
+      Capture:SetEndedAt(run, false)
+      return
+    end
+    if role == Constants.scenarioRole.Stages and PlainBoolean(info.isComplete) then
+      Capture:SetEndedAt(run, false)
+    end
   end
 
   local function onActiveDelveData()
@@ -1492,7 +1411,7 @@ function Capture:RegisterCaptureEvents()
     if not run or run.endedAt then
       return
     end
-    Capture:RefreshRunSnapshots(run)
+    Capture:SetDelveHeader(run)
   end
 
   ---@param _frame Frame
@@ -1511,11 +1430,11 @@ function Capture:RegisterCaptureEvents()
       return
     end
     local info = C_ScenarioInfo.GetScenarioInfo()
-    local scenarioID = info and ReadPlainNumber(info.scenarioID)
+    local scenarioID = info and PlainNumber(info.scenarioID)
     if findScenarioRole(scenarioID) ~= Constants.scenarioRole.Boss then
       return
     end
-    Capture:SetRunEndedAt(run, false)
+    Capture:SetEndedAt(run, false)
   end
 
   ---@param _frame Frame
@@ -1533,7 +1452,7 @@ function Capture:RegisterCaptureEvents()
   ---@param _lineID number|nil
   ---@param guid WOWGUID|nil
   local function onChatMsgLoot(_frame, _event, text, _playerName, _languageName, _channelName, _playerName2, _specialFlags, _zoneChannelID, _channelIndex, _channelBaseName, _languageID, _lineID, guid)
-    Capture:RecordRunLoot(text, guid)
+    Capture:AddLootReward(text, guid)
   end
 
   ---@param _frame Frame
@@ -1551,7 +1470,7 @@ function Capture:RegisterCaptureEvents()
   ---@param _lineID number|nil
   ---@param guid WOWGUID|nil
   local function onChatMsgMoney(_frame, _event, text, _playerName, _languageName, _channelName, _playerName2, _specialFlags, _zoneChannelID, _channelIndex, _channelBaseName, _languageID, _lineID, guid)
-    Capture:RecordRunMoney(text, guid)
+    Capture:AddGoldReward(text, guid)
   end
 
   ---@param _frame Frame
@@ -1560,11 +1479,11 @@ function Capture:RegisterCaptureEvents()
   ---@param quantity number|nil
   ---@param quantityChange number|nil
   local function onCurrencyDisplayUpdate(_frame, _event, currencyType, quantity, quantityChange)
-    Capture:RecordRunCurrency(currencyType, quantity, quantityChange)
+    Capture:AddCurrencyReward(currencyType, quantity, quantityChange)
   end
 
   local function onPlayerXp()
-    Capture:StoreRunCharacter()
+    Capture:AddExperienceReward()
   end
 
   ---@param _frame Frame
@@ -1576,15 +1495,15 @@ function Capture:RegisterCaptureEvents()
     if real == false or type(oldLevel) ~= "number" or type(newLevel) ~= "number" then
       return
     end
-    Capture:StoreRunCharacter()
+    Capture:AddExperienceReward()
   end
 
   local function onPlayerDead()
-    Capture:RecordRunDeath()
+    Capture:AddDeath()
   end
 
   local function onSpecializationChanged()
-    Capture:MarkRunSpecChanged()
+    Capture:SetSpecChanged()
   end
 
   ---@param _frame Frame
@@ -1598,7 +1517,7 @@ function Capture:RegisterCaptureEvents()
     if not run or run.endedAt then
       return
     end
-    Capture:StoreRunBoons(run)
+    Capture:SetBoons(run)
   end
 
   local function onUpdateFaction()
@@ -1606,7 +1525,7 @@ function Capture:RegisterCaptureEvents()
     if not run or run.endedAt then
       return
     end
-    Capture:UpdateCompanion(run)
+    Capture:SetCompanion(run)
   end
 
   ---@param _frame Frame
@@ -1619,8 +1538,8 @@ function Capture:RegisterCaptureEvents()
     if not run or run.endedAt then
       return
     end
-    Capture:UpdateCompanion(run)
-    Capture:AddRunRenown(run, factionID, newLevel, oldLevel)
+    Capture:SetCompanion(run)
+    Capture:AddRenownReward(run, factionID, newLevel, oldLevel)
   end
 
   local function onPlayerChoiceUpdate()
@@ -1640,13 +1559,16 @@ function Capture:RegisterCaptureEvents()
     end
   end
 
-  Events:RegisterEvent("PLAYER_ENTERING_WORLD", onPlayerEnteringWorld, true)
+  Events:RegisterEvent("PLAYER_ENTERING_WORLD", function()
+    Capture.ready = true
+    onZoneOrInstance()
+  end, true)
   Events:RegisterEvent({
     "ZONE_CHANGED",
     "ZONE_CHANGED_INDOORS",
     "ZONE_CHANGED_NEW_AREA",
     "UPDATE_INSTANCE_INFO",
-  }, onPlace, true)
+  }, onZoneOrInstance, true)
   Events:RegisterEvent({
     "SCENARIO_UPDATE",
     "SCENARIO_CRITERIA_UPDATE",
@@ -1671,5 +1593,4 @@ function Capture:RegisterCaptureEvents()
   Events:RegisterEvent("PLAYER_CHOICE_CLOSE", onPlayerChoiceClose, true)
   Events:RegisterEvent("ADDON_LOADED", onAddonLoaded, true)
   hookPlayerChoiceFrame()
-  Capture:ApplyTracker()
 end

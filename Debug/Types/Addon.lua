@@ -27,8 +27,6 @@
 ---@field level number|nil
 ---@field experience number|nil
 ---@field experienceMax number|nil
----@field zone string|nil
----@field subzone string|nil
 ---@field loot table<string, number>
 
 ---@class LDT_Core : AceAddon, AceConsole-3.0
@@ -91,8 +89,7 @@
 ---@field clockOrigin number
 ---@field entranceNoted boolean
 ---@field timerFromGame boolean|nil
----@field timerContext "run"|nil
 ---@field trackerHidden boolean|nil
----@field onRunStored function|nil
+---@field onRunChanged function|nil
 
 ---@class LDT_Debug

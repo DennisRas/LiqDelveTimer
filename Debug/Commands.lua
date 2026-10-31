@@ -25,13 +25,13 @@ function Debug:OnChatCommand(input)
       addon.Core:Print(format("Usage: /%s probe <stepID>", addon.name:lower()))
       return true
     end
-    addon.Log:ReadStep(stepID)
+    addon.Log:LogStep(stepID)
     return true
   end
   if token ~= "dump" then
     return false
   end
-  local run = Data:FindActiveRun() or Data:FindLatestRun()
+  local run = Data:FindActiveRun() or Data:GetLatestRun()
   if not run then
     addon.Core:Print("No delve run yet.")
     return true

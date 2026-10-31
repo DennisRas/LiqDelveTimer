@@ -10,13 +10,14 @@ local Constants = addon.Constants
 local Helpers = addon.Helpers
 local FormatElapsed = Helpers.FormatElapsed
 local RoundShownDelta = Helpers.RoundShownDelta
-local FindDeltaColor = Helpers.FindDeltaColor
+local GetDeltaColor = Helpers.GetDeltaColor
 local FormatDelta = Helpers.FormatDelta
-local FindRunTier = Helpers.FindRunTier
+local GetTier = Helpers.GetTier
 local RoundIcon = Helpers.RoundIcon
-local FindRunDuration = Helpers.FindRunDuration
-local FindBestDuration = Helpers.FindBestDuration
+local GetDuration = Helpers.GetDuration
 local Capture = addon.Capture
+
+local trackerHooked = false
 
 ---@param icon Texture
 ---@param text FontString
@@ -47,10 +48,10 @@ local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
 end
 
 ---@param color ColorRGBAData
----@param apply function
-local function showColorPicker(color, apply)
+---@param repaint function
+local function showColorPicker(color, repaint)
   local previous = { r = color.r, g = color.g, b = color.b, a = color.a }
-  local function applyPickedColor()
+  local function setPickedColor()
     ---@type number?, number?, number?
     local red, green, blue = ColorPickerFrame:GetColorRGB()
     local alpha = ColorPickerFrame:GetColorAlpha()
@@ -63,22 +64,22 @@ local function showColorPicker(color, apply)
     if type(alpha) == "number" then
       color.a = alpha
     end
-    apply()
+    repaint()
   end
-  local function applyPickedOpacity()
+  local function setPickedOpacity()
     local alpha = ColorPickerFrame:GetColorAlpha()
     if type(alpha) ~= "number" then
       return
     end
     color.a = alpha
-    apply()
+    repaint()
   end
   local function restorePreviousColor()
     color.r = previous.r
     color.g = previous.g
     color.b = previous.b
     color.a = previous.a
-    apply()
+    repaint()
   end
   ---@type LiqUI_ColorPickerInfo
   local colorInfo = {
@@ -88,8 +89,8 @@ local function showColorPicker(color, apply)
     a = color.a,
     opacity = color.a,
     hasOpacity = 1,
-    swatchFunc = applyPickedColor,
-    opacityFunc = applyPickedOpacity,
+    swatchFunc = setPickedColor,
+    opacityFunc = setPickedOpacity,
     cancelFunc = restorePreviousColor,
   }
   ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
@@ -142,7 +143,7 @@ end
 
 ---@param fontString FontString
 ---@param size number
-local function applyFontSize(fontString, size)
+local function setFontSize(fontString, size)
   local face, _, flags = fontString:GetFont()
   if not face then
     face = Constants.media.NumberFont
@@ -293,7 +294,7 @@ function Timer:OpenMenu(owner)
       return options.replaceTracker
     end, function()
       options.replaceTracker = not options.replaceTracker
-      Capture:ApplyTracker()
+      Timer:Render()
     end)
     rootMenu:CreateCheckbox("Show objective count", function()
       return options.showObjectiveCounts == true
@@ -406,7 +407,7 @@ end
 ---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
 ---@param shown boolean
 ---@param fromGame boolean|nil
-function Timer:ApplyFrameShown(shown, fromGame)
+function Timer:SetFrameShown(shown, fromGame)
   if not self.frame then
     self:Render()
   end
@@ -621,7 +622,7 @@ local function paintNode(line, detail, label, title, offsetY)
     shown = format("%s: %s", label, WHITE_FONT_COLOR:WrapTextInColorCode(title))
   end
   local text = line.text
-  applyFontSize(text, Data.db.global.timer.stepFontSize)
+  setFontSize(text, Data.db.global.timer.stepFontSize)
   text:SetTextColor(stepColor.r, stepColor.g, stepColor.b)
   text:SetWordWrap(false)
   text:SetJustifyH("LEFT")
@@ -656,7 +657,7 @@ local function paintLine(line, detail, entry, offsetY, indent)
     atlas = Constants.media.MarkCheck
   end
   local text = line.text
-  applyFontSize(text, objectiveSize)
+  setFontSize(text, objectiveSize)
   text:SetTextColor(color.r, color.g, color.b)
   text:SetJustifyH("LEFT")
   text:SetWordWrap(false)
@@ -793,7 +794,7 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
       if model.best then
         delta = RoundShownDelta(model.elapsed, model.best)
       end
-      local deltaColor = FindDeltaColor(delta, ahead, behind)
+      local deltaColor = GetDeltaColor(delta, ahead, behind)
       deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta))
     end
     local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
@@ -807,10 +808,10 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     local splitColor = Data.db.global.timer.splitTextColor
     local splitSize = Data.db.global.timer.splitFontSize
     local barHeight = splitBarHeight(splitSize)
-    applyFontSize(row.name, splitSize)
-    applyFontSize(row.delta, splitSize)
-    applyFontSize(row.time, splitSize)
-    applyFontSize(row.best, splitSize)
+    setFontSize(row.name, splitSize)
+    setFontSize(row.delta, splitSize)
+    setFontSize(row.time, splitSize)
+    setFontSize(row.best, splitSize)
     row.name:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
     row.time:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
     row.best:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
@@ -847,7 +848,7 @@ end
 
 ---@param run LDT_Run
 ---@return string
-local function formatRunName(run)
+local function formatName(run)
   local instance = run.instance
   local name = instance and instance.name
   if not name or name == "" then
@@ -876,6 +877,31 @@ local function formatRunName(run)
     return "Delve"
   end
   return title
+end
+
+local function setObjectiveTracker()
+  local tracker = _G.ObjectiveTrackerFrame
+  if not tracker or not Data.db then
+    return
+  end
+  if not trackerHooked then
+    trackerHooked = true
+    tracker:HookScript("OnShow", function()
+      setObjectiveTracker()
+    end)
+  end
+  local run = Data:FindActiveRun()
+  if run and Data.db.global.timer.replaceTracker then
+    if tracker:IsShown() then
+      tracker:Hide()
+    end
+    Capture.trackerHidden = true
+    return
+  end
+  if Capture.trackerHidden then
+    Capture.trackerHidden = false
+    tracker:Show()
+  end
 end
 
 function Timer:Render()
@@ -1034,7 +1060,21 @@ function Timer:Render()
   end
 
   local frame = self.frame
-  if not frame or not frame:IsShown() then
+  if not frame then
+    return
+  end
+  setObjectiveTracker()
+  local run = Data:FindActiveRun()
+  if run then
+    if not frame:IsShown() then
+      self:SetFrameShown(true, true)
+      return
+    end
+  elseif Capture.timerFromGame and frame:IsShown() then
+    self:SetFrameShown(false, true)
+    return
+  end
+  if not frame:IsShown() then
     return
   end
 
@@ -1099,11 +1139,11 @@ function Timer:Render()
   local title = "Delve"
   local tier
   if activeRun then
-    if not Capture:IsRunEnded(activeRun) then
+    if not Capture:IsEnded(activeRun) then
       headerInfo = Capture:SetDelveHeader(activeRun)
     end
-    title = formatRunName(activeRun)
-    tier = FindRunTier(activeRun)
+    title = formatName(activeRun)
+    tier = GetTier(activeRun)
   else
     title = SAMPLE_NAME
     tier = SAMPLE_TIER
@@ -1214,22 +1254,22 @@ function Timer:Render()
   local phraseText
   local phraseColor = ahead
   if activeRun and Capture.clockReady then
-    local frozen = FindRunDuration(activeRun)
+    local frozen = GetDuration(activeRun)
     if frozen then
       clockValue = frozen
     else
-      clockValue = Capture:ReadRunElapsed(activeRun)
+      clockValue = Capture:GetElapsed(activeRun)
     end
     local compare
     if frozen then
-      compare = FindBestDuration(activeRun)
+      compare = GetDuration(activeRun.best)
     else
       compare = findCurrentBest(nodes)
     end
     if clockValue and compare then
       local delta = RoundShownDelta(clockValue, compare)
       phraseText = FormatDelta(delta)
-      phraseColor = FindDeltaColor(delta, ahead, behind)
+      phraseColor = GetDeltaColor(delta, ahead, behind)
     end
   elseif not activeRun then
     clockValue = SAMPLE_CLOCK
@@ -1264,10 +1304,10 @@ function Timer:Render()
   local columnHeight = splitBarHeight(options.splitFontSize)
   local columnColor = options.columnTextColor
   columns:SetHeight(columnHeight)
-  applyFontSize(columns.splits, options.splitFontSize)
-  applyFontSize(columns.delta, options.splitFontSize)
-  applyFontSize(columns.time, options.splitFontSize)
-  applyFontSize(columns.best, options.splitFontSize)
+  setFontSize(columns.splits, options.splitFontSize)
+  setFontSize(columns.delta, options.splitFontSize)
+  setFontSize(columns.time, options.splitFontSize)
+  setFontSize(columns.best, options.splitFontSize)
   columns.splits:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
   columns.delta:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
   columns.time:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
@@ -1284,14 +1324,6 @@ function Timer:Render()
   frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.headerHeight + columnHeight + splitsHeight + clockHeight)
 end
 
-function Timer:ShowRun()
-  self:ApplyFrameShown(true, true)
-end
-
-function Timer:HideRun()
-  self:ApplyFrameShown(false, true)
-end
-
 function Timer:ToggleWindow()
   if not self.frame then
     self:Render()
@@ -1299,7 +1331,7 @@ function Timer:ToggleWindow()
   if not self.frame then
     return
   end
-  self:ApplyFrameShown(not self.frame:IsShown(), false)
+  self:SetFrameShown(not self.frame:IsShown(), false)
 end
 
 function Timer:OnEnable()

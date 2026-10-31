@@ -8,11 +8,11 @@ addon.Module_History = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local FindRunDuration = Helpers.FindRunDuration
+local GetDuration = Helpers.GetDuration
 local FormatDate = Helpers.FormatDate
-local FindRunTier = Helpers.FindRunTier
-local FormatRunResult = Helpers.FormatRunResult
-local FindRunResultColor = Helpers.FindRunResultColor
+local GetTier = Helpers.GetTier
+local FormatResult = Helpers.FormatResult
+local GetResultColor = Helpers.GetResultColor
 local FormatElapsed = Helpers.FormatElapsed
 local LiqUI = addon.libs.LiqUI
 local layoutSizes = LiqUI.Constants.layout.sizes
@@ -181,7 +181,7 @@ function Module:Render()
       end
     end
     local inProgress = run.endedAt == nil
-    local duration = FindRunDuration(run) or 0
+    local duration = GetDuration(run) or 0
     local whenText = FormatDate(run.startedAt, Constants.dateLength.Medium)
     local characterName = ""
     local characterText = ""
@@ -197,13 +197,13 @@ function Module:Render()
         end
       end
     end
-    local tier = FindRunTier(run) or 0
+    local tier = GetTier(run) or 0
     local tierText = "-"
     if tier > 0 then
       tierText = tostring(tier)
     end
-    local label = FormatRunResult(run.result)
-    local red, green, blue = FindRunResultColor(run.result)
+    local label = FormatResult(run.result)
+    local red, green, blue = GetResultColor(run.result)
     local resultText = colorText(label, red, green, blue)
     local durationText = "-"
     if not inProgress then
@@ -263,7 +263,7 @@ function Module:ToggleWindow()
 end
 
 function Module:OnEnable()
-  addon.Capture.onRunStored = function()
+  addon.Capture.onRunChanged = function()
     if Module.window and Module.window:IsShown() then
       Module:Render()
     end
