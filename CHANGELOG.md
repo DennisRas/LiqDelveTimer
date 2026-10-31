@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.3 - TBD
+## v1.0.3 - 2026-10-31
 
 - Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.
 - Added an option to automatically click the delve option in a dialogue.
