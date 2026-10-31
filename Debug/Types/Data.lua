@@ -42,6 +42,7 @@
 ---@field showObjectives boolean
 ---@field showObjectiveCounts boolean
 ---@field autoOpenChambers boolean
+---@field autoClickDelveOptions boolean
 ---@field aheadColor ColorRGBAData
 ---@field behindColor ColorRGBAData
 ---@field windowBackgroundColor ColorRGBAData
@@ -50,6 +51,18 @@
 ---@field clockBackgroundColor ColorRGBAData
 ---@field stripeColor ColorRGBAData
 ---@field activeRowColor ColorRGBAData
+---@field headerTextColor ColorRGBAData
+---@field headerFontSize number
+---@field columnTextColor ColorRGBAData
+---@field splitTextColor ColorRGBAData
+---@field splitFontSize number
+---@field stepTextColor ColorRGBAData
+---@field stepFontSize number
+---@field objectiveTextColor ColorRGBAData
+---@field objectiveDoneTextColor ColorRGBAData
+---@field objectiveFontSize number
+---@field clockTextColor ColorRGBAData
+---@field clockFontSize number
 ---@field scale number
 ---@field point LiqUI_WindowPointPersisted?
 

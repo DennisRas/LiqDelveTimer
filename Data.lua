@@ -11,13 +11,13 @@ local TableForEach = LiqUI.Utils.TableForEach
 local TableGet = LiqUI.Utils.TableGet
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local ReadPlainNumber = Helpers.ReadPlainNumber
-local ReadPlainString = Helpers.ReadPlainString
-local ReadPlainBoolean = Helpers.ReadPlainBoolean
-local FindTier = Helpers.FindTier
+local PlainNumber = Helpers.PlainNumber
+local PlainString = Helpers.PlainString
+local PlainBoolean = Helpers.PlainBoolean
+local GetTier = Helpers.GetTier
 local FindBestRun = Helpers.FindBestRun
 
-Data.dbVersion = 3
+Data.dbVersion = 4
 
 ---@type table
 Data.defaultDB = {
@@ -47,6 +47,7 @@ Data.defaultDB = {
       showObjectives = true,
       showObjectiveCounts = false,
       autoOpenChambers = true,
+      autoClickDelveOptions = true,
       aheadColor = Constants.colors.ahead,
       behindColor = Constants.colors.behind,
       windowBackgroundColor = Constants.colors.windowBackground,
@@ -55,6 +56,18 @@ Data.defaultDB = {
       clockBackgroundColor = Constants.colors.clockBackground,
       stripeColor = Constants.colors.stripe,
       activeRowColor = Constants.colors.activeRow,
+      headerTextColor = Constants.colors.titleText,
+      headerFontSize = Constants.sizes.timer.titleFont,
+      columnTextColor = Constants.colors.columnText,
+      splitTextColor = Constants.colors.splitText,
+      splitFontSize = Constants.sizes.timer.splitFont,
+      stepTextColor = Constants.colors.step,
+      stepFontSize = Constants.sizes.timer.stepFont,
+      objectiveTextColor = Constants.colors.objective,
+      objectiveDoneTextColor = Constants.colors.objectiveDone,
+      objectiveFontSize = Constants.sizes.timer.objectiveFont,
+      clockTextColor = Constants.colors.clockText,
+      clockFontSize = Constants.sizes.timer.clockFont,
       scale = 100,
     },
     scenarios = {},
@@ -175,7 +188,7 @@ function Data:FindDelve(instance)
 end
 
 ---@return LDT_Run|nil
-function Data:FindLatestRun()
+function Data:GetLatestRun()
   if not self.db then
     return nil
   end
@@ -183,51 +196,24 @@ function Data:FindLatestRun()
   return runs[#runs]
 end
 
----@param startedAt number
----@return LDT_Run|nil
-function Data:CreateRun(startedAt)
-  if not self.db then
-    return nil
-  end
-  local runs = self.db.global.runs
-  local nextRunID = self.db.global.nextRunID
-  local runID = format("run-%d", nextRunID)
-  if not runID then
-    return nil
-  end
-  self.db.global.nextRunID = nextRunID + 1
-  ---@type LDT_Run
-  local run = {
-    id = runID,
-    result = Constants.runResult.Active,
-    startedAt = startedAt,
-    scenarios = {},
-    boons = {},
-    rewards = {},
-  }
-  runs[#runs + 1] = run
-  self.db.global.activeRunID = run.id
-  return run
-end
-
 ---@param criteria LDT_CriteriaSnap[]
 ---@return LDT_Criteria[]
-local function readCriteria(criteria)
+local function plainCriteria(criteria)
   ---@type LDT_Criteria[]
   local rows = {}
   for index = 1, #criteria do
     local info = criteria[index]
-    local criteriaID = ReadPlainNumber(info.criteriaID)
+    local criteriaID = PlainNumber(info.criteriaID)
     if criteriaID ~= nil then
       ---@type LDT_Criteria
       local row = {
         criteriaID = criteriaID,
-        description = ReadPlainString(info.description),
-        totalQuantity = ReadPlainNumber(info.totalQuantity),
-        criteriaType = ReadPlainNumber(info.criteriaType),
-        flags = ReadPlainNumber(info.flags),
-        assetID = ReadPlainNumber(info.assetID),
-        isWeightedProgress = ReadPlainBoolean(info.isWeightedProgress),
+        description = PlainString(info.description),
+        totalQuantity = PlainNumber(info.totalQuantity),
+        criteriaType = PlainNumber(info.criteriaType),
+        flags = PlainNumber(info.flags),
+        assetID = PlainNumber(info.assetID),
+        isWeightedProgress = PlainBoolean(info.isWeightedProgress),
       }
       rows[#rows + 1] = row
     end
@@ -274,7 +260,7 @@ end
 
 ---@param run LDT_Run
 ---@param scenario LDT_Scenario
-function Data:StoreScenario(run, scenario)
+function Data:SetScenario(run, scenario)
   if not self.db then
     return
   end
@@ -283,20 +269,20 @@ function Data:StoreScenario(run, scenario)
   if not info or not step then
     return
   end
-  local scenarioID = ReadPlainNumber(info.scenarioID)
-  local stepID = ReadPlainNumber(step.stepID)
+  local scenarioID = PlainNumber(info.scenarioID)
+  local stepID = PlainNumber(step.stepID)
   if not scenarioID or not stepID then
     return
   end
-  local stage = ReadPlainNumber(info.currentStage)
-  local numStages = ReadPlainNumber(info.numStages)
+  local stage = PlainNumber(info.currentStage)
+  local numStages = PlainNumber(info.numStages)
   local knownScenario = TableGet(self.scenarios, "scenarioID", scenarioID)
   local knownStep = TableGet(self.steps, "stepID", stepID)
   if not knownScenario then
     local scenarios = self.db.global.scenarios
     local record = scenarios[scenarioID]
-    local scenarioTitle = ReadPlainString(info.name)
-    local flags = ReadPlainNumber(info.flags)
+    local scenarioTitle = PlainString(info.name)
+    local flags = PlainNumber(info.flags)
     local instance = run.instance
     local mapID = instance and instance.mapID
     local instanceID = instance and instance.instanceID
@@ -317,9 +303,9 @@ function Data:StoreScenario(run, scenario)
       record.difficultyID = record.difficultyID or difficultyID
     end
   end
-  local criteriaRows = readCriteria(scenario.criteria)
-  local title = ReadPlainString(step.title)
-  local description = ReadPlainString(step.description)
+  local criteriaRows = plainCriteria(scenario.criteria)
+  local title = PlainString(step.title)
+  local description = PlainString(step.description)
   local learnTitle = title and not knownStep
   local learnDescription = description and (not knownStep or not knownStep.description or knownStep.description == "")
   local learnStage = stage and not knownStep
@@ -347,7 +333,6 @@ function Data:StoreScenario(run, scenario)
       storedStep.criteria = mergeCriteria(storedStep.criteria, criteriaRows)
     end
   end
-  self:SetBest(run)
 end
 
 ---@param callback fun(run: LDT_Run)
@@ -403,7 +388,7 @@ end
 
 ---@param run LDT_Run
 function Data:SetBest(run)
-  if run.best or not FindTier(run) then
+  if run.best or not GetTier(run) then
     return
   end
   if run.mode ~= Constants.runMode.Lab then
@@ -906,7 +891,7 @@ local function buildLabSplits(run)
       rows[openChamber].nodes = nested
     end
   end
-  local tier = FindTier(run)
+  local tier = GetTier(run)
   if not tier or tier < NEMESIS_TIER then
     return rows
   end

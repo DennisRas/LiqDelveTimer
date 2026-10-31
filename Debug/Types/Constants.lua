@@ -18,6 +18,9 @@
 ---@field clockBackground ColorRGBAData
 ---@field clear ColorRGBAData
 ---@field titleText ColorRGBAData
+---@field splitText ColorRGBAData
+---@field columnText ColorRGBAData
+---@field clockText ColorRGBAData
 ---@field activeRow ColorRGBAData
 ---@field divider ColorRGBAData
 ---@field blockText ColorRGBAData
@@ -51,12 +54,15 @@
 ---@field markSize number
 ---@field markGap number
 ---@field borderSize number
----@field phraseGap number
+---@field clockDeltaGap number
 ---@field clockHeight number
 ---@field titleFont number
+---@field splitFont number
+---@field stepFont number
+---@field objectiveFont number
 ---@field metaFont number
 ---@field clockFont number
----@field phraseFont number
+---@field clockDeltaFont number
 ---@field padding number
 ---@field width number
 ---@field columnX number[]
@@ -109,6 +115,8 @@
 
 ---@class LDT_Constants
 ---@field prefix string
+---@field delveDifficultyID number
+---@field labyrinthInstanceID number
 ---@field runMode table<string, LDT_RunModeId>
 ---@field runResult table<string, LDT_RunResultId>
 ---@field scenarioRole table<string, LDT_ScenarioRoleId>

@@ -16,27 +16,28 @@
 ---@field Constants LDT_Constants
 ---@field Helpers LDT_Helpers
 ---@field Capture LDT_Capture
----@field Log LDT_Log
+---@field Debugger LDT_Debugger
 ---@field logger LiqUI_LoggerHandle|nil
 ---@field Module_Timer LDT_Module_Timer
 ---@field Module_Run LDT_Module_Run
 ---@field Module_History LDT_Module_History
 ---@field Debug LDT_Debug|nil
 
+---@class LDT_CallResult
+---@field name string
+---@field text string
+
 ---@class LDT_CaptureState
----@field gold number|nil
 ---@field level number|nil
 ---@field experience number|nil
 ---@field experienceMax number|nil
----@field zone string|nil
----@field subzone string|nil
+---@field money number|nil
 ---@field loot table<string, number>
 
 ---@class LDT_Core : AceAddon, AceConsole-3.0
 
----@class LDT_Log
----@field lastPacked string|nil
----@field lastLines string[]|nil
+---@class LDT_Debugger
+---@field logging boolean
 
 ---@class LDT_Module_Timer : AceModule
 ---@field frame LDT_TimerFrame|nil
@@ -49,11 +50,13 @@
 ---@field livesIcon Texture|nil
 ---@field spells Frame|nil
 ---@field spellButtons LDT_TimerSpell[]|nil
+---@field columns LDT_TimerColumns|nil
 ---@field splits Frame|nil
 ---@field splitRows LDT_TimerSplitRow[]|nil
 ---@field clockFrame LDT_TimerClock|nil
 ---@field clockText FontString|nil
----@field phrase FontString|nil
+---@field clockDelta FontString|nil
+---@field openDelta FontString|nil
 
 ---@class LDT_Module_Run : AceModule
 ---@field window LiqUI_WindowInstance|nil
@@ -86,14 +89,11 @@
 ---@field table LiqUI_TableInstance|nil
 
 ---@class LDT_Capture
----@field ready boolean
----@field clockReady boolean
+---@field clockOriginSet boolean
 ---@field clockOrigin number
----@field zoneKnown boolean
 ---@field entranceNoted boolean
 ---@field timerFromGame boolean|nil
----@field timerContext "run"|nil
 ---@field trackerHidden boolean|nil
----@field onRunStored function|nil
+---@field onRunChanged function|nil
 
 ---@class LDT_Debug

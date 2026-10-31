@@ -9,7 +9,7 @@ local Constants = addon.Constants
 
 ---@param value string|nil
 ---@return string|nil
-function Helpers.ReadPlainString(value)
+function Helpers.PlainString(value)
   if type(value) ~= "string" or issecretvalue(value) or value == "" then
     return nil
   end
@@ -18,7 +18,7 @@ end
 
 ---@param value number|nil
 ---@return number|nil
-function Helpers.ReadPlainNumber(value)
+function Helpers.PlainNumber(value)
   if type(value) ~= "number" or issecretvalue(value) then
     return nil
   end
@@ -27,7 +27,7 @@ end
 
 ---@param value boolean|nil
 ---@return boolean|nil
-function Helpers.ReadPlainBoolean(value)
+function Helpers.PlainBoolean(value)
   if type(value) ~= "boolean" or issecretvalue(value) then
     return nil
   end
@@ -38,7 +38,7 @@ end
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@return ColorRGBAData
-function Helpers.FindDeltaColor(delta, ahead, behind)
+function Helpers.GetDeltaColor(delta, ahead, behind)
   if delta > 0 then
     return behind
   end
@@ -164,13 +164,13 @@ end
 
 ---@param result string|nil
 ---@return boolean
-function Helpers.IsCleared(result)
+function Helpers.IsResultCleared(result)
   return result == addon.Constants.runResult.Completed or result == addon.Constants.runResult.PersonalBest or result == "complete"
 end
 
 ---@param result string|nil
 ---@return boolean
-function Helpers.IsAbandoned(result)
+function Helpers.IsResultAbandoned(result)
   return result == addon.Constants.runResult.Abandoned or result == "left"
 end
 
@@ -180,10 +180,10 @@ function Helpers.FormatResult(result)
   if result == addon.Constants.runResult.PersonalBest then
     return "Personal Best"
   end
-  if Helpers.IsCleared(result) then
+  if Helpers.IsResultCleared(result) then
     return "Completed"
   end
-  if Helpers.IsAbandoned(result) then
+  if Helpers.IsResultAbandoned(result) then
     return "Abandoned"
   end
   if result == addon.Constants.runResult.Active then
@@ -194,7 +194,7 @@ end
 
 ---@param result string|nil
 ---@return number, number, number
-function Helpers.FindResultColor(result)
+function Helpers.GetResultColor(result)
   if result == addon.Constants.runResult.PersonalBest then
     local timer = addon.Data.db and addon.Data.db.global.timer
     local color = timer and timer.aheadColor
@@ -203,7 +203,7 @@ function Helpers.FindResultColor(result)
     end
     return 0.35, 0.9, 0.5
   end
-  if Helpers.IsAbandoned(result) then
+  if Helpers.IsResultAbandoned(result) then
     return 1, 0.35, 0.35
   end
   return 0.95, 0.95, 0.95
@@ -211,7 +211,7 @@ end
 
 ---@param run LDT_Run
 ---@return number|nil
-function Helpers.FindTier(run)
+function Helpers.GetTier(run)
   local tier = run.entrance and run.entrance.tierInfo and run.entrance.tierInfo.tier
   if tier and tier > 0 then
     return tier
@@ -219,13 +219,13 @@ function Helpers.FindTier(run)
   return nil
 end
 
----@param run LDT_Run
+---@param timed LDT_Run|LDT_RunBest|nil
 ---@return number|nil
-function Helpers.FindDuration(run)
-  if not run.endedAt then
+function Helpers.GetDuration(timed)
+  if not timed or not timed.startedAt or not timed.endedAt then
     return nil
   end
-  return run.endedAt - run.startedAt
+  return timed.endedAt - timed.startedAt
 end
 
 ---@param milliseconds number
@@ -246,7 +246,7 @@ end
 ---@param run LDT_Run
 ---@return LDT_Run|nil
 function Helpers.FindBestRun(run)
-  local tier = Helpers.FindTier(run)
+  local tier = Helpers.GetTier(run)
   if not tier then
     return nil
   end
@@ -262,10 +262,10 @@ function Helpers.FindBestRun(run)
   local best
   local bestTime
   addon.Data:ForEachRun(function(saved)
-    if saved == run or not Helpers.IsCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
+    if saved == run or not Helpers.IsResultCleared(saved.result) or not saved.endedAt or saved.endedAt > run.startedAt then
       return
     end
-    if Helpers.FindTier(saved) ~= tier or saved.mode ~= mode then
+    if Helpers.GetTier(saved) ~= tier or saved.mode ~= mode then
       return
     end
     if scenarioID then
@@ -274,7 +274,7 @@ function Helpers.FindBestRun(run)
         return
       end
     end
-    local time = Helpers.FindDuration(saved)
+    local time = Helpers.GetDuration(saved)
     if not time then
       return
     end
@@ -284,45 +284,4 @@ function Helpers.FindBestRun(run)
     end
   end)
   return best
-end
-
----@param run LDT_Run
----@return number|nil
-function Helpers.FindBestDuration(run)
-  local best = run.best
-  if not best or not best.endedAt or not best.startedAt then
-    return nil
-  end
-  return best.endedAt - best.startedAt
-end
-
-local listedCurrencyIDs
-local listedCurrencyCount = 0
-local listedCurrencyAt
-
----@param currencyID number|nil
----@return boolean
-function Helpers.IsCurrencyListed(currencyID)
-  if not currencyID or currencyID <= 0 then
-    return false
-  end
-  local now = GetTime()
-  if not listedCurrencyIDs or not listedCurrencyAt or now - listedCurrencyAt > 1 then
-    listedCurrencyIDs = {}
-    listedCurrencyCount = 0
-    local size = C_CurrencyInfo.GetCurrencyListSize() or 0
-    for index = 1, size do
-      local row = C_CurrencyInfo.GetCurrencyListInfo(index)
-      if row and not row.isHeader and row.currencyID and row.currencyID > 0 then
-        listedCurrencyIDs[row.currencyID] = true
-        listedCurrencyCount = listedCurrencyCount + 1
-      end
-    end
-    listedCurrencyAt = now
-  end
-  if listedCurrencyCount == 0 then
-    local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
-    return info ~= nil and not info.isHeader and info.name ~= nil and info.name ~= ""
-  end
-  return listedCurrencyIDs[currencyID] == true
 end

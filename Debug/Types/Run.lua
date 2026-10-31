@@ -29,7 +29,7 @@
 ---@field activeSpellIDs number[]|nil
 ---@field tierInfo TieredEntranceTierInfo|nil
 
----@class LDT_DelveHeader
+---@class LDT_Lives
 ---@field tier number|nil
 ---@field lives number|nil
 ---@field deaths number|nil

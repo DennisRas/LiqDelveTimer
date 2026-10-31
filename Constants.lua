@@ -6,6 +6,8 @@ local Constants = {}
 addon.Constants = Constants
 
 Constants.prefix = format("<%s> ", addon.name)
+Constants.delveDifficultyID = 208
+Constants.labyrinthInstanceID = 3043
 
 ---@enum LDT_RunModeId
 Constants.runMode = {
@@ -89,6 +91,9 @@ Constants.colors = {
   clockBackground = { r = 0, g = 0, b = 0, a = 0.3 },
   clear = { r = 0, g = 0, b = 0, a = 0 },
   titleText = { r = 1, g = 1, b = 1, a = 1 },
+  splitText = { r = 1, g = 1, b = 1, a = 1 },
+  columnText = { r = 1, g = 0.82, b = 0, a = 1 },
+  clockText = { r = 1, g = 1, b = 1, a = 1 },
   activeRow = { r = 0.12, g = 0.32, b = 0.72, a = 0.3 },
   divider = { r = 0, g = 0, b = 0, a = 0.5 },
   blockText = { r = 1, g = 1, b = 1, a = 1 },
@@ -98,9 +103,9 @@ Constants.colors = {
 }
 
 local timerStageWidth = 135
-local timerNumberWidth = 75
+local timerNumberWidth = 83
 local runStageWidth = 168
-local runNumberWidth = 70
+local runNumberWidth = 77
 local runPadding = 8
 local runBodyWidth = runStageWidth + (runNumberWidth * 3)
 local runLabelWidth = 110
@@ -121,12 +126,15 @@ Constants.sizes = {
     markSize = 14,
     markGap = 4,
     borderSize = 1,
-    phraseGap = 12,
+    clockDeltaGap = 12,
     clockHeight = 36,
     titleFont = 15,
+    splitFont = 12,
+    stepFont = 13,
+    objectiveFont = 12,
     metaFont = 14,
     clockFont = 22,
-    phraseFont = 14,
+    clockDeltaFont = 14,
     padding = 8,
     width = timerStageWidth + (timerNumberWidth * 3),
     columnX = {

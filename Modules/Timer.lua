@@ -9,14 +9,16 @@ local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
 local FormatElapsed = Helpers.FormatElapsed
+local RoundShown = Helpers.RoundShown
 local RoundShownDelta = Helpers.RoundShownDelta
-local FindDeltaColor = Helpers.FindDeltaColor
+local GetDeltaColor = Helpers.GetDeltaColor
 local FormatDelta = Helpers.FormatDelta
-local FindTier = Helpers.FindTier
+local GetTier = Helpers.GetTier
 local RoundIcon = Helpers.RoundIcon
-local FindDuration = Helpers.FindDuration
-local FindBestDuration = Helpers.FindBestDuration
+local GetDuration = Helpers.GetDuration
 local Capture = addon.Capture
+
+local trackerHooked = false
 
 ---@param icon Texture
 ---@param text FontString
@@ -47,10 +49,10 @@ local function placeCount(icon, text, atlas, count, anchor, point, offsetX)
 end
 
 ---@param color ColorRGBAData
----@param apply function
-local function showColorPicker(color, apply)
+---@param repaint function
+local function showColorPicker(color, repaint)
   local previous = { r = color.r, g = color.g, b = color.b, a = color.a }
-  local function applyPickedColor()
+  local function setPickedColor()
     ---@type number?, number?, number?
     local red, green, blue = ColorPickerFrame:GetColorRGB()
     local alpha = ColorPickerFrame:GetColorAlpha()
@@ -63,22 +65,22 @@ local function showColorPicker(color, apply)
     if type(alpha) == "number" then
       color.a = alpha
     end
-    apply()
+    repaint()
   end
-  local function applyPickedOpacity()
+  local function setPickedOpacity()
     local alpha = ColorPickerFrame:GetColorAlpha()
     if type(alpha) ~= "number" then
       return
     end
     color.a = alpha
-    apply()
+    repaint()
   end
   local function restorePreviousColor()
     color.r = previous.r
     color.g = previous.g
     color.b = previous.b
     color.a = previous.a
-    apply()
+    repaint()
   end
   ---@type LiqUI_ColorPickerInfo
   local colorInfo = {
@@ -88,8 +90,8 @@ local function showColorPicker(color, apply)
     a = color.a,
     opacity = color.a,
     hasOpacity = 1,
-    swatchFunc = applyPickedColor,
-    opacityFunc = applyPickedOpacity,
+    swatchFunc = setPickedColor,
+    opacityFunc = setPickedOpacity,
     cancelFunc = restorePreviousColor,
   }
   ColorPickerFrame:SetupColorPickerAndShow(colorInfo)
@@ -97,6 +99,11 @@ end
 
 local paintRemaining = 0
 local placedOnTracker = false
+local layoutStamp = ""
+local clockFinish ---@type number|nil
+local clockSplitBest ---@type number|nil
+local paintedClock ---@type number|nil
+local clockPainted = false
 
 ---@return number|nil
 ---@return number|nil
@@ -137,8 +144,48 @@ local function onPaintUpdate(_frame, elapsed)
   if not placedOnTracker and not Data.db.global.timer.point then
     Timer:Place()
   end
-  Timer:Render()
+  local stamp = Timer:GetLayoutStamp(Data:FindActiveRun())
+  if stamp ~= layoutStamp then
+    Timer:Render()
+    return
+  end
+  Timer:PaintClocks()
 end
+
+---@param fontString FontString
+---@param size number
+local function setFontSize(fontString, size)
+  local face, _, flags = fontString:GetFont()
+  if not face then
+    face = Constants.media.NumberFont
+    flags = ""
+  end
+  fontString:SetFont(face, size, flags)
+end
+
+---@param fontSize number
+---@return number
+local function textLineHeight(fontSize)
+  local height = fontSize + 6
+  if height < Constants.sizes.timer.lineHeight then
+    return Constants.sizes.timer.lineHeight
+  end
+  return height
+end
+
+---@param fontSize number
+---@return number
+local function splitBarHeight(fontSize)
+  local height = fontSize + 14
+  if height < Constants.sizes.timer.rowHeight then
+    return Constants.sizes.timer.rowHeight
+  end
+  return height
+end
+
+local HEADER_FONT_SIZES = { 12, 14, 15, 16, 18, 20 }
+local BODY_FONT_SIZES = { 10, 12, 13, 14, 15, 16, 18 }
+local CLOCK_FONT_SIZES = { 16, 18, 20, 22, 24, 28, 32 }
 
 ---@param owner Frame
 local function showHeaderTooltip(owner)
@@ -150,7 +197,7 @@ local function showHeaderTooltip(owner)
   GameTooltip:Show()
 end
 
----@param rootMenu RootMenuDescriptionProxy
+---@param rootMenu RootMenuDescriptionProxy|ElementMenuDescriptionProxy
 ---@param text string
 ---@param color ColorRGBAData
 local function addColorSwatch(rootMenu, text, color)
@@ -180,6 +227,18 @@ local function resetTimerColors()
   restoreColor(options.clockBackgroundColor, Constants.colors.clockBackground)
   restoreColor(options.stripeColor, Constants.colors.stripe)
   restoreColor(options.activeRowColor, Constants.colors.activeRow)
+  restoreColor(options.headerTextColor, Constants.colors.titleText)
+  restoreColor(options.columnTextColor, Constants.colors.columnText)
+  restoreColor(options.splitTextColor, Constants.colors.splitText)
+  restoreColor(options.stepTextColor, Constants.colors.step)
+  restoreColor(options.objectiveTextColor, Constants.colors.objective)
+  restoreColor(options.objectiveDoneTextColor, Constants.colors.objectiveDone)
+  restoreColor(options.clockTextColor, Constants.colors.clockText)
+  options.headerFontSize = Constants.sizes.timer.titleFont
+  options.splitFontSize = Constants.sizes.timer.splitFont
+  options.stepFontSize = Constants.sizes.timer.stepFont
+  options.objectiveFontSize = Constants.sizes.timer.objectiveFont
+  options.clockFontSize = Constants.sizes.timer.clockFont
   Timer:Render()
 end
 
@@ -188,7 +247,7 @@ local resetColorsDialog = addon.name:upper() .. "_RESET_COLORS"
 do
   ---@type LDT_ResetColorsStaticPopupDialog
   local dialog = {
-    text = "Reset colors?",
+    text = "Reset colors and text sizes?",
     button1 = YES,
     button2 = CANCEL,
     OnAccept = resetTimerColors,
@@ -203,6 +262,40 @@ local function confirmResetTimerColors()
   StaticPopup_Show(resetColorsDialog)
 end
 
+---@param parent RootMenuDescriptionProxy|ElementMenuDescriptionProxy
+---@param label string
+---@param key "headerFontSize"|"splitFontSize"|"stepFontSize"|"objectiveFontSize"|"clockFontSize"
+---@param sizes number[]
+---@param fallback number
+local function addFontSizes(parent, label, key, sizes, fallback)
+  local sizeMenu = parent:CreateButton(label)
+  for index = 1, #sizes do
+    local size = sizes[index]
+    sizeMenu:CreateRadio(tostring(size), function()
+      local stored = Data.db.global.timer[key]
+      if type(stored) ~= "number" then
+        stored = fallback
+      end
+      return stored == size
+    end, function()
+      Data.db.global.timer[key] = size
+      Timer:Render()
+    end)
+  end
+end
+
+---@param parent RootMenuDescriptionProxy|ElementMenuDescriptionProxy
+---@param label string
+---@param color ColorRGBAData
+---@param sizeKey "headerFontSize"|"splitFontSize"|"stepFontSize"|"objectiveFontSize"|"clockFontSize"
+---@param sizes number[]
+---@param fallback number
+local function addTextStyle(parent, label, color, sizeKey, sizes, fallback)
+  local styleMenu = parent:CreateButton(label)
+  addColorSwatch(styleMenu, "Color", color)
+  addFontSizes(styleMenu, "Size", sizeKey, sizes, fallback)
+end
+
 ---@param owner Frame
 function Timer:OpenMenu(owner)
   local options = Data.db.global.timer
@@ -212,7 +305,7 @@ function Timer:OpenMenu(owner)
       return options.replaceTracker
     end, function()
       options.replaceTracker = not options.replaceTracker
-      Capture:Sync()
+      Timer:Render()
     end)
     rootMenu:CreateCheckbox("Show objective count", function()
       return options.showObjectiveCounts == true
@@ -231,6 +324,21 @@ function Timer:OpenMenu(owner)
     end, function()
       options.autoOpenChambers = options.autoOpenChambers == false
     end)
+    rootMenu:CreateCheckbox("Automatically click delve options", function()
+      return options.autoClickDelveOptions ~= false
+    end, function()
+      options.autoClickDelveOptions = options.autoClickDelveOptions == false
+    end)
+    local textMenu = rootMenu:CreateButton("Text")
+    addTextStyle(textMenu, "Header", options.headerTextColor, "headerFontSize", HEADER_FONT_SIZES, Constants.sizes.timer.titleFont)
+    addColorSwatch(textMenu, "Columns", options.columnTextColor)
+    addTextStyle(textMenu, "Splits", options.splitTextColor, "splitFontSize", BODY_FONT_SIZES, Constants.sizes.timer.splitFont)
+    addTextStyle(textMenu, "Steps", options.stepTextColor, "stepFontSize", BODY_FONT_SIZES, Constants.sizes.timer.stepFont)
+    local objectiveMenu = textMenu:CreateButton("Objectives")
+    addColorSwatch(objectiveMenu, "Color", options.objectiveTextColor)
+    addColorSwatch(objectiveMenu, "Finished", options.objectiveDoneTextColor)
+    addFontSizes(objectiveMenu, "Size", "objectiveFontSize", BODY_FONT_SIZES, Constants.sizes.timer.objectiveFont)
+    addTextStyle(textMenu, "Clock", options.clockTextColor, "clockFontSize", CLOCK_FONT_SIZES, Constants.sizes.timer.clockFont)
     addColorSwatch(rootMenu, "Faster than best", options.aheadColor)
     addColorSwatch(rootMenu, "Slower than best", options.behindColor)
     addColorSwatch(rootMenu, "Background", options.windowBackgroundColor)
@@ -243,7 +351,7 @@ function Timer:OpenMenu(owner)
     for scalePercent = Constants.timerScale.min, Constants.timerScale.max, Constants.timerScale.step do
       timerScale:CreateRadio(scalePercent .. "%", timerScaleIsSelected, selectTimerScale, scalePercent)
     end
-    rootMenu:CreateButton("Reset colors", confirmResetTimerColors)
+    rootMenu:CreateButton("Reset colors and text sizes", confirmResetTimerColors)
   end)
 end
 
@@ -315,7 +423,7 @@ end
 ---Show or hide the timer. fromGame true means Capture owns auto-hide on leave.
 ---@param shown boolean
 ---@param fromGame boolean|nil
-function Timer:ApplyFrameShown(shown, fromGame)
+function Timer:SetFrameShown(shown, fromGame)
   if not self.frame then
     self:Render()
   end
@@ -347,18 +455,6 @@ local SAMPLE_DEATHS = 1
 local SAMPLE_LIVES = 4
 local SAMPLE_SPELLS = { 1279443, 1307638, 462940 }
 local SAMPLE_CLOCK = 154000
-
----@param nodes LDT_TimerNode[]
----@return number|nil
-local function findCurrentBest(nodes)
-  for index = 1, #nodes do
-    local node = nodes[index]
-    if node.current then
-      return node.best
-    end
-  end
-  return nil
-end
 
 ---@return LDT_TimerNode[]
 local function buildSampleRows()
@@ -414,7 +510,8 @@ end
 ---@param parent Frame
 ---@param column integer
 ---@param align "LEFT"|"RIGHT"
-local function placeColumn(fontString, parent, column, align)
+---@param rowHeight number
+local function placeColumn(fontString, parent, column, align, rowHeight)
   local x = Constants.sizes.timer.columnX[column] or 0
   local width = Constants.sizes.timer.columnWidth[column] or 0
   fontString:ClearAllPoints()
@@ -422,9 +519,9 @@ local function placeColumn(fontString, parent, column, align)
   fontString:SetJustifyH(align)
   fontString:SetWordWrap(false)
   if align == "RIGHT" then
-    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - Constants.sizes.timer.padding, -Constants.sizes.timer.rowHeight / 2)
+    fontString:SetPoint("RIGHT", parent, "TOPLEFT", x + width - Constants.sizes.timer.padding, -rowHeight / 2)
   else
-    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + Constants.sizes.timer.padding, -Constants.sizes.timer.rowHeight / 2)
+    fontString:SetPoint("LEFT", parent, "TOPLEFT", x + Constants.sizes.timer.padding, -rowHeight / 2)
   end
 end
 
@@ -451,10 +548,10 @@ local function createSplitRow(rows, index, parent)
   local delta = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   local time = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   local best = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  placeColumn(name, bar, 1, "LEFT")
-  placeColumn(delta, bar, 2, "RIGHT")
-  placeColumn(time, bar, 3, "RIGHT")
-  placeColumn(best, bar, 4, "RIGHT")
+  placeColumn(name, bar, 1, "LEFT", Constants.sizes.timer.rowHeight)
+  placeColumn(delta, bar, 2, "RIGHT", Constants.sizes.timer.rowHeight)
+  placeColumn(time, bar, 3, "RIGHT", Constants.sizes.timer.rowHeight)
+  placeColumn(best, bar, 4, "RIGHT", Constants.sizes.timer.rowHeight)
   local detail = CreateFrame("Frame", nil, frame)
   detail:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, 0)
@@ -514,13 +611,14 @@ local function paintNode(line, detail, label, title, offsetY)
   frame:ClearAllPoints()
   frame:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, -offsetY)
   frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
-  frame:SetHeight(Constants.sizes.timer.lineHeight)
+  frame:SetHeight(textLineHeight(Data.db.global.timer.stepFontSize))
   local icon = line.icon
   icon:ClearAllPoints()
   icon:SetSize(Constants.sizes.timer.markSize, Constants.sizes.timer.markSize)
   icon:SetPoint("LEFT", frame, "LEFT", Constants.sizes.timer.nodeIndent, 0)
   icon:SetAtlas(Constants.media.MarkNub)
-  icon:SetVertexColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
+  local stepColor = Data.db.global.timer.stepTextColor
+  icon:SetVertexColor(stepColor.r, stepColor.g, stepColor.b)
   icon:Show()
   local textLeft = Constants.sizes.timer.nodeIndent + Constants.sizes.timer.markSize + Constants.sizes.timer.markGap
   local shown = label
@@ -528,8 +626,8 @@ local function paintNode(line, detail, label, title, offsetY)
     shown = format("%s: %s", label, WHITE_FONT_COLOR:WrapTextInColorCode(title))
   end
   local text = line.text
-  text:SetFontObject("GameFontNormal")
-  text:SetTextColor(Constants.colors.step.r, Constants.colors.step.g, Constants.colors.step.b)
+  setFontSize(text, Data.db.global.timer.stepFontSize)
+  text:SetTextColor(stepColor.r, stepColor.g, stepColor.b)
   text:SetWordWrap(false)
   text:SetJustifyH("LEFT")
   text:SetJustifyV("MIDDLE")
@@ -554,14 +652,16 @@ local function paintLine(line, detail, entry, offsetY, indent)
   frame:SetPoint("TOPRIGHT", detail, "TOPRIGHT", 0, -offsetY)
   local textLeft = indent + Constants.sizes.timer.markSize + Constants.sizes.timer.markGap
   local textWidth = Constants.sizes.timer.width - textLeft - Constants.sizes.timer.padding
-  local color = Constants.colors.objective
+  local objectiveSize = Data.db.global.timer.objectiveFontSize
+  local lineHeight = textLineHeight(objectiveSize)
+  local color = Data.db.global.timer.objectiveTextColor
   local atlas = Constants.media.MarkNub
   if entry.completed then
-    color = Constants.colors.objectiveDone
+    color = Data.db.global.timer.objectiveDoneTextColor
     atlas = Constants.media.MarkCheck
   end
   local text = line.text
-  text:SetFontObject("GameFontHighlightSmall")
+  setFontSize(text, objectiveSize)
   text:SetTextColor(color.r, color.g, color.b)
   text:SetJustifyH("LEFT")
   text:SetWordWrap(false)
@@ -572,13 +672,13 @@ local function paintLine(line, detail, entry, offsetY, indent)
   text:SetWordWrap(true)
   local textHeight = text:GetStringHeight()
   if oneLine < 1 then
-    oneLine = Constants.sizes.timer.lineHeight
+    oneLine = lineHeight
   end
   if textHeight < oneLine then
     textHeight = oneLine
   end
   local wrapped = textHeight > oneLine + 1
-  local rowHeight = Constants.sizes.timer.lineHeight
+  local rowHeight = lineHeight
   if wrapped and textHeight > rowHeight then
     rowHeight = textHeight
   end
@@ -590,7 +690,7 @@ local function paintLine(line, detail, entry, offsetY, indent)
   icon:SetVertexColor(color.r, color.g, color.b)
   icon:Show()
   if wrapped then
-    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -Constants.sizes.timer.lineHeight / 2)
+    icon:SetPoint("LEFT", frame, "TOPLEFT", indent, -lineHeight / 2)
     text:SetJustifyV("TOP")
     text:SetPoint("TOPLEFT", frame, "TOPLEFT", textLeft, 0)
     text:SetHeight(textHeight)
@@ -598,7 +698,7 @@ local function paintLine(line, detail, entry, offsetY, indent)
     icon:SetPoint("LEFT", frame, "LEFT", indent, 0)
     text:SetJustifyV("MIDDLE")
     text:SetPoint("LEFT", frame, "LEFT", textLeft, 0)
-    text:SetHeight(Constants.sizes.timer.lineHeight)
+    text:SetHeight(lineHeight)
   end
   line.time:Hide()
   local plain = entry.text
@@ -652,7 +752,7 @@ local function paintDetail(row, model, showSteps)
       used = used + 1
       local line = createDetailLine(row, used)
       paintNode(line, detail, node.name, node.title, offsetY)
-      offsetY = offsetY + Constants.sizes.timer.lineHeight
+      offsetY = offsetY + textLineHeight(Data.db.global.timer.stepFontSize)
       if node.current then
         used, offsetY = paintLines(row, detail, node.lines, Constants.sizes.timer.lineIndent, used, offsetY)
       end
@@ -676,6 +776,7 @@ end
 ---@param splits Frame
 ---@param splitRows LDT_TimerSplitRow[]
 ---@param nodes LDT_TimerNode[]
+---@param clock number|nil
 ---@param ahead ColorRGBAData
 ---@param behind ColorRGBAData
 ---@param showSteps boolean
@@ -683,7 +784,7 @@ end
 ---@param stripe ColorRGBAData
 ---@param activeRow ColorRGBAData
 ---@return number
-local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, showCounts, stripe, activeRow)
+local function paintSplits(splits, splitRows, nodes, clock, ahead, behind, showSteps, showCounts, stripe, activeRow)
   local offsetY = 0
   local stripeIndex = 0
   for index = 1, #nodes do
@@ -692,14 +793,20 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     local row = createSplitRow(splitRows, index, splits)
     local timeText = ""
     local deltaText = ""
+    local deltaElapsed = model.elapsed
+    if deltaElapsed == nil and model.current then
+      deltaElapsed = clock
+    end
     if model.elapsed then
       timeText = FormatElapsed(model.elapsed) or ""
-      local delta = 0
-      if model.best then
-        delta = RoundShownDelta(model.elapsed, model.best)
-      end
-      local deltaColor = FindDeltaColor(delta, ahead, behind)
+    end
+    if deltaElapsed ~= nil and model.best ~= nil then
+      local delta = RoundShownDelta(deltaElapsed, model.best)
+      local deltaColor = GetDeltaColor(delta, ahead, behind)
       deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta))
+    elseif model.elapsed then
+      local deltaColor = GetDeltaColor(0, ahead, behind)
+      deltaText = CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(0))
     end
     local bestText = GRAY_FONT_COLOR:WrapTextInColorCode("-")
     if model.best then
@@ -709,6 +816,21 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
     row.delta:SetText(deltaText)
     row.time:SetText(timeText)
     row.best:SetText(bestText)
+    local splitColor = Data.db.global.timer.splitTextColor
+    local splitSize = Data.db.global.timer.splitFontSize
+    local barHeight = splitBarHeight(splitSize)
+    setFontSize(row.name, splitSize)
+    setFontSize(row.delta, splitSize)
+    setFontSize(row.time, splitSize)
+    setFontSize(row.best, splitSize)
+    row.name:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
+    row.time:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
+    row.best:SetTextColor(splitColor.r, splitColor.g, splitColor.b)
+    placeColumn(row.name, row.bar, 1, "LEFT", barHeight)
+    placeColumn(row.delta, row.bar, 2, "RIGHT", barHeight)
+    placeColumn(row.time, row.bar, 3, "RIGHT", barHeight)
+    placeColumn(row.best, row.bar, 4, "RIGHT", barHeight)
+    row.bar:SetHeight(barHeight)
     if stripeIndex % 2 == 1 then
       row.background:SetColorTexture(stripe.r, stripe.g, stripe.b, stripe.a)
     else
@@ -721,7 +843,7 @@ local function paintSplits(splits, splitRows, nodes, ahead, behind, showSteps, s
       row.highlight:Hide()
     end
     local detailHeight = paintDetail(row, model, showSteps)
-    local height = Constants.sizes.timer.rowHeight + detailHeight
+    local height = barHeight + detailHeight
     row.frame:ClearAllPoints()
     row.frame:SetPoint("TOPLEFT", splits, "TOPLEFT", 0, -offsetY)
     row.frame:SetPoint("TOPRIGHT", splits, "TOPRIGHT", 0, -offsetY)
@@ -737,7 +859,7 @@ end
 
 ---@param run LDT_Run
 ---@return string
-local function formatRunName(run)
+local function formatName(run)
   local instance = run.instance
   local name = instance and instance.name
   if not name or name == "" then
@@ -768,6 +890,179 @@ local function formatRunName(run)
   return title
 end
 
+---@param parts string[]
+---@param value string|number|boolean|nil
+local function pushStamp(parts, value)
+  if value == nil then
+    parts[#parts + 1] = ""
+    return
+  end
+  parts[#parts + 1] = tostring(value)
+end
+
+---@param run LDT_Run|nil
+---@return string
+function Timer:GetLayoutStamp(run)
+  if not run then
+    return "sample"
+  end
+  ---@type string[]
+  local parts = {}
+  pushStamp(parts, run.id)
+  pushStamp(parts, run.endedAt)
+  pushStamp(parts, run.deaths)
+  pushStamp(parts, run.lives)
+  pushStamp(parts, GetTier(run))
+  pushStamp(parts, formatName(run))
+  local spells = run.entrance and run.entrance.activeSpellIDs
+  if spells then
+    for index = 1, #spells do
+      pushStamp(parts, spells[index])
+    end
+  end
+  local best = run.best
+  pushStamp(parts, best and best.startedAt)
+  pushStamp(parts, best and best.endedAt)
+  if best then
+    for index = 1, #best.scenarios do
+      local scenario = best.scenarios[index]
+      pushStamp(parts, scenario.scenarioID)
+      pushStamp(parts, scenario.completedElapsed)
+      for stepIndex = 1, #scenario.steps do
+        pushStamp(parts, scenario.steps[stepIndex].completedElapsed)
+      end
+    end
+  end
+  for index = 1, #run.scenarios do
+    local scenario = run.scenarios[index]
+    pushStamp(parts, scenario.scenarioID)
+    pushStamp(parts, scenario.role)
+    pushStamp(parts, scenario.completedElapsed)
+    for stepIndex = 1, #scenario.steps do
+      local step = scenario.steps[stepIndex]
+      pushStamp(parts, step.stepID)
+      pushStamp(parts, step.completedElapsed)
+      for criteriaIndex = 1, #step.criteria do
+        local criteria = step.criteria[criteriaIndex]
+        pushStamp(parts, criteria.criteriaID)
+        pushStamp(parts, criteria.quantity)
+        pushStamp(parts, criteria.completed)
+        pushStamp(parts, criteria.failed)
+      end
+    end
+  end
+  return table.concat(parts, "|")
+end
+
+---@param run LDT_Run|nil
+---@return number|nil
+local function currentClock(run)
+  if run and Capture.clockOriginSet then
+    local frozen = GetDuration(run)
+    if frozen then
+      return frozen
+    end
+    return Capture:GetElapsed(run)
+  end
+  if not run then
+    return SAMPLE_CLOCK
+  end
+  return nil
+end
+
+---@param nodes LDT_TimerNode[]
+---@param run LDT_Run|nil
+local function rememberClocks(nodes, run)
+  Timer.openDelta = nil
+  clockSplitBest = nil
+  clockFinish = nil
+  if run then
+    clockFinish = GetDuration(run.best)
+  elseif #nodes > 0 then
+    clockFinish = nodes[#nodes].best
+  end
+  local rows = Timer.splitRows
+  if not rows then
+    return
+  end
+  for index = 1, #nodes do
+    local node = nodes[index]
+    if node.current and node.elapsed == nil then
+      local row = rows[index]
+      Timer.openDelta = row and row.delta
+      clockSplitBest = node.best
+      return
+    end
+  end
+end
+
+function Timer:PaintClocks()
+  local clockText = Timer.clockText
+  local clockDelta = Timer.clockDelta
+  if not Data.db or not clockText or not clockDelta then
+    return
+  end
+  local run = Data:FindActiveRun()
+  local clockValue = currentClock(run)
+  local shown = -1
+  if clockValue then
+    shown = RoundShown(clockValue)
+  end
+  if clockPainted and paintedClock == shown then
+    return
+  end
+  clockPainted = true
+  paintedClock = shown
+  local options = Data.db.global.timer
+  local ahead = options.aheadColor or Constants.colors.ahead
+  local behind = options.behindColor or Constants.colors.behind
+  local clockDeltaText = ""
+  local clockDeltaColor = ahead
+  if clockValue ~= nil and clockFinish ~= nil then
+    local delta = RoundShownDelta(clockValue, clockFinish)
+    clockDeltaText = FormatDelta(delta)
+    clockDeltaColor = GetDeltaColor(delta, ahead, behind)
+  end
+  if clockValue ~= nil then
+    clockText:SetText(FormatElapsed(clockValue))
+  else
+    clockText:SetText("0:00.00")
+  end
+  clockDelta:SetText(clockDeltaText)
+  clockDelta:SetTextColor(clockDeltaColor.r, clockDeltaColor.g, clockDeltaColor.b, clockDeltaColor.a)
+  local openDelta = Timer.openDelta
+  if openDelta and clockValue ~= nil and clockSplitBest ~= nil then
+    local delta = RoundShownDelta(clockValue, clockSplitBest)
+    local deltaColor = GetDeltaColor(delta, ahead, behind)
+    openDelta:SetText(CreateColor(deltaColor.r, deltaColor.g, deltaColor.b):WrapTextInColorCode(FormatDelta(delta)))
+  end
+end
+
+local function setObjectiveTracker()
+  local tracker = _G.ObjectiveTrackerFrame
+  if not tracker or not Data.db then
+    return
+  end
+  if not trackerHooked then
+    trackerHooked = true
+    tracker:HookScript("OnShow", function()
+      setObjectiveTracker()
+    end)
+  end
+  local run = Data:FindActiveRun()
+  if run and Data.db.global.timer.replaceTracker then
+    if tracker:IsShown() then
+      tracker:Hide()
+    end
+    Capture.trackerHidden = true
+    return
+  end
+  if Capture.trackerHidden then
+    Capture.trackerHidden = false
+    tracker:Show()
+  end
+end
+
 function Timer:Render()
   if not self.frame then
     local options = Data.db.global.timer
@@ -780,7 +1075,7 @@ function Timer:Render()
       updateTimerClampInsets(sizedFrame)
     end)
     updateTimerClampInsets(frame)
-    frame:SetFrameStrata("HIGH")
+    frame:SetFrameStrata("MEDIUM")
     self.frame = frame
 
     ---@type LDT_TimerHeader
@@ -831,22 +1126,28 @@ function Timer:Render()
     tier:SetWordWrap(false)
     self.tier = tier
 
+    ---@type LDT_TimerColumns
     local columns = CreateFrame("Frame", nil, frame)
     columns:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
     columns:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, 0)
     columns:SetHeight(Constants.sizes.timer.rowHeight)
     local headerSplits = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     headerSplits:SetText("Splits")
-    placeColumn(headerSplits, columns, 1, "LEFT")
+    placeColumn(headerSplits, columns, 1, "LEFT", Constants.sizes.timer.rowHeight)
     local headerDelta = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     headerDelta:SetText("Delta")
-    placeColumn(headerDelta, columns, 2, "RIGHT")
+    placeColumn(headerDelta, columns, 2, "RIGHT", Constants.sizes.timer.rowHeight)
     local headerTime = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     headerTime:SetText("Time")
-    placeColumn(headerTime, columns, 3, "RIGHT")
+    placeColumn(headerTime, columns, 3, "RIGHT", Constants.sizes.timer.rowHeight)
     local headerBest = columns:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     headerBest:SetText("Best")
-    placeColumn(headerBest, columns, 4, "RIGHT")
+    placeColumn(headerBest, columns, 4, "RIGHT", Constants.sizes.timer.rowHeight)
+    columns.splits = headerSplits
+    columns.delta = headerDelta
+    columns.time = headerTime
+    columns.best = headerBest
+    self.columns = columns
 
     local splits = CreateFrame("Frame", nil, frame)
     splits:SetPoint("TOPLEFT", columns, "BOTTOMLEFT", 0, 0)
@@ -898,11 +1199,11 @@ function Timer:Render()
     clockText:SetWordWrap(false)
     self.clockText = clockText
 
-    local phrase = clockFrame:CreateFontString(nil, "OVERLAY")
-    phrase:SetPoint("RIGHT", clockText, "LEFT", -Constants.sizes.timer.phraseGap, 0)
-    phrase:SetJustifyH("RIGHT")
-    phrase:SetWordWrap(false)
-    self.phrase = phrase
+    local clockDelta = clockFrame:CreateFontString(nil, "OVERLAY")
+    clockDelta:SetPoint("RIGHT", clockText, "LEFT", -Constants.sizes.timer.clockDeltaGap, 0)
+    clockDelta:SetJustifyH("RIGHT")
+    clockDelta:SetWordWrap(false)
+    self.clockDelta = clockDelta
 
     frame:Hide()
     frame:SetScript("OnShow", function(shownFrame)
@@ -918,7 +1219,21 @@ function Timer:Render()
   end
 
   local frame = self.frame
-  if not frame or not frame:IsShown() then
+  if not frame then
+    return
+  end
+  setObjectiveTracker()
+  local run = Data:FindActiveRun()
+  if run then
+    if not frame:IsShown() then
+      self:SetFrameShown(true, true)
+      return
+    end
+  elseif Capture.timerFromGame and frame:IsShown() then
+    self:SetFrameShown(false, true)
+    return
+  end
+  if not frame:IsShown() then
     return
   end
 
@@ -933,9 +1248,10 @@ function Timer:Render()
   local spellButtons = self.spellButtons
   local splits = self.splits
   local splitRows = self.splitRows
+  local columns = self.columns
   local clockFrame = self.clockFrame
   local clockText = self.clockText
-  local phrase = self.phrase
+  local clockDelta = self.clockDelta
   if
     not header
     or not titleText
@@ -948,16 +1264,16 @@ function Timer:Render()
     or not spellButtons
     or not splits
     or not splitRows
+    or not columns
     or not clockFrame
     or not clockText
-    or not phrase
+    or not clockDelta
   then
     return
   end
 
   local options = Data.db.global.timer
-  local inside = Capture:IsInside() or Capture:IsInInstance()
-  local activeRun = inside and Data:FindActiveRun() or nil
+  local activeRun = Data:FindActiveRun()
   local windowBackground = options.windowBackgroundColor or Constants.colors.windowBackground
   local border = options.borderColor or Constants.colors.border
   local ahead = options.aheadColor or Constants.colors.ahead
@@ -977,24 +1293,20 @@ function Timer:Render()
   frame:SetBackdropColor(windowBackground.r, windowBackground.g, windowBackground.b, windowBackground.a)
   frame:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
 
-  local headerInfo
   local title = "Delve"
   local tier
   if activeRun then
-    if not Capture:IsEnded(activeRun) then
-      headerInfo = Capture:SetDelveHeader(activeRun)
-    end
-    title = formatRunName(activeRun)
-    tier = FindTier(activeRun)
+    title = formatName(activeRun)
+    tier = GetTier(activeRun)
   else
     title = SAMPLE_NAME
     tier = SAMPLE_TIER
   end
-  titleText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.titleFont, "")
-  titleText:SetTextColor(Constants.colors.titleText.r, Constants.colors.titleText.g, Constants.colors.titleText.b, Constants.colors.titleText.a)
+  titleText:SetFont(Constants.media.NumberFont, options.headerFontSize, "")
+  titleText:SetTextColor(options.headerTextColor.r, options.headerTextColor.g, options.headerTextColor.b, options.headerTextColor.a)
   titleText:SetText(title)
-  tierText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.titleFont, "")
-  tierText:SetTextColor(Constants.colors.titleText.r, Constants.colors.titleText.g, Constants.colors.titleText.b, Constants.colors.titleText.a)
+  tierText:SetFont(Constants.media.NumberFont, options.headerFontSize, "")
+  tierText:SetTextColor(options.headerTextColor.r, options.headerTextColor.g, options.headerTextColor.b, options.headerTextColor.a)
   titleText:ClearAllPoints()
   tierText:ClearAllPoints()
   if tier then
@@ -1025,9 +1337,7 @@ function Timer:Render()
   countAnchor, countPoint, countOffset = placeCount(deathsIcon, deathsText, Constants.media.Skull, deathsCount, countAnchor, countPoint, countOffset)
 
   local spellIDs = {}
-  if headerInfo and #headerInfo.spellIDs > 0 then
-    spellIDs = headerInfo.spellIDs
-  elseif activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
+  if activeRun and activeRun.entrance and activeRun.entrance.activeSpellIDs then
     spellIDs = activeRun.entrance.activeSpellIDs
   elseif not activeRun then
     spellIDs = SAMPLE_SPELLS
@@ -1092,48 +1402,16 @@ function Timer:Render()
     nodes = buildSampleRows()
   end
 
-  local clockValue
-  local phraseText
-  local phraseColor = ahead
-  if activeRun and Capture.clockReady then
-    local frozen = FindDuration(activeRun)
-    if frozen then
-      clockValue = frozen
-    else
-      clockValue = Capture:ReadElapsed(activeRun)
-    end
-    local compare
-    if frozen then
-      compare = FindBestDuration(activeRun)
-    else
-      compare = findCurrentBest(nodes)
-    end
-    if clockValue and compare then
-      local delta = RoundShownDelta(clockValue, compare)
-      phraseText = FormatDelta(delta)
-      phraseColor = FindDeltaColor(delta, ahead, behind)
-    end
-  elseif not activeRun then
-    clockValue = SAMPLE_CLOCK
-    local compare = findCurrentBest(nodes)
-    if compare then
-      phraseText = FormatDelta(RoundShownDelta(SAMPLE_CLOCK, compare))
-    end
-  end
-  clockText:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockFont, "")
-  phrase:SetFont(Constants.media.NumberFont, Constants.sizes.timer.phraseFont, "")
-  if clockValue then
-    clockText:SetText(FormatElapsed(clockValue))
-  else
-    clockText:SetText("0:00.00")
-  end
-  phrase:SetText(phraseText or "")
-  phrase:SetTextColor(phraseColor.r, phraseColor.g, phraseColor.b, phraseColor.a)
+  local clockValue = currentClock(activeRun)
+  clockText:SetFont(Constants.media.NumberFont, options.clockFontSize, "")
+  clockText:SetTextColor(options.clockTextColor.r, options.clockTextColor.g, options.clockTextColor.b, options.clockTextColor.a)
+  clockDelta:SetFont(Constants.media.NumberFont, Constants.sizes.timer.clockDeltaFont, "")
 
   local splitsHeight = paintSplits(
     splits,
     splitRows,
     nodes,
+    clockValue,
     ahead,
     behind,
     options.showObjectives ~= false,
@@ -1142,16 +1420,31 @@ function Timer:Render()
     activeRow
   )
   splits:SetHeight(splitsHeight)
-  clockFrame:SetHeight(Constants.sizes.timer.clockHeight)
-  frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.headerHeight + Constants.sizes.timer.rowHeight + splitsHeight + Constants.sizes.timer.clockHeight)
-end
-
-function Timer:ShowRun()
-  self:ApplyFrameShown(true, true)
-end
-
-function Timer:HideRun()
-  self:ApplyFrameShown(false, true)
+  local columnHeight = splitBarHeight(options.splitFontSize)
+  local columnColor = options.columnTextColor
+  columns:SetHeight(columnHeight)
+  setFontSize(columns.splits, options.splitFontSize)
+  setFontSize(columns.delta, options.splitFontSize)
+  setFontSize(columns.time, options.splitFontSize)
+  setFontSize(columns.best, options.splitFontSize)
+  columns.splits:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
+  columns.delta:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
+  columns.time:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
+  columns.best:SetTextColor(columnColor.r, columnColor.g, columnColor.b)
+  placeColumn(columns.splits, columns, 1, "LEFT", columnHeight)
+  placeColumn(columns.delta, columns, 2, "RIGHT", columnHeight)
+  placeColumn(columns.time, columns, 3, "RIGHT", columnHeight)
+  placeColumn(columns.best, columns, 4, "RIGHT", columnHeight)
+  local clockHeight = options.clockFontSize + 8
+  if clockHeight < Constants.sizes.timer.clockHeight then
+    clockHeight = Constants.sizes.timer.clockHeight
+  end
+  clockFrame:SetHeight(clockHeight)
+  frame:SetSize(Constants.sizes.timer.width, Constants.sizes.timer.headerHeight + columnHeight + splitsHeight + clockHeight)
+  rememberClocks(nodes, activeRun)
+  clockPainted = false
+  self:PaintClocks()
+  layoutStamp = self:GetLayoutStamp(activeRun)
 end
 
 function Timer:ToggleWindow()
@@ -1161,7 +1454,7 @@ function Timer:ToggleWindow()
   if not self.frame then
     return
   end
-  self:ApplyFrameShown(not self.frame:IsShown(), false)
+  self:SetFrameShown(not self.frame:IsShown(), false)
 end
 
 function Timer:OnEnable()

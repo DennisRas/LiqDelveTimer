@@ -5,8 +5,6 @@ local addon = select(2, ...)
 local Debug = {}
 addon.Debug = Debug
 
-local Data = addon.Data
-
 ---@param input string|nil
 ---@return boolean
 function Debug:OnChatCommand(input)
@@ -16,27 +14,17 @@ function Debug:OnChatCommand(input)
     return false
   end
   local token = command:lower()
-  local stepID
-  if type(select(2, addon.Core:GetArgs(input or "", 2))) == "string" then
-    stepID = tonumber(select(2, addon.Core:GetArgs(input or "", 2)))
-  end
-  if token == "probe" then
-    if not stepID or not addon.Log then
-      addon.Core:Print(format("Usage: /%s probe <stepID>", addon.name:lower()))
-      return true
+  if token == "start" then
+    if addon.Debugger then
+      addon.Debugger:Start()
     end
-    addon.Log:ReadStep(stepID)
     return true
   end
-  if token ~= "dump" then
-    return false
-  end
-  local run = Data:FindActiveRun() or Data:FindLatestRun()
-  if not run then
-    addon.Core:Print("No delve run yet.")
+  if token == "stop" then
+    if addon.Debugger then
+      addon.Debugger:Stop()
+    end
     return true
   end
-  local mode = run.mode or "none"
-  addon.Core:Print(format("Run %s (%s) mode %s scenarios %d", run.id, run.result, mode, #run.scenarios))
-  return true
+  return false
 end

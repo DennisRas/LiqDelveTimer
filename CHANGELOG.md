@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.3 - 2026-10-31
+
+- Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.
+- Added an option to automatically click the delve option in a dialogue.
+- Added a delta on the open row that keeps updating.
+- Fixed the clock delta so it compares to the best run's total time.
+- Fixed the timer window so it doesn't sit on top of the entire UI.
+- Fixed the delta, time, and best columns so the full time stays visible.
+- Fixed a run starting or staying in progress outside a delve, including walking out and a teleport to your house.
+- Fixed currencies on a run so each change is counted.
+- Fixed item loot so the item link is saved in every language.
+
 ## v1.0.2 - 2026-10-28
 
 - Added shift click on the timer header to open the run details.

@@ -32,14 +32,33 @@ function Core:OnInitialize()
   ---@param displayFrame Frame
   ---@param mouseButton MouseButton
   local function onLauncherClick(displayFrame, mouseButton)
-    local shifted = IsShiftKeyDown()
-    if shifted then
+    local isControlDown = IsControlKeyDown()
+    local isShiftDown = IsShiftKeyDown()
+    local isButtonLeft = mouseButton == "LeftButton"
+    local isButtonRight = mouseButton == "RightButton"
+    if isControlDown and isButtonLeft then
+      if addon.logger then
+        addon.logger:Show()
+      end
+      return
+    end
+    if isControlDown and isButtonRight then
+      if addon.Debugger then
+        if addon.Debugger.logging then
+          addon.Debugger:Stop()
+        else
+          addon.Debugger:Start()
+        end
+      end
+      return
+    end
+    if isShiftDown then
       if addon.Module_Timer then
         addon.Module_Timer:ToggleWindow()
       end
       return
     end
-    if mouseButton == "RightButton" then
+    if isButtonRight then
       if addon.Module_Timer then
         addon.Module_Timer:OpenMenu(displayFrame)
       end
@@ -75,13 +94,7 @@ function Core:OnEnable()
   if not Events then
     return
   end
-  Capture:Register()
-  if addon.Log then
-    addon.Log:Enable()
-  end
-  if addon.logger and addon.Log then
-    addon.logger:Show()
-  end
+  Capture:RegisterCaptureEvents()
 end
 
 ---@param input string|nil

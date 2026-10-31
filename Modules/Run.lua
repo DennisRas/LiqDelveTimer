@@ -8,20 +8,18 @@ addon.Module_Run = Module
 local Data = addon.Data
 local Constants = addon.Constants
 local Helpers = addon.Helpers
-local FindTier = Helpers.FindTier
+local GetTier = Helpers.GetTier
 local RoundShownDelta = Helpers.RoundShownDelta
-local FindDeltaColor = Helpers.FindDeltaColor
+local GetDeltaColor = Helpers.GetDeltaColor
 local FormatDelta = Helpers.FormatDelta
 local FormatElapsed = Helpers.FormatElapsed
 local FormatDate = Helpers.FormatDate
-local FindResultColor = Helpers.FindResultColor
+local GetResultColor = Helpers.GetResultColor
 local FormatResult = Helpers.FormatResult
-local FindBestDuration = Helpers.FindBestDuration
-local FindDuration = Helpers.FindDuration
+local GetDuration = Helpers.GetDuration
 local ParseBoonAmount = Helpers.ParseBoonAmount
 local FormatBoonAmount = Helpers.FormatBoonAmount
 local FormatMoney = Helpers.FormatMoney
-local IsCurrencyListed = Helpers.IsCurrencyListed
 local IsItemHidden = Helpers.IsItemHidden
 local RoundIcon = Helpers.RoundIcon
 local LiqUI = addon.libs.LiqUI
@@ -109,7 +107,7 @@ local function formatWindowTitle(run)
   if type(variant) == "string" and variant ~= "" and variant ~= name then
     title = format("%s - %s", name, variant) or name
   end
-  local tier = FindTier(run)
+  local tier = GetTier(run)
   if tier then
     title = format("%s (Tier %d)", title, tier) or title
   end
@@ -129,7 +127,7 @@ local function formatDeltaText(elapsed, bestElapsed, ahead, behind)
   if bestElapsed then
     delta = RoundShownDelta(elapsed, bestElapsed)
   end
-  local color = FindDeltaColor(delta, ahead, behind)
+  local color = GetDeltaColor(delta, ahead, behind)
   return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(FormatDelta(delta))
 end
 
@@ -234,7 +232,7 @@ local function formatComparedTime(elapsed, bestElapsed, ahead, behind)
   if not bestElapsed then
     return text
   end
-  local color = FindDeltaColor(RoundShownDelta(elapsed, bestElapsed), ahead, behind)
+  local color = GetDeltaColor(RoundShownDelta(elapsed, bestElapsed), ahead, behind)
   return CreateColor(color.r, color.g, color.b):WrapTextInColorCode(text)
 end
 
@@ -337,12 +335,12 @@ local function buildSummary(run, ahead, behind)
     endedText = FormatDate(run.endedAt, Constants.dateLength.Full)
   end
   data[#data + 1] = buildValueRow("Ended", endedText)
-  local red, green, blue = FindResultColor(run.result)
+  local red, green, blue = GetResultColor(run.result)
   data[#data + 1] = buildValueRow("Result", CreateColor(red, green, blue):WrapTextInColorCode(FormatResult(run.result)))
-  local bestTime = FindBestDuration(run)
+  local bestTime = GetDuration(run.best)
   local timeText = "-"
   if run.endedAt then
-    local duration = FindDuration(run)
+    local duration = GetDuration(run)
     if duration then
       timeText = formatComparedTime(duration, bestTime, ahead, behind)
     end
@@ -607,7 +605,7 @@ local function buildRewards(run)
     local change = rewards[index]
     local currencyID = change.id
     local total = change.amount
-    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and IsCurrencyListed(currencyID) then
+    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 then
       local name = tostring(currencyID)
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.name and info.name ~= "" then
@@ -1362,7 +1360,6 @@ function Module:Fill(run)
     paintCompanion(self.companion, nil)
     return
   end
-  Data:SetBest(run)
   window:SetTitle(formatWindowTitle(run))
   local summaryRows, affixSpells = buildSummary(run, ahead, behind)
   self.summaryData = summaryRows
