@@ -42,6 +42,7 @@
 ---@field showObjectives boolean
 ---@field showObjectiveCounts boolean
 ---@field autoOpenChambers boolean
+---@field autoClickDelveOptions boolean
 ---@field aheadColor ColorRGBAData
 ---@field behindColor ColorRGBAData
 ---@field windowBackgroundColor ColorRGBAData

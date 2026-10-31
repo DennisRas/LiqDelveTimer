@@ -285,34 +285,3 @@ function Helpers.FindBestRun(run)
   end)
   return best
 end
-
-local listedCurrencyIDs
-local listedCurrencyCount = 0
-local listedCurrencyAt
-
----@param currencyID number|nil
----@return boolean
-function Helpers.IsCurrencyListed(currencyID)
-  if not currencyID or currencyID <= 0 then
-    return false
-  end
-  local now = GetTime()
-  if not listedCurrencyIDs or not listedCurrencyAt or now - listedCurrencyAt > 1 then
-    listedCurrencyIDs = {}
-    listedCurrencyCount = 0
-    local size = C_CurrencyInfo.GetCurrencyListSize() or 0
-    for index = 1, size do
-      local row = C_CurrencyInfo.GetCurrencyListInfo(index)
-      if row and not row.isHeader and row.currencyID and row.currencyID > 0 then
-        listedCurrencyIDs[row.currencyID] = true
-        listedCurrencyCount = listedCurrencyCount + 1
-      end
-    end
-    listedCurrencyAt = now
-  end
-  if listedCurrencyCount == 0 then
-    local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
-    return info ~= nil and not info.isHeader and info.name ~= nil and info.name ~= ""
-  end
-  return listedCurrencyIDs[currencyID] == true
-end

@@ -313,6 +313,11 @@ function Timer:OpenMenu(owner)
     end, function()
       options.autoOpenChambers = options.autoOpenChambers == false
     end)
+    rootMenu:CreateCheckbox("Automatically click delve options", function()
+      return options.autoClickDelveOptions ~= false
+    end, function()
+      options.autoClickDelveOptions = options.autoClickDelveOptions == false
+    end)
     local textMenu = rootMenu:CreateButton("Text")
     addTextStyle(textMenu, "Header", options.headerTextColor, "headerFontSize", HEADER_FONT_SIZES, Constants.sizes.timer.titleFont)
     addColorSwatch(textMenu, "Columns", options.columnTextColor)
@@ -1114,8 +1119,7 @@ function Timer:Render()
   end
 
   local options = Data.db.global.timer
-  local insideDelveOrLabyrinth = Capture:IsInsideDelveOrLabyrinth()
-  local activeRun = insideDelveOrLabyrinth and Data:FindActiveRun() or nil
+  local activeRun = Data:FindActiveRun()
   local windowBackground = options.windowBackgroundColor or Constants.colors.windowBackground
   local border = options.borderColor or Constants.colors.border
   local ahead = options.aheadColor or Constants.colors.ahead
@@ -1247,7 +1251,7 @@ function Timer:Render()
   local clockValue
   local phraseText
   local phraseColor = ahead
-  if activeRun and Capture.clockReady then
+  if activeRun and Capture.clockOriginSet then
     local frozen = GetDuration(activeRun)
     if frozen then
       clockValue = frozen

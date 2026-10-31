@@ -3,12 +3,11 @@
 ## v1.0.3 - TBD
 
 - Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.
-- Added a log of run events. Open it with /liqdelvetimer log.
-- Updated the Timer window so it doesn't sit on top of the entire UI.
+- Added an option to automatically click the delve option in a dialogue.
+- Fixed the timer window so it doesn't sit on top of the entire UI.
 - Fixed a run starting or staying in progress outside a delve, including a teleport to your house.
-- Fixed the timer, the objective tracker, and run capture so the Labyrinth starts and continues the same way a delve does.
-- Fixed gold on a run so a vendor sale is not counted.
-- Fixed item loot so the item link is recorded in every language.
+- Fixed currencies on a run so each change is counted.
+- Fixed item loot so the item link is saved in every language.
 
 ## v1.0.2 - 2026-10-28
 

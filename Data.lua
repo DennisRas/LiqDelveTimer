@@ -47,6 +47,7 @@ Data.defaultDB = {
       showObjectives = true,
       showObjectiveCounts = false,
       autoOpenChambers = true,
+      autoClickDelveOptions = true,
       aheadColor = Constants.colors.ahead,
       behindColor = Constants.colors.behind,
       windowBackgroundColor = Constants.colors.windowBackground,

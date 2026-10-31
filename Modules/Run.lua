@@ -20,7 +20,6 @@ local GetDuration = Helpers.GetDuration
 local ParseBoonAmount = Helpers.ParseBoonAmount
 local FormatBoonAmount = Helpers.FormatBoonAmount
 local FormatMoney = Helpers.FormatMoney
-local IsCurrencyListed = Helpers.IsCurrencyListed
 local IsItemHidden = Helpers.IsItemHidden
 local RoundIcon = Helpers.RoundIcon
 local LiqUI = addon.libs.LiqUI
@@ -606,7 +605,7 @@ local function buildRewards(run)
     local change = rewards[index]
     local currencyID = change.id
     local total = change.amount
-    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 and IsCurrencyListed(currencyID) then
+    if change.type == Constants.rewardType.Currency and currencyID and total ~= 0 then
       local name = tostring(currencyID)
       local info = C_CurrencyInfo.GetCurrencyInfo(currencyID)
       if info and info.name and info.name ~= "" then
