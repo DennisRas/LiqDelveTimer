@@ -160,6 +160,9 @@ function Capture:SetClockOrigin(run)
 end
 
 local function isDelveRun()
+  if C_DelvesUI.IsInLair() then
+    return false
+  end
   return C_PartyInfo.IsDelveInProgress() or C_DelvesUI.HasActiveDelve()
 end
 

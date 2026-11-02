@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.4 - 2026-11-02
+
+- Fixed the timer starting in a lair, such as The Tidebound Grotto. No need to speedrun Nymrissa.
+
 ## v1.0.3 - 2026-10-31
 
 - Added options to change the timer text colors and sizes for the header, columns, splits, steps, objectives, and clock.

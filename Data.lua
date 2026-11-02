@@ -17,7 +17,7 @@ local PlainBoolean = Helpers.PlainBoolean
 local GetTier = Helpers.GetTier
 local FindBestRun = Helpers.FindBestRun
 
-Data.dbVersion = 4
+Data.dbVersion = 5
 
 ---@type table
 Data.defaultDB = {
